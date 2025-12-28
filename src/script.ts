@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group } from 'three';
+import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group, Raycaster, Vector2 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { earth } from './planets/earth/earth';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
@@ -99,6 +99,79 @@ document.addEventListener('keydown', (event: KeyboardEvent) => {
     }
 });
 
+// Raycaster for mouse clicks and hover
+const raycaster = new Raycaster();
+const mouse = new Vector2();
+let hoveredObject: Mesh | any = null;
+
+renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects([moon, earth, moonOrbit]);
+    
+    // Reset previous hover
+    if (hoveredObject) {
+        hoveredObject = null;
+        renderer.domElement.style.cursor = 'default';
+    }
+    
+    // Apply hover highlight
+    if (intersects.length > 0) {
+        hoveredObject = intersects[0].object;
+        
+        // Check if already focused
+        let targetObject: Mesh | null = null;
+        if (hoveredObject === moon || hoveredObject === moonOrbit) {
+            targetObject = moon;
+        } else if (hoveredObject === earth) {
+            targetObject = earth;
+        }
+        
+        const distanceToTarget = targetObject ? camera.position.distanceTo(targetObject.position) : 1000;
+        const isAlreadyFocused = targetObject && controls.target.distanceTo(targetObject.position) < 1 && distanceToTarget < 10;
+        
+        if (!isAlreadyFocused) {
+            renderer.domElement.style.cursor = 'pointer';
+        } else {
+            renderer.domElement.style.cursor = 'default';
+            hoveredObject = null;
+        }
+    }
+});
+
+renderer.domElement.addEventListener('click', (event: MouseEvent) => {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects([moon, earth, moonOrbit]);
+    
+    if (intersects.length > 0) {
+        const clickedObject = intersects[0].object;
+        
+        let targetObject: Mesh | null = null;
+        if (clickedObject === moon || clickedObject === moonOrbit) {
+            targetObject = moon;
+        } else if (clickedObject === earth) {
+            targetObject = earth;
+        }
+        
+        // Only focus if we're not already observing this object
+        if (targetObject) {
+            const distanceToTarget = camera.position.distanceTo(targetObject.position);
+            const isAlreadyFocused = controls.target.distanceTo(targetObject.position) < 1 && distanceToTarget < 10;
+            
+            if (!isAlreadyFocused) {
+                focusOnObject(targetObject, 3, 1500);
+            }
+        }
+    }
+});
+
 // Update ISS position
 setInterval(updateISSPosition, ISS_UPDATE_INTERVAL);
 updateISSPosition(); // Initial fetch
@@ -138,5 +211,12 @@ function animate() {
     controls.update();
     renderer.render(scene, camera);
 }
+
+// Handle window resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(container.clientWidth, container.clientHeight);
+});
 
 animate();
