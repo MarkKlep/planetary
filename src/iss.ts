@@ -1,5 +1,6 @@
 import { Mesh, BoxGeometry, MeshBasicMaterial, Group, CylinderGeometry, Vector3 } from 'three';
-import { earth } from './planets/earth.js';
+import { earth } from './planets/earth/earth';
+import { ISS_ORBITAL_RADIUS, ISS_UPDATE_INTERVAL } from './constants/planets.const';
 
 // Create ISS as a more realistic model
 const iss = new Group();
@@ -44,12 +45,11 @@ const starboardRadiator = new Mesh(radiatorGeometry, radiatorMaterial);
 starboardRadiator.position.set(0.015, -0.005, 0);
 iss.add(starboardRadiator);
 
-// Position ISS in orbit (408km altitude above Earth's surface)
-// If Earth radius = 1 unit, ISS orbits at ~1.064 units from center
-iss.position.set(1.064, 0, 0);
+// Position ISS in orbit
+iss.position.set(ISS_ORBITAL_RADIUS, 0, 0);
 
 // Function to convert lat/lon to 3D coordinates, accounting for Earth's rotation
-function latLonToPosition(latitude, longitude, radius = 1.064) {
+function latLonToPosition(latitude, longitude, radius = ISS_ORBITAL_RADIUS) {
     const lat = (latitude * Math.PI) / 180;
     const lon = (longitude * Math.PI) / 180;
     
@@ -65,10 +65,9 @@ function latLonToPosition(latitude, longitude, radius = 1.064) {
     return position;
 }
 
-let issCurrentPos = new Vector3(1.064, 0, 0);
-let issTargetPos = new Vector3(1.064, 0, 0);
+let issCurrentPos = new Vector3(ISS_ORBITAL_RADIUS, 0, 0);
+let issTargetPos = new Vector3(ISS_ORBITAL_RADIUS, 0, 0);
 let issLastUpdateTime = Date.now();
-const updateInterval = 1500; // 1.5 seconds
 
 async function updateISSPosition() {
     try {
@@ -88,4 +87,4 @@ async function updateISSPosition() {
     }
 }
 
-export { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime, updateInterval };
+export { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime };

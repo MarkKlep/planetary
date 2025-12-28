@@ -9,5 +9,3 @@ const material = new MeshBasicMaterial({
 });
 
 export const earth = new Mesh(geometry, material);
-const EARTH_SIDEREAL_DAY = 86164.1;
-export const EARTH_ANGULAR_VELOCITY = (2 * Math.PI) / EARTH_SIDEREAL_DAY;

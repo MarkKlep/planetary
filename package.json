@@ -13,7 +13,9 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/three": "^0.182.0",
     "sass-embedded": "^1.97.1",
+    "typescript": "^5.9.3",
     "vite": "^7.3.0"
   },
   "dependencies": {
