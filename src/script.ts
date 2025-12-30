@@ -1,8 +1,10 @@
-import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group, Raycaster, Vector2 } from 'three';
+import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group, Raycaster, Vector2, MeshBasicMaterial } from 'three';
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { earth } from './planets/earth/earth';
+import { backgroundTexture } from './background/background';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
-import { moon, moonOrbit } from './planets/earth/moon';
+import { moon, moonOrbit, moonHalo } from './planets/earth/moon';
 import { EARTH_ANGULAR_VELOCITY, MOON_DISTANCE, MOON_ANGULAR_VELOCITY, ISS_UPDATE_INTERVAL } from './constants/planets.const';
 
 const container = document.getElementById('app') as HTMLElement;
@@ -11,6 +13,14 @@ const renderer = new WebGLRenderer({ antialias: true });
 renderer.setSize(container.clientWidth, container.clientHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 container.appendChild(renderer.domElement);
+
+// 2D label renderer (for moon label)
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(container.clientWidth, container.clientHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.bottom = '18px';
+labelRenderer.domElement.style.pointerEvents = 'none';
+container.appendChild(labelRenderer.domElement);
 
 const scene = new Scene();
 
@@ -22,6 +32,23 @@ scene.add(earth);
 scene.add(iss);
 scene.add(moon);
 scene.add(moonOrbit);
+moon.add(moonHalo);
+scene.add(backgroundTexture);
+
+// Moon label (CSS2D)
+const moonLabelEl = document.createElement('div');
+moonLabelEl.textContent = 'Moon';
+moonLabelEl.style.color = 'white';
+moonLabelEl.style.fontSize = '14px';
+moonLabelEl.style.padding = '2px 6px';
+moonLabelEl.style.background = 'rgba(0, 0, 0, 0.45)';
+moonLabelEl.style.borderRadius = '4px';
+moonLabelEl.style.opacity = '0';
+moonLabelEl.style.transition = 'opacity 0.1s linear';
+moonLabelEl.style.pointerEvents = 'none';
+const moonLabel = new CSS2DObject(moonLabelEl);
+moonLabel.position.set(0, 0.18, 0);
+moon.add(moonLabel);
 
 camera.position.z = 3;
 
@@ -59,6 +86,8 @@ function focusOnObject(target: Mesh | Group, distance = 5, duration = 2000) {
     if (distanceToTarget < 0.01) {
         // If camera is already at target, use a default direction
         directionToTarget = new Vector3(0, 0.3, 1).normalize();
+
+        
     } else {
         directionToTarget.normalize();
     }
@@ -193,6 +222,23 @@ function animate() {
     moonOrbitalAngle += MOON_ANGULAR_VELOCITY / 60; // Assuming 60 FPS
     moon.position.x = Math.cos(moonOrbitalAngle) * MOON_DISTANCE;
     moon.position.z = Math.sin(moonOrbitalAngle) * MOON_DISTANCE;
+
+    // Keep moon halo facing camera; fixed radius (no distance scaling)
+    moonHalo.lookAt(camera.position);
+    const moonViewingDistance = camera.position.distanceTo(moon.position);
+    const moonTargetDistance = controls.target.distanceTo(moon.position);
+    const moonHaloMaterial = moonHalo.material as MeshBasicMaterial;
+    const targetHaloOpacity = (moonTargetDistance < 1 && moonViewingDistance < 10) ? 0 : 0.6;
+    const newOpacity = moonHaloMaterial.opacity + (targetHaloOpacity - moonHaloMaterial.opacity) * 0.15;
+    moonHaloMaterial.opacity = Math.max(0, Math.min(0.6, newOpacity));
+    moonHalo.visible = moonHaloMaterial.opacity > 0.02;
+
+    // Moon label fade mirrors halo behavior
+    const targetLabelOpacity = targetHaloOpacity > 0 ? 1 : 0;
+    const currentLabelOpacity = parseFloat(moonLabelEl.style.opacity || '0');
+    const newLabelOpacity = currentLabelOpacity + (targetLabelOpacity - currentLabelOpacity) * 0.15;
+    moonLabelEl.style.opacity = newLabelOpacity.toFixed(2);
+    moonLabel.visible = newLabelOpacity > 0.02;
     
     // Handle camera focus animation
     if (focusAnimation) {
@@ -210,6 +256,7 @@ function animate() {
     
     controls.update();
     renderer.render(scene, camera);
+    labelRenderer.render(scene, camera);
 }
 
 // Handle window resize
@@ -217,6 +264,7 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(container.clientWidth, container.clientHeight);
+    labelRenderer.setSize(container.clientWidth, container.clientHeight);
 });
 
 animate();

@@ -1,4 +1,4 @@
-import { SphereGeometry, Mesh, MeshBasicMaterial, TextureLoader, BufferGeometry, LineBasicMaterial, Line, Vector3 } from 'three';
+import { SphereGeometry, Mesh, MeshBasicMaterial, TextureLoader, BufferGeometry, LineBasicMaterial, Line, Vector3, RingGeometry } from 'three';
 import { MOON_DISTANCE, MOON_RADIUS } from '../../constants/planets.const';
 
 const textureLoader = new TextureLoader();
@@ -24,3 +24,13 @@ const orbitMaterial = new LineBasicMaterial({
     opacity: 0.3
 });
 export const moonOrbit = new Line(orbitGeometry, orbitMaterial);
+
+export const moonHalo = new Mesh(
+    new RingGeometry(0.45, 0.55, 96),
+    new MeshBasicMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.6,
+        depthTest: false
+    })
+);
