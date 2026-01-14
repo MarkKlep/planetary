@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.DIMENSION_Y = exports.DIMENSION_X = exports.EMPTY_IMAGE_HEIGHT = exports.EMPTY_IMAGE_WIDTH = exports.EMPTY_MAP_IMAGE_PATH = exports.BINARY_FILE_PATH = exports.PORT = void 0;
+var path = require("path");
+exports.PORT = Number(process.env.PORT || 3002);
+exports.BINARY_FILE_PATH = path.resolve(__dirname, "..", "..", "sst.grid");
+exports.EMPTY_MAP_IMAGE_PATH = path.resolve(__dirname, "..", "..", "empty-map.jpg");
+exports.EMPTY_IMAGE_WIDTH = 3600;
+exports.EMPTY_IMAGE_HEIGHT = 1800;
+exports.DIMENSION_X = 36000;
+exports.DIMENSION_Y = 17999;

@@ -4,6 +4,14 @@
   "main": "index.js",
   "scripts": {
     "dev": "vite",
+    "dev:planetary": "vite --port 5173 --strictPort",
+    "setup:heatmap": "npm --prefix external/heatmap-client install",
+    "dev:heatmap": "cross-env PORT=3001 BROWSER=none npm --prefix external/heatmap-client start",
+    "setup:heatmap:server": "npm --prefix external/heatmap-server install",
+    "dev:heatmap:server": "cross-env PORT=3002 node external/heatmap-server/src/index.js",
+    "dev:heatmap:only": "concurrently -n heatmap,heatmap-api -c magenta,yellow \"npm run dev:heatmap\" \"npm run dev:heatmap:server\"",
+    "dev:mf": "concurrently -n planetary,heatmap -c cyan,magenta \"npm run dev:planetary\" \"npm run dev:heatmap\"",
+    "dev:mf:full": "concurrently -n planetary,heatmap,heatmap-api -c cyan,magenta,yellow \"npm run dev:planetary\" \"npm run dev:heatmap\" \"npm run dev:heatmap:server\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"
@@ -13,12 +21,19 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@types/react": "^19.2.8",
+    "@types/react-dom": "^19.2.3",
     "@types/three": "^0.182.0",
+    "@vitejs/plugin-react": "^5.1.2",
+    "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "sass-embedded": "^1.97.1",
     "typescript": "^5.9.3",
     "vite": "^7.3.0"
   },
   "dependencies": {
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "three": "^0.182.0"
   }
 }
