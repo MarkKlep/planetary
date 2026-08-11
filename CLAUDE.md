@@ -47,15 +47,48 @@ Scene objects are each defined in their own module and imported into `script.ts`
 
 Units: 1 scene unit = 1 Earth radius. Distances/sizes for new objects should be computed from real km values divided by `EARTH_RADIUS_KM`, matching the existing constants.
 
-### Geographic coordinates and the sun (important, easy to get wrong)
+### The orbital model (important, easy to get wrong)
 
-`src/geo.ts` is the single source of truth for placing anything by latitude/longitude. The mapping is derived from three.js `SphereGeometry`'s UV layout and is **`(cos·cos, sin(lat), −cos·sin(lon))`** — note the negative z. Anything positioned geographically must then be carried into the Earth mesh's spinning frame with `toWorldFrame(dir, earth.rotation.y)` (positive angle). Both the ISS and the sun go through this; if you add anything else geographic, use it too rather than re-deriving the trig.
+The Sun is at the world origin and Earth orbits it. **Nothing accumulates per-frame angles** — every body's transform is a pure function of the simulated date, which is what keeps the spin, both orbits and the seasons in step at any time multiplier, and makes it frame-rate independent.
 
-`src/sun.ts` computes the real subsolar point from the current date (low-precision Astronomical Almanac formulae), so the daylight terminator matches actual geography. The render loop calls `updateSunPosition(new Date(), earth.rotation.y)` every frame and then feeds the resulting `sunDirection` to two consumers in different spaces:
-- `atmosphereSunDirection` — **world** space
-- `earthSunDirectionView` — **view** space (`.transformDirection(camera.matrixWorldInverse)`), because the Earth shader compares it against a view-space normal
+Scene graph, built in `initScene()`:
 
-The Earth mesh spins ~60× real time (`EARTH_ANGULAR_VELOCITY` is applied per *frame*, not per second). That's fine and self-consistent: because the sun is placed geographically and then rotated by the same `earth.rotation.y`, the terminator stays locked to the correct continents.
+```
+scene
+├── sun                     (origin)
+└── earthSystem             moves along the orbit
+    ├── earthTilt           fixed −23.44° about X; never touched again
+    │   ├── earth           spins inside the tilt
+    │   ├── clouds
+    │   └── iss
+    ├── atmosphere
+    └── moonOrbitPlane      5.14° to the ecliptic, not to the equator
+        └── moon
+```
+
+The tilt living *above* the spin, and never being updated, is the whole mechanism: the axis stays pointing at a fixed direction in space while Earth goes round, so the seasons fall out of the geometry. Verified — the solstice declination of ±23.44° is not imposed anywhere, it emerges and matches the almanac formula to 0.004°.
+
+`src/orbits.ts` owns the maths. World layout is: ecliptic = XZ plane, +Y = ecliptic north, longitudes via `eclipticDirection()` which uses the same negative-z handedness as `geo.ts` so the two compose without a sign fix. `earthSpinAngle()` solves for the spin that puts the subsolar point under the Sun given the tilt — read the comment there before touching it.
+
+`src/geo.ts` is still the single source of truth for latitude/longitude: **`(cos·cos, sin(lat), −cos·sin(lon))`**, derived from three.js's `SphereGeometry` UV layout. Note the negative z.
+
+Sunlight is now geometric rather than constructed: the direction is simply `normalize(-earthWorldPosition)`. It feeds two consumers in **different spaces** — `atmosphereSunDirection` (world) and `earthSunDirectionView` (view space, via `.transformDirection(camera.matrixWorldInverse)`, because the Earth shader compares it against a view-space normal).
+
+`src/simulation.ts` is the clock: starts at the real current date, advances by real elapsed time × a multiplier, and pause stops it (which halts spin *and* orbits).
+
+### Scale, and why bodies have markers
+
+**Everything is at true scale** — body sizes, the Earth–Moon distance, and the Earth's orbit (`EARTH_ORBIT_RADIUS` = a real AU, 23,481 units). Nothing is fudged, which is what makes apparent sizes come out right for free: from Earth the Sun subtends 0.5329° and the Moon 0.5179° (real: 0.533° / 0.518°), a ratio of 1.03 — the near-coincidence that makes total solar eclipses just barely possible.
+
+The cost is that Earth is 1 unit against a 23,481-unit orbit, so it falls far below a pixel whenever the orbit is in frame — and even the Sun is only ~3px there, ~5px from Earth. `src/body-marker.ts` handles this the way Celestia and NASA's Eyes do: a small additive dot that fades in only once the body itself drops below a few pixels, so the geometry stays honest. **Do not "fix" invisible bodies by scaling the meshes up.**
+
+The huge far plane (400,000) costs nothing: depth resolution goes as `z²/(near · 2²⁴)` and so is set by the *near* plane, not the far one.
+
+Two traps at this scale, both already hit once:
+- **Label offsets must be in screen pixels, not world units.** A world-space offset shrinks with distance, so labels collapsed onto their bodies and their opaque backgrounds hid the very thing they labelled. `createLabel()` anchors a zero-size div and offsets the visible chip with CSS.
+- **Marker/glow textures need flat-topped gradients.** Drawn at ~10px, a gradient that starts falling off at the centre leaves a solid core barely 2px wide and reads as a smudge.
+
+Because bodies move, the camera **follows**: `focusOnObject()` stores the target object plus an offset and re-derives its endpoint every frame (a snapshot would miss, since the body moves during the fly-to), and `followTarget` then translates the camera by the body's per-frame delta so the user's orbit angle survives. Anything comparing positions must use `getWorldPosition()` — `.position` is now a local coordinate for everything under `earthSystem`. The star dome is pinned to the camera each frame, otherwise travelling 1500 units along the orbit flies you out of your own starfield.
 
 ### Textures
 

@@ -160,6 +160,26 @@ body {
     margin-bottom: 4px;
 }
 
+.nav-speeds {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+}
+
+.nav-btn--compact {
+    padding: 8px 10px;
+    font-size: 12px;
+    text-align: center;
+
+    &:hover {
+        transform: none;
+    }
+
+    &:active {
+        transform: scale(0.97);
+    }
+}
+
 .nav-btn {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.12);

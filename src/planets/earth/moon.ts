@@ -36,14 +36,14 @@ export const moon = new Mesh(geometry, material);
  *
  * The real Moon rotates exactly once per orbit, so the same near side always faces
  * Earth. Left unrotated the mesh holds a fixed orientation in world space and slowly
- * turns its far side toward us as it goes around — which is why the wrong hemisphere
- * was showing.
+ * turns its far side toward us as it goes around.
  *
  * `SphereGeometry` puts texture longitude 0° (the near-side centre on an
  * equirectangular lunar map) along local +X, and rotating by φ carries +X to
- * (cos φ, 0, −sin φ). Pointing that at Earth from orbital angle θ — direction
- * (−cos θ, 0, −sin θ) — gives φ = π − θ.
+ * (cos φ, 0, −sin φ). The Moon sits at `eclipticDirection(L) · d`, i.e.
+ * (cos L, 0, −sin L), so the direction back to Earth is (−cos L, 0, sin L). Matching
+ * those gives φ = π + L.
  */
-export function moonTidalRotation(orbitalAngle: number): number {
-    return Math.PI - orbitalAngle;
+export function moonTidalRotation(orbitalLongitude: number): number {
+    return Math.PI + orbitalLongitude;
 }

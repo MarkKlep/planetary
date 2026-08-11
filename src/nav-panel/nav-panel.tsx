@@ -1,67 +1,74 @@
 import { useState } from 'react';
+import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import './nav-panel.scss';
 
 export function NavPanel() {
   const [activeTarget, setActiveTarget] = useState<string | null>(null);
-  const [rotationEnabled, setRotationEnabled] = useState(true);
+  const [activeSpeed, setActiveSpeed] = useState<number>(DEFAULT_TIME_SPEED);
+  const [paused, setPaused] = useState(false);
 
-  const handleObjectClick = (target: string) => {
-    setActiveTarget(target);
-    // Navigation logic will be handled by the existing script.ts event listeners
-  };
-
-  const handleResetCamera = () => {
-    setActiveTarget(null);
-    // Reset logic will be handled by the existing script.ts event listeners
-  };
-
-  const handleToggleRotation = () => {
-    setRotationEnabled(!rotationEnabled);
-    // Toggle logic will be handled by the existing script.ts event listeners
-  };
+  // The actual behaviour is wired up in script.ts, which listens on the data-*
+  // attributes and ids below. These handlers only drive the button styling.
+  const objects = [
+    { id: 'sun', label: 'Sun' },
+    { id: 'earth', label: 'Earth' },
+    { id: 'moon', label: 'Moon' },
+    { id: 'iss', label: 'ISS' },
+  ];
 
   return (
     <nav className="navigation-panel">
         <h1 className="nav-title">Planetary</h1>
         <div className="nav-section">
             <h2 className="nav-section-title">Objects</h2>
-            <button 
-              className={`nav-btn ${activeTarget === 'earth' ? 'active' : ''}`}
-              data-target="earth"
-              onClick={() => handleObjectClick('earth')}
+            {objects.map(({ id, label }) => (
+              <button
+                key={id}
+                className={`nav-btn ${activeTarget === id ? 'active' : ''}`}
+                data-target={id}
+                onClick={() => setActiveTarget(id)}
+              >
+                {label}
+              </button>
+            ))}
+            <button
+              className={`nav-btn ${activeTarget === 'system' ? 'active' : ''}`}
+              data-target="system"
+              onClick={() => setActiveTarget('system')}
             >
-              Earth
+              Solar system
             </button>
-            <button 
-              className={`nav-btn ${activeTarget === 'moon' ? 'active' : ''}`}
-              data-target="moon"
-              onClick={() => handleObjectClick('moon')}
+        </div>
+        <div className="nav-section">
+            <h2 className="nav-section-title">Time</h2>
+            <div className="nav-speeds">
+              {TIME_SPEEDS.map(({ label, secondsPerSecond }) => (
+                <button
+                  key={label}
+                  className={`nav-btn nav-btn--compact ${activeSpeed === secondsPerSecond ? 'active' : ''}`}
+                  data-speed={secondsPerSecond}
+                  onClick={() => setActiveSpeed(secondsPerSecond)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              className="nav-btn"
+              id="toggle-rotation"
+              onClick={() => setPaused(!paused)}
             >
-              Moon
-            </button>
-            <button 
-              className={`nav-btn ${activeTarget === 'iss' ? 'active' : ''}`}
-              data-target="iss"
-              onClick={() => handleObjectClick('iss')}
-            >
-              ISS
+              {paused ? 'Resume' : 'Pause'}
             </button>
         </div>
         <div className="nav-section">
             <h2 className="nav-section-title">Controls</h2>
-            <button 
-              className="nav-btn" 
+            <button
+              className="nav-btn"
               id="reset-camera"
-              onClick={handleResetCamera}
+              onClick={() => setActiveTarget(null)}
             >
               Reset Camera
-            </button>
-            <button 
-              className="nav-btn" 
-              id="toggle-rotation"
-              onClick={handleToggleRotation}
-            >
-              {rotationEnabled ? 'Pause Rotation' : 'Resume Rotation'}
             </button>
         </div>
         <div className="nav-section">
