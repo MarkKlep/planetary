@@ -1,19 +1,20 @@
-import { Mesh, BoxGeometry, MeshBasicMaterial, Group, CylinderGeometry, Vector3 } from 'three';
+import { Mesh, BoxGeometry, MeshStandardMaterial, Group, CylinderGeometry, Vector3 } from 'three';
 import { earth } from './planets/earth/earth';
-import { ISS_ORBITAL_RADIUS, ISS_UPDATE_INTERVAL } from './constants/planets.const';
+import { latLonToDirection, toWorldFrame } from './geo';
+import { ISS_ORBITAL_RADIUS } from './constants/planets.const';
 
 // Create ISS as a more realistic model
 const iss = new Group();
 
 // Main truss structure (central backbone)
 const trussGeometry = new CylinderGeometry(0.002, 0.002, 0.025, 6);
-const trussMaterial = new MeshBasicMaterial({ color: 0x888888 });
+const trussMaterial = new MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.6, metalness: 0.8 });
 const truss = new Mesh(trussGeometry, trussMaterial);
 iss.add(truss);
 
 // Pressurized modules along the truss
 const moduleGeometry = new BoxGeometry(0.003, 0.003, 0.008);
-const moduleMaterial = new MeshBasicMaterial({ color: 0xaaaaaa });
+const moduleMaterial = new MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.5, metalness: 0.3 });
 for (let i = -1; i <= 1; i++) {
     const module = new Mesh(moduleGeometry, moduleMaterial);
     module.position.z = i * 0.006;
@@ -22,7 +23,7 @@ for (let i = -1; i <= 1; i++) {
 
 // Solar panel array - Port (left) side
 const portPanelGeometry = new BoxGeometry(0.035, 0.00015, 0.008);
-const panelMaterial = new MeshBasicMaterial({ color: 0x1a4d99 });
+const panelMaterial = new MeshStandardMaterial({ color: 0x1a3f77, roughness: 0.25, metalness: 0.7 });
 
 const portPanel = new Mesh(portPanelGeometry, panelMaterial);
 portPanel.position.set(-0.023, 0.005, 0);
@@ -35,7 +36,7 @@ iss.add(starboardPanel);
 
 // Radiators (golden-bronze color)
 const radiatorGeometry = new BoxGeometry(0.015, 0.00015, 0.008);
-const radiatorMaterial = new MeshBasicMaterial({ color: 0xb8860b });
+const radiatorMaterial = new MeshStandardMaterial({ color: 0xc9922a, roughness: 0.35, metalness: 0.85 });
 
 const portRadiator = new Mesh(radiatorGeometry, radiatorMaterial);
 portRadiator.position.set(-0.015, -0.005, 0);
@@ -48,21 +49,17 @@ iss.add(starboardRadiator);
 // Position ISS in orbit
 iss.position.set(ISS_ORBITAL_RADIUS, 0, 0);
 
-// Function to convert lat/lon to 3D coordinates, accounting for Earth's rotation
-function latLonToPosition(latitude, longitude, radius = ISS_ORBITAL_RADIUS) {
-    const lat = (latitude * Math.PI) / 180;
-    const lon = (longitude * Math.PI) / 180;
-    
-    const x = radius * Math.cos(lat) * Math.cos(lon);
-    const y = radius * Math.sin(lat);
-    const z = radius * Math.cos(lat) * Math.sin(lon);
-    
-    // Rotate position vector by Earth's current rotation
-    const rotationAxis = new Vector3(0, 1, 0);
-    const position = new Vector3(x, y, z);
-    position.applyAxisAngle(rotationAxis, -earth.rotation.y);
-    
-    return position;
+// Convert lat/lon to a 3D position, carried into the Earth mesh's current frame.
+//
+// This previously negated both the longitude term and the rotation angle. The two
+// errors cancelled for the *rotation*, so the ISS tracked the spinning globe
+// correctly, but the net result placed it at a mirrored longitude — over the wrong
+// hemisphere. Both now go through the shared helper, which the sun also uses, so
+// the station and the daylight terminator agree on where a place is.
+function latLonToPosition(latitude: number, longitude: number, radius = ISS_ORBITAL_RADIUS): Vector3 {
+    const direction = latLonToDirection(latitude, longitude);
+    toWorldFrame(direction, earth.rotation.y);
+    return direction.multiplyScalar(radius);
 }
 
 let issCurrentPos = new Vector3(ISS_ORBITAL_RADIUS, 0, 0);

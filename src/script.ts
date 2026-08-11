@@ -1,11 +1,14 @@
-import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group, Raycaster, Vector2, MeshBasicMaterial } from 'three';
+import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Mesh, Group, Raycaster, Vector2, AmbientLight, ACESFilmicToneMapping } from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { earth } from './planets/earth/earth';
+import { earth, earthSunDirectionView } from './planets/earth/earth';
+import { clouds } from './planets/earth/clouds';
+import { atmosphere, atmosphereSunDirection } from './planets/earth/atmosphere';
+import { sun, sunDirection, updateSunPosition } from './sun';
 import { backgroundTexture } from './background/background';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
-import { moon, moonOrbit, moonHalo } from './planets/earth/moon';
-import { EARTH_ANGULAR_VELOCITY, MOON_DISTANCE, MOON_ANGULAR_VELOCITY, ISS_UPDATE_INTERVAL } from './constants/planets.const';
+import { moon, moonTidalRotation } from './planets/earth/moon';
+import { EARTH_ANGULAR_VELOCITY, MOON_DISTANCE, MOON_ANGULAR_VELOCITY, ISS_UPDATE_INTERVAL, CLOUD_ANGULAR_VELOCITY_SCALE } from './constants/planets.const';
 
 export function initScene() {
     const container = document.getElementById('app') as HTMLElement;
@@ -28,6 +31,10 @@ export function initScene() {
     const renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(initialWidth, initialHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+    // Filmic tone mapping keeps the sunlit face from clipping to flat white where
+    // deserts and cloud tops are brightest.
+    renderer.toneMapping = ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
     renderer.domElement.style.display = 'block';
     container.appendChild(renderer.domElement);
 
@@ -45,11 +52,19 @@ export function initScene() {
     const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 10000);
 
     scene.add(earth);
+    scene.add(clouds);
+    scene.add(atmosphere);
     scene.add(iss);
     scene.add(moon);
-    scene.add(moonOrbit);
-    moon.add(moonHalo);
     scene.add(backgroundTexture);
+
+    // The sun. Its target must live in the scene graph for the light to aim.
+    scene.add(sun);
+    scene.add(sun.target);
+    // Just enough fill to keep the night side from crushing to pure black — real
+    // night sides catch starlight and, for the Moon, earthshine. Any more than this
+    // and the terminator stops reading.
+    scene.add(new AmbientLight(0x2a3a55, 0.05));
 
     // Moon label (CSS2D)
     const moonLabelEl = document.createElement('div');
@@ -155,7 +170,7 @@ export function initScene() {
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([moon, earth, moonOrbit]);
+        const intersects = raycaster.intersectObjects([moon, earth]);
 
         // Reset previous hover
         if (hoveredObject) {
@@ -169,7 +184,7 @@ export function initScene() {
 
             // Check if already focused
             let targetObject: Mesh | null = null;
-            if (hoveredObject === moon || hoveredObject === moonOrbit) {
+            if (hoveredObject === moon) {
                 targetObject = moon;
             } else if (hoveredObject === earth) {
                 targetObject = earth;
@@ -193,13 +208,13 @@ export function initScene() {
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects([moon, earth, moonOrbit]);
+        const intersects = raycaster.intersectObjects([moon, earth]);
 
         if (intersects.length > 0) {
             const clickedObject = intersects[0].object;
 
             let targetObject: Mesh | null = null;
-            if (clickedObject === moon || clickedObject === moonOrbit) {
+            if (clickedObject === moon) {
                 targetObject = moon;
             } else if (clickedObject === earth) {
                 targetObject = earth;
@@ -270,7 +285,17 @@ export function initScene() {
 
         if (rotationEnabled) {
             earth.rotation.y += EARTH_ANGULAR_VELOCITY;
+            clouds.rotation.y += EARTH_ANGULAR_VELOCITY * CLOUD_ANGULAR_VELOCITY_SCALE;
         }
+
+        // Re-aim the sun at the subsolar point for the current instant. The Earth's
+        // spin is passed in so the terminator stays locked to real geography rather
+        // than sliding across the continents as the mesh turns.
+        updateSunPosition(new Date(), earth.rotation.y);
+        atmosphereSunDirection.copy(sunDirection);
+        // The Earth shader compares the sun against a view-space normal, so the
+        // direction has to be carried into view space alongside it.
+        earthSunDirectionView.copy(sunDirection).transformDirection(camera.matrixWorldInverse);
 
         // Smooth interpolation between current and target position
         const elapsedTime = Date.now() - issLastUpdateTime;
@@ -287,19 +312,16 @@ export function initScene() {
         }
         moon.position.x = Math.cos(moonOrbitalAngle) * MOON_DISTANCE;
         moon.position.z = Math.sin(moonOrbitalAngle) * MOON_DISTANCE;
+        // Tidal lock: one rotation per orbit, so the near side always faces Earth.
+        moon.rotation.y = moonTidalRotation(moonOrbitalAngle);
 
-        // Keep moon halo facing camera; fixed radius (no distance scaling)
-        moonHalo.lookAt(camera.position);
+        // The label hides once the camera is actually parked on the Moon — at that
+        // point the object speaks for itself and the tag just sits in the way.
         const moonViewingDistance = camera.position.distanceTo(moon.position);
         const moonTargetDistance = controls.target.distanceTo(moon.position);
-        const moonHaloMaterial = moonHalo.material as MeshBasicMaterial;
-        const targetHaloOpacity = (moonTargetDistance < 1 && moonViewingDistance < 10) ? 0 : 0.6;
-        const newOpacity = moonHaloMaterial.opacity + (targetHaloOpacity - moonHaloMaterial.opacity) * 0.15;
-        moonHaloMaterial.opacity = Math.max(0, Math.min(0.6, newOpacity));
-        moonHalo.visible = moonHaloMaterial.opacity > 0.02;
+        const isObservingMoon = moonTargetDistance < 1 && moonViewingDistance < 10;
 
-        // Moon label fade mirrors halo behavior
-        const targetLabelOpacity = targetHaloOpacity > 0 ? 1 : 0;
+        const targetLabelOpacity = isObservingMoon ? 0 : 1;
         const currentLabelOpacity = parseFloat(moonLabelEl.style.opacity || '0');
         const newLabelOpacity = currentLabelOpacity + (targetLabelOpacity - currentLabelOpacity) * 0.15;
         moonLabelEl.style.opacity = newLabelOpacity.toFixed(2);
