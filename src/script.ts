@@ -8,18 +8,24 @@ import { sun, sunLight, updateSun } from './sun';
 import { backgroundTexture } from './background/background';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
 import { moon, moonTidalRotation } from './planets/earth/moon';
+import { mars } from './planets/mars/mars';
+import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import {
     EARTH_OBLIQUITY,
     earthOrbitPosition,
     earthSpinAngle,
+    marsOrbitPosition,
+    marsSpinAngle,
+    MARS_AXIS_ORIENTATION,
     moonEclipticLongitude,
     moonOrbitPosition,
 } from './orbits';
 import {
     ISS_UPDATE_INTERVAL,
     CLOUD_ANGULAR_VELOCITY_SCALE,
+    MARS_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
     MOON_RADIUS,
     EARTH_ORBIT_RADIUS,
@@ -71,19 +77,23 @@ export function initScene() {
     // resolution goes as z^2/(near * 2^24), which is unchanged.
     const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 400000);
 
-    // Scene graph. The Sun is at the world origin; everything Earth-ish hangs off a
-    // single moving node so the orbit only has to be applied in one place.
+    // Scene graph. The Sun is at the world origin; each planet hangs off a single
+    // moving node so its orbit only has to be applied in one place.
     //
     //   scene
     //   ├── sun
-    //   └── earthSystem            <- moves along the orbit
-    //       ├── earthTilt          <- fixed 23.44° lean, never follows the orbit
-    //       │   ├── earth          <- spins inside the tilt
-    //       │   ├── clouds
-    //       │   └── iss
-    //       ├── atmosphere
-    //       └── moonOrbitPlane     <- inclined to the ecliptic, not to the equator
-    //           └── moon
+    //   ├── earthSystem            <- moves along the orbit
+    //   │   ├── earthTilt          <- fixed 23.44° lean, never follows the orbit
+    //   │   │   ├── earth          <- spins inside the tilt
+    //   │   │   ├── clouds
+    //   │   │   └── iss
+    //   │   ├── atmosphere
+    //   │   └── moonOrbitPlane     <- inclined to the ecliptic, not to the equator
+    //   │       └── moon
+    //   └── marsSystem             <- same shape, one orbit further out
+    //       ├── marsAxis           <- fixed IAU pole direction, likewise never touched
+    //       │   └── mars           <- spins inside the tilt
+    //       └── marsAtmosphere
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
     // The tilt is applied here, above the spin, and is never touched again. That is
@@ -102,14 +112,28 @@ export function initScene() {
     earthSystem.add(atmosphere);
     earthSystem.add(moonOrbitPlane);
 
+    // Mars is built exactly like the Earth, for exactly the same reason: the axis
+    // node is set once from the IAU pole and then left alone, so Mars leans a fixed
+    // way in space and gets its own seasons out of the geometry. Earth's tilt is a
+    // single rotation about X because the scene's frame is *defined* by Earth's
+    // orbit; Mars's has to be a full orientation, since its pole points somewhere
+    // that has nothing to do with our equinox.
+    const marsSystem = new Object3D();
+    const marsAxis = new Object3D();
+    marsAxis.quaternion.copy(MARS_AXIS_ORIENTATION);
+
+    marsAxis.add(mars);
+    marsSystem.add(marsAxis);
+    marsSystem.add(marsAtmosphere);
+
     scene.add(earthSystem);
+    scene.add(marsSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
 
-    // Directional light aimed from the Sun at the Earth; the target must be in the
-    // scene graph for three to resolve its world position.
+    // A point light sitting inside the Sun, so every body is lit from the direction
+    // the Sun really is — and dimmed by however far out it orbits.
     sunLight.position.set(0, 0, 0);
-    sunLight.target = earthSystem;
     scene.add(sunLight);
     // Just enough fill to keep the night side from crushing to pure black — real
     // night sides catch starlight and, for the Moon, earthshine. Any more than this
@@ -156,10 +180,11 @@ export function initScene() {
         { ...createLabel('Earth', earthSystem, 1.25), body: earthSystem, radius: 1, hideBeyond: Infinity },
         { ...createLabel('Moon', moon, 0.18), body: moon, radius: MOON_RADIUS, hideBeyond: 400 },
         { ...createLabel('Sun', sun, SUN_RADIUS * 1.15), body: sun, radius: SUN_RADIUS, hideBeyond: Infinity },
+        { ...createLabel('Mars', marsSystem, MARS_RADIUS * 1.25), body: marsSystem, radius: MARS_RADIUS, hideBeyond: Infinity },
     ];
 
-    // Distance markers so Earth and the Moon stay findable once the whole orbit is
-    // in frame and they are both well under a pixel across.
+    // Distance markers so the planets stay findable once the whole system is in
+    // frame and they are all well under a pixel across.
     // The Sun needs one too: at a true AU its disc is only ~5px from Earth and ~3px
     // from the system view, so without this the brightest object in the scene reads
     // as a dim speck.
@@ -167,10 +192,12 @@ export function initScene() {
         createBodyMarker(0x9fc4ff, 1),
         createBodyMarker(0xcfcfcf, MOON_RADIUS),
         createBodyMarker(0xfff2d8, SUN_RADIUS, 14),
+        createBodyMarker(0xff9c6b, MARS_RADIUS),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
     sun.add(markers[2].sprite);
+    marsSystem.add(markers[3].sprite);
 
     // Start parked next to Earth. Earth is a full AU (23,481 units) from the origin,
     // so the old `camera.position.z = 3` would drop the camera inside the Sun.
@@ -183,10 +210,15 @@ export function initScene() {
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 0.1;
-    // Framing the whole orbit needs roughly radius/tan(fov/2) ~ 30,600 units, so
-    // this leaves comfortable headroom past that.
-    controls.maxDistance = EARTH_ORBIT_RADIUS * 2.5;
+    // Framing Mars's orbit needs roughly 1.67 AU/tan(fov/2) ~ 2.2 AU, so this leaves
+    // comfortable headroom past that.
+    controls.maxDistance = EARTH_ORBIT_RADIUS * 4;
     controls.enablePan = true;
+
+    // Earth is framed from 3 of its radii; Mars is barely half the size, so matching
+    // that framing means measuring the distance in *its* radii rather than reusing
+    // the number.
+    const MARS_VIEW_DISTANCE = MARS_RADIUS * 3.5;
 
     /**
      * Camera focus.
@@ -262,6 +294,9 @@ export function initScene() {
             case '3':
                 focusOnObject(iss, 0.5, 1500);
                 break;
+            case '4':
+                focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
+                break;
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
@@ -278,6 +313,7 @@ export function initScene() {
         { hit: earth, focus: earth, distance: 3 },
         { hit: moon, focus: moon, distance: 3 },
         { hit: sun, focus: sun, distance: SUN_RADIUS * 4 },
+        { hit: mars, focus: mars, distance: MARS_VIEW_DISTANCE },
     ];
 
     function pickTarget(event: MouseEvent) {
@@ -346,14 +382,19 @@ export function initScene() {
                 case 'iss':
                     focusOnObject(iss, 0.5, 1500);
                     break;
+                case 'mars':
+                    focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
+                    break;
                 case 'sun':
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
                     break;
                 case 'system':
-                    // Far enough back from the Sun to take in the whole orbit, viewed
-                    // obliquely from above the ecliptic so the orbit reads as a
-                    // circle rather than edge-on.
-                    focusOnObject(sun, EARTH_ORBIT_RADIUS * 1.6, 2500, new Vector3(0.3, 0.78, 0.55));
+                    // Far enough back from the Sun to take in the whole system,
+                    // viewed obliquely from above the ecliptic so the orbits read as
+                    // circles rather than edge-on. Mars reaches 1.67 AU at aphelion
+                    // and a 75° vertical field sees 0.77 AU per AU of distance, so
+                    // anything under ~2.2 AU back would crop its orbit.
+                    focusOnObject(sun, EARTH_ORBIT_RADIUS * 2.6, 2500, new Vector3(0.3, 0.78, 0.55));
                     break;
             }
         });
@@ -406,8 +447,12 @@ export function initScene() {
         // Tidal lock: one rotation per orbit, so the near side always faces Earth.
         moon.rotation.y = moonTidalRotation(moonEclipticLongitude(now));
 
-        // Sunlight direction, now genuinely geometric: Earth sits somewhere on the
-        // orbit and the Sun is at the origin, so this is simply the way back.
+        marsOrbitPosition(now, marsSystem.position);
+        // The IAU prime-meridian angle, applied inside the fixed axis node.
+        mars.rotation.y = marsSpinAngle(now);
+
+        // Sunlight direction, now genuinely geometric: each planet sits somewhere on
+        // its orbit and the Sun is at the origin, so this is simply the way back.
         const earthWorldPosition = earthSystem.getWorldPosition(scratchA);
         const sunDirection = scratchB.copy(earthWorldPosition).negate().normalize();
 
@@ -415,6 +460,10 @@ export function initScene() {
         // The Earth shader compares the sun against a view-space normal, so the
         // direction has to be carried into view space alongside it.
         earthSunDirectionView.copy(sunDirection).transformDirection(camera.matrixWorldInverse);
+
+        // Mars needs its own: it is a whole orbit away, so the direction back to the
+        // Sun is nothing like Earth's.
+        marsAtmosphereSunDirection.copy(marsSystem.position).negate().normalize();
 
         // Smooth interpolation between current and target position
         const elapsedTime = Date.now() - issLastUpdateTime;

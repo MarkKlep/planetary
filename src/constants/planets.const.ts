@@ -43,6 +43,33 @@ export const MOON_ORBITAL_PERIOD_DAYS = 27.321661; // sidereal
  *  eclipse every single month. */
 export const MOON_ORBIT_INCLINATION_DEG = 5.145;
 
+// Mars constants
+export const MARS_RADIUS_KM = 3389.5; // volumetric mean radius
+/** Just over half Earth's radius, so ~0.53 units. */
+export const MARS_RADIUS = MARS_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * Orientation of Mars in space, from the IAU working group's rotational elements.
+ *
+ * The pole is given as a fixed direction in the J2000 *equatorial* frame, which is
+ * what makes the Martian seasons work the same way Earth's do here: point the axis
+ * once and leave it alone while the planet goes round. Mars's obliquity is not
+ * stated anywhere — it falls out of this pole direction as ~25.2° to its own orbit,
+ * which is why Mars has seasons much like Earth's, only twice as long.
+ */
+export const MARS_POLE_RA_DEG = 317.68143;
+export const MARS_POLE_DEC_DEG = 52.88650;
+/** Prime meridian angle at J2000, measured east from the node of Mars's equator. */
+export const MARS_PRIME_MERIDIAN_DEG = 176.630;
+export const MARS_ROTATION_DEG_PER_DAY = 350.89198226;
+/** 24h 37m 22s — the reason a Martian sol runs ~40 minutes longer than a day. */
+export const MARS_SIDEREAL_DAY = (360 / MARS_ROTATION_DEG_PER_DAY) * 86400;
+export const MARS_ORBITAL_PERIOD_DAYS = 686.980;
+/**
+ * Mars's air is ~0.6% of Earth's pressure and its scale height is 11 km, so the haze
+ * is a far thinner rind than Earth's: about 50 km, against Earth's ~220 km here.
+ */
+export const MARS_ATMOSPHERE_RADIUS = MARS_RADIUS * 1.015;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

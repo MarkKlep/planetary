@@ -1,5 +1,5 @@
 import {
-    DirectionalLight,
+    PointLight,
     Mesh,
     ShaderMaterial,
     SphereGeometry,
@@ -11,7 +11,12 @@ import {
     Group,
     Color,
 } from 'three';
-import { SUN_RADIUS, SUN_INTENSITY, SUN_ROTATION_PERIOD_DAYS } from './constants/planets.const';
+import {
+    SUN_RADIUS,
+    SUN_INTENSITY,
+    SUN_ROTATION_PERIOD_DAYS,
+    EARTH_ORBIT_RADIUS,
+} from './constants/planets.const';
 import { daysSinceJ2000 } from './orbits';
 
 /**
@@ -221,12 +226,24 @@ sun.add(createGlare(11.0, 3.4, '255,176,96', 0.30));
 /**
  * Sunlight.
  *
- * Kept directional rather than a point light: over the Earth-Moon system real
- * sunlight is parallel to within a fraction of a degree, and a directional light
- * gives a predictable intensity with no inverse-square falloff to tune. Its
- * direction is set by aiming `target` at the Earth each frame.
+ * This was a `DirectionalLight` aimed at the Earth, which was fine while the Earth
+ * and Moon were the only lit bodies: over a system 60 Earth-radii across, real
+ * sunlight is parallel to a small fraction of a degree. It does not survive a second
+ * planet. A directional light has *one* direction for the whole scene, so Mars would
+ * have been lit from whatever way Earth happened to lie — up to 180° wrong, putting
+ * its terminator on the wrong side of the planet whenever the two were not aligned.
+ *
+ * A point light at the origin is the honest fix: every body is lit from wherever the
+ * Sun actually is relative to it, which is the same thing the sky does.
+ *
+ * The intensity is the directional light's, multiplied back up by the square of an
+ * AU. three.js's point lights fall off as 1/d², so this reproduces the old Earth
+ * lighting exactly while making the falloff itself real — Mars, half again as far
+ * out, receives the 43% of Earth's sunlight that it should, varying between 36% and
+ * 52% over its year because its orbit is so eccentric.
  */
-export const sunLight = new DirectionalLight(0xfff6e8, SUN_INTENSITY);
+export const sunLight = new PointLight(0xfff6e8, SUN_INTENSITY * EARTH_ORBIT_RADIUS ** 2);
+sunLight.decay = 2;
 
 /** Spins the photosphere and drifts its granulation, driven by the simulated clock. */
 export function updateSun(date: Date): void {

@@ -14,6 +14,7 @@ export function NavPanel() {
     { id: 'earth', label: 'Earth' },
     { id: 'moon', label: 'Moon' },
     { id: 'iss', label: 'ISS' },
+    { id: 'mars', label: 'Mars' },
   ];
 
   return (

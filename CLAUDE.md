@@ -35,12 +35,13 @@ When changing anything heatmap-related, check whether the edit belongs in the ro
 
 ### Main 3D scene (`src/script.ts`)
 
-`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`/`1`/`2`/`3` to focus Earth/Earth-reset/Moon/ISS) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
+`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`/`1`/`2`/`3`/`4` to focus Earth-reset/Earth/Moon/ISS/Mars) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
 
 Scene objects are each defined in their own module and imported into `script.ts` as pre-built Three.js objects (not factories):
 - `src/planets/earth/earth.ts` — Earth mesh. `MeshStandardMaterial` with day/height/land-mask maps, plus an `onBeforeCompile` patch that adds night-side city lights (the night texture is added to `totalEmissiveRadiance` masked by the surface's angle to the sun, since a plain `emissiveMap` would also glow through the daylit face). Exports `earthSunDirectionView`, which the render loop must keep updated in **view** space.
 - `src/planets/earth/clouds.ts`, `src/planets/earth/atmosphere.ts` — separate shells at radius 1.006 / 1.035. The atmosphere is a `BackSide` additive Fresnel shell, scaled by sun alignment so it only glows on the lit limb.
-- `src/planets/earth/moon.ts` — Moon mesh. Orbital motion is computed per-frame in `script.ts`, not inside this module. Lit by the same directional sun, so it runs through real phases. `moonTidalRotation(orbitalAngle)` returns the spin that keeps the near side facing Earth — the mesh must be rotated every frame or it holds a fixed world orientation and slowly turns its far side toward us.
+- `src/planets/earth/moon.ts` — Moon mesh. Orbital motion is computed per-frame in `script.ts`, not inside this module. Lit by the same sun, so it runs through real phases. `moonTidalRotation(orbitalAngle)` returns the spin that keeps the near side facing Earth — the mesh must be rotated every frame or it holds a fixed world orientation and slowly turns its far side toward us.
+- `src/planets/mars/mars.ts`, `src/planets/mars/atmosphere.ts` — Mars mesh (Viking colour + MOLA relief) and its much thinner limb haze. Deliberately carries *no* albedo correction, unlike the Moon: see the comment there, the arithmetic is not the obvious one.
 - `src/iss.ts` — ISS model (built from primitives) plus `updateISSPosition()`, which polls `http://api.open-notify.org/iss-now.json` on an interval (`ISS_UPDATE_INTERVAL`) and converts lat/lon to a 3D position accounting for Earth's current rotation. Position updates are interpolated (lerp) between fetches in the animation loop rather than snapping.
 - `src/background/background.ts` — procedural starfield (`Points`).
 - `src/constants/planets.const.ts` — single source of truth for orbital/rotation constants, all derived from real-world values (sidereal day, km radii/distances) then scaled relative to Earth's radius = 1 unit. Add new celestial-body constants here rather than inlining magic numbers.
@@ -49,36 +50,47 @@ Units: 1 scene unit = 1 Earth radius. Distances/sizes for new objects should be 
 
 ### The orbital model (important, easy to get wrong)
 
-The Sun is at the world origin and Earth orbits it. **Nothing accumulates per-frame angles** — every body's transform is a pure function of the simulated date, which is what keeps the spin, both orbits and the seasons in step at any time multiplier, and makes it frame-rate independent.
+The Sun is at the world origin and the planets orbit it. **Nothing accumulates per-frame angles** — every body's transform is a pure function of the simulated date, which is what keeps the spin, the orbits and the seasons in step at any time multiplier, and makes it frame-rate independent.
 
 Scene graph, built in `initScene()`:
 
 ```
 scene
 ├── sun                     (origin)
-└── earthSystem             moves along the orbit
-    ├── earthTilt           fixed −23.44° about X; never touched again
-    │   ├── earth           spins inside the tilt
-    │   ├── clouds
-    │   └── iss
-    ├── atmosphere
-    └── moonOrbitPlane      5.14° to the ecliptic, not to the equator
-        └── moon
+├── earthSystem             moves along the orbit
+│   ├── earthTilt           fixed −23.44° about X; never touched again
+│   │   ├── earth           spins inside the tilt
+│   │   ├── clouds
+│   │   └── iss
+│   ├── atmosphere
+│   └── moonOrbitPlane      5.14° to the ecliptic, not to the equator
+│       └── moon
+└── marsSystem              same shape, one orbit out
+    ├── marsAxis            fixed IAU pole orientation; likewise never touched
+    │   └── mars            spins inside it
+    └── marsAtmosphere
 ```
 
-The tilt living *above* the spin, and never being updated, is the whole mechanism: the axis stays pointing at a fixed direction in space while Earth goes round, so the seasons fall out of the geometry. Verified — the solstice declination of ±23.44° is not imposed anywhere, it emerges and matches the almanac formula to 0.004°.
+The tilt living *above* the spin, and never being updated, is the whole mechanism: the axis stays pointing at a fixed direction in space while the planet goes round, so the seasons fall out of the geometry. Verified — Earth's solstice declination of ±23.44° is not imposed anywhere, it emerges and matches the almanac formula to 0.004°; likewise Mars's 25.19° obliquity emerges from its pole direction alone. **Add new planets by copying this shape**, not by rotating a system node per frame.
 
 `src/orbits.ts` owns the maths. World layout is: ecliptic = XZ plane, +Y = ecliptic north, longitudes via `eclipticDirection()` which uses the same negative-z handedness as `geo.ts` so the two compose without a sign fix. `earthSpinAngle()` solves for the spin that puts the subsolar point under the Sun given the tilt — read the comment there before touching it.
 
+Two traps when adding a body to `orbits.ts`, both already hit:
+
+- **Frames.** Earth's position comes from an almanac series, which is referred to the *equinox of date*; orbital elements are referred to *J2000*. Mixing them silently is a 0.37° error today, growing forever. `marsOrbitPosition()` ends with a `precessionSinceJ2000()` rotation for exactly this reason — any new body built from elements needs the same.
+- **Axes.** Textbook coordinates are z-up; this scene is y-up. `eclipticToScene()` / `equatorialToScene()` do the conversion; don't hand-roll the sign juggling.
+
 `src/geo.ts` is still the single source of truth for latitude/longitude: **`(cos·cos, sin(lat), −cos·sin(lon))`**, derived from three.js's `SphereGeometry` UV layout. Note the negative z.
 
-Sunlight is now geometric rather than constructed: the direction is simply `normalize(-earthWorldPosition)`. It feeds two consumers in **different spaces** — `atmosphereSunDirection` (world) and `earthSunDirectionView` (view space, via `.transformDirection(camera.matrixWorldInverse)`, because the Earth shader compares it against a view-space normal).
+Sunlight is geometric rather than constructed: each planet's direction is simply `normalize(-planetWorldPosition)`. It feeds consumers in **different spaces** — `atmosphereSunDirection` and `marsAtmosphereSunDirection` (world) and `earthSunDirectionView` (view space, via `.transformDirection(camera.matrixWorldInverse)`, because the Earth shader compares it against a view-space normal).
+
+`sunLight` is a **`PointLight` at the origin, not a directional light**. A directional light has one direction for the entire scene, which was fine while Earth and the Moon shared a spot in the sky but lights a second planet from a direction up to 180° wrong. Its intensity is scaled by the square of an AU so the 1/d² falloff reproduces the old Earth lighting exactly — meaning **the intensity constant is not in ordinary units**, and outer planets get correctly dimmer for free. Do not "fix" a dim distant planet by raising it.
 
 `src/simulation.ts` is the clock: starts at the real current date, advances by real elapsed time × a multiplier, and pause stops it (which halts spin *and* orbits).
 
 ### Scale, and why bodies have markers
 
-**Everything is at true scale** — body sizes, the Earth–Moon distance, and the Earth's orbit (`EARTH_ORBIT_RADIUS` = a real AU, 23,481 units). Nothing is fudged, which is what makes apparent sizes come out right for free: from Earth the Sun subtends 0.5329° and the Moon 0.5179° (real: 0.533° / 0.518°), a ratio of 1.03 — the near-coincidence that makes total solar eclipses just barely possible.
+**Everything is at true scale** — body sizes, the Earth–Moon distance, and the orbits (`EARTH_ORBIT_RADIUS` = a real AU, 23,481 units; Mars ranges over 1.38–1.67 of those). Nothing is fudged, which is what makes apparent sizes come out right for free: from Earth the Sun subtends 0.5329° and the Moon 0.5179° (real: 0.533° / 0.518°), a ratio of 1.03 — the near-coincidence that makes total solar eclipses just barely possible.
 
 The cost is that Earth is 1 unit against a 23,481-unit orbit, so it falls far below a pixel whenever the orbit is in frame — and even the Sun is only ~3px there, ~5px from Earth. `src/body-marker.ts` handles this the way Celestia and NASA's Eyes do: a small additive dot that fades in only once the body itself drops below a few pixels, so the geometry stays honest. **Do not "fix" invisible bodies by scaling the meshes up.**
 
