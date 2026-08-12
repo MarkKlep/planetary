@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
+import { FlightHud } from './flight-hud/flight-hud';
 import { initScene } from './script';
 
 export function App() {
@@ -14,6 +15,7 @@ export function App() {
     <>
       <div id="app"></div>
       <NavPanel />
+      <FlightHud />
     </>
   );
 }

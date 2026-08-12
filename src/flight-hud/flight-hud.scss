@@ -1,0 +1,84 @@
+.flight-hud {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    width: 232px;
+    padding: 16px 18px;
+    border-radius: 10px;
+    background: rgba(15, 15, 25, 0.92);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    color: white;
+
+    // The canvas underneath is being dragged to look around, so the panel must
+    // never swallow the pointer.
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+
+    &--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+}
+
+.flight-hud__title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 12px;
+}
+
+.flight-hud__readout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    align-items: baseline;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.flight-hud__label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.flight-hud__value {
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    // Tabular figures stop the speed jittering sideways as digits change.
+    font-variant-numeric: tabular-nums;
+}
+
+.flight-hud__keys {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.flight-hud__key-row {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    gap: 10px;
+    font-size: 11px;
+
+    dt {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    dd {
+        color: rgba(255, 255, 255, 0.45);
+    }
+}

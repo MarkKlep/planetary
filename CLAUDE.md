@@ -35,7 +35,7 @@ When changing anything heatmap-related, check whether the edit belongs in the ro
 
 ### Main 3D scene (`src/script.ts`)
 
-`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`/`1`/`2`/`3`/`4` to focus Earth-reset/Earth/Moon/ISS/Mars) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
+`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`/`1`/`2`/`3`/`4` to focus Earth-reset/Earth/Moon/ISS/Mars, `F`/`Esc` for free flight) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
 
 Scene objects are each defined in their own module and imported into `script.ts` as pre-built Three.js objects (not factories):
 - `src/planets/earth/earth.ts` — Earth mesh. `MeshStandardMaterial` with day/height/land-mask maps, plus an `onBeforeCompile` patch that adds night-side city lights (the night texture is added to `totalEmissiveRadiance` masked by the surface's angle to the sun, since a plain `emissiveMap` would also glow through the daylit face). Exports `earthSunDirectionView`, which the render loop must keep updated in **view** space.
@@ -101,6 +101,18 @@ Two traps at this scale, both already hit once:
 - **Marker/glow textures need flat-topped gradients.** Drawn at ~10px, a gradient that starts falling off at the centre leaves a solid core barely 2px wide and reads as a smudge.
 
 Because bodies move, the camera **follows**: `focusOnObject()` stores the target object plus an offset and re-derives its endpoint every frame (a snapshot would miss, since the body moves during the fly-to), and `followTarget` then translates the camera by the body's per-frame delta so the user's orbit angle survives. Anything comparing positions must use `getWorldPosition()` — `.position` is now a local coordinate for everything under `earthSystem`. The star dome is pinned to the camera each frame, otherwise travelling 1500 units along the orbit flies you out of your own starfield.
+
+### The two camera modes
+
+`OrbitControls` (guided) and `src/free-flight.ts` (fly it yourself) are **mutually exclusive**, and `setFreeFlight()` in `script.ts` is the only thing that switches between them. They cannot both be live: `OrbitControls.update()` ends by aiming the camera at its pivot, so it is disabled *and* its `update()` is skipped while flying, or it would overwrite the direction free flight just set. Coming back, the pivot is re-parked straight ahead of the camera so the handover is invisible — which is also why free flight has no roll, since `lookAt` assumes the world up vector.
+
+`updateNearestBody()` answers "what am I nearest, and by how much" once per frame, and three separate things depend on it:
+
+- **Flight speed** is proportional to the clearance to the nearest surface. At true scale there is no workable fixed speed — inspecting the ISS wants ~0.01 units/s and reaching Mars wants ~1000 — so making it scale-invariant is the only thing that works. **Don't replace this with a constant.**
+- **The near plane** is derived from it too, in `updateNearPlane()`. A fixed 0.1 clipped everything within 640 km, so you could never actually reach a surface; but depth resolution goes as `z²/(near · 2²⁴)`, so a permanently tiny near plane would wreck the depth buffer at solar-system range. Only the nearest thing matters, so scaling it is what satisfies both.
+- **The reference frame** you fly in. Free flight sets `followTarget` to the nearest body, so parking beside a planet inherits its motion instead of watching it leave at 30 km/s (much more at high time multipliers).
+
+Free flight must also use **real** elapsed time, not the simulated clock — it has to keep working while the simulation is paused, and must not speed up because the user picked a larger time multiplier.
 
 ### Textures
 

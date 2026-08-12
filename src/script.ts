@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Object3D, Raycaster, Vector2, AmbientLight, ACESFilmicToneMapping } from 'three';
+import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Object3D, Raycaster, Vector2, AmbientLight, ACESFilmicToneMapping, MathUtils } from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { earth, earthSunDirectionView } from './planets/earth/earth';
@@ -12,6 +12,7 @@ import { mars } from './planets/mars/mars';
 import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
+import { createFreeFlight } from './free-flight';
 import {
     EARTH_OBLIQUITY,
     earthOrbitPosition,
@@ -25,6 +26,7 @@ import {
 import {
     ISS_UPDATE_INTERVAL,
     CLOUD_ANGULAR_VELOCITY_SCALE,
+    EARTH_RADIUS_KM,
     MARS_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
     MOON_RADIUS,
@@ -221,6 +223,68 @@ export function initScene() {
     const MARS_VIEW_DISTANCE = MARS_RADIUS * 3.5;
 
     /**
+     * "What am I nearest, and by how much?" — recomputed every frame.
+     *
+     * Three separate things need this, which is why it is worth computing once: the
+     * flight speed scales with it, the near plane scales with it, and the body it
+     * names becomes the frame you fly in.
+     */
+    const flightBodies: Array<{ name: string; object: Object3D; radius: number }> = [
+        { name: 'Sun', object: sun, radius: SUN_RADIUS },
+        { name: 'Earth', object: earthSystem, radius: 1 },
+        { name: 'Moon', object: moon, radius: MOON_RADIUS },
+        { name: 'Mars', object: marsSystem, radius: MARS_RADIUS },
+    ];
+    let nearestBody = flightBodies[1];
+    let nearestClearance = 1;
+
+    function updateNearestBody() {
+        let closest = flightBodies[0];
+        let clearance = Infinity;
+
+        for (const body of flightBodies) {
+            // Clearance to the *surface*, not the centre — otherwise the Sun, 109
+            // units of radius, would always read as far away while you skim it.
+            const distance =
+                camera.position.distanceTo(body.object.getWorldPosition(scratchA)) - body.radius;
+            if (distance < clearance) {
+                clearance = distance;
+                closest = body;
+            }
+        }
+
+        nearestBody = closest;
+        nearestClearance = clearance;
+    }
+
+    /**
+     * The near plane has to move with us.
+     *
+     * A fixed 0.1 clips everything within 640 km of the camera, so free flight could
+     * never actually reach a surface. But it cannot simply be made tiny either: depth
+     * resolution goes as z²/(near·2²⁴), so a near plane small enough to land with
+     * would destroy the depth buffer out at solar-system range. Since it is only ever
+     * the *nearest* thing that matters, deriving it from the clearance satisfies both
+     * — and incidentally makes the far view far more precise than the old constant.
+     */
+    function updateNearPlane() {
+        const near = MathUtils.clamp(nearestClearance * 0.02, 0.0002, 5);
+        // Rebuilding the projection matrix every frame for a sub-pixel change is
+        // pointless churn; a 5% band is well below anything visible.
+        if (Math.abs(near - camera.near) > camera.near * 0.05) {
+            camera.near = near;
+            camera.updateProjectionMatrix();
+        }
+    }
+
+    const freeFlight = createFreeFlight(camera, renderer.domElement);
+    const flightHud = document.getElementById('flight-hud');
+    const flightSpeedValue = document.getElementById('flight-speed');
+    const flightFrameValue = document.getElementById('flight-frame');
+    const toggleFreeFlightBtn = document.getElementById('toggle-free-flight');
+    toggleFreeFlightBtn?.addEventListener('click', () => setFreeFlight(!freeFlight.enabled));
+
+    /**
      * Camera focus.
      *
      * Nothing sits still any more, so a focus cannot be a snapshot of a position: by
@@ -253,6 +317,11 @@ export function initScene() {
         duration = 2000,
         approachFrom?: Vector3
     ) {
+        // Asking to be taken somewhere is the opposite of flying yourself there.
+        // This has to happen *first*: leaving free flight re-parks the orbit pivot,
+        // and the animation below captures that pivot as its starting point.
+        setFreeFlight(false);
+
         const targetPosition = target.getWorldPosition(scratchA).clone();
 
         // Default to the current line of sight so the framing does not lurch. Callers
@@ -279,12 +348,65 @@ export function initScene() {
         followInitialised = false;
     }
 
+    /**
+     * Hand control between the two camera modes.
+     *
+     * They cannot both be live: `OrbitControls.update()` ends by aiming the camera at
+     * its pivot, which would overwrite the direction free flight had just set. So the
+     * orbit controls are switched off outright, and `update()` is skipped, while
+     * flying.
+     */
+    function setFreeFlight(enabled: boolean) {
+        if (enabled === freeFlight.enabled) return;
+
+        if (enabled) {
+            focusAnimation = null;
+            controls.enabled = false;
+            freeFlight.enable();
+            document
+                .querySelectorAll('.nav-btn[data-target]')
+                .forEach((button) => button.classList.remove('active'));
+        } else {
+            freeFlight.disable();
+            controls.enabled = true;
+
+            // Give the orbit pivot somewhere sensible to be before handing back.
+            // Left where it was, the first `update()` would swing the camera round to
+            // face whatever it was last locked to. Parking it straight ahead, at
+            // roughly whatever we are near, makes the handover invisible.
+            const pivotDistance = MathUtils.clamp(
+                nearestClearance,
+                controls.minDistance,
+                controls.maxDistance
+            );
+            camera.getWorldDirection(scratchA);
+            controls.target.copy(camera.position).addScaledVector(scratchA, pivotDistance);
+
+            // Keep drifting with whatever we parked next to, rather than watching it
+            // pull away at orbital speed.
+            followTarget = nearestBody.object;
+            followInitialised = false;
+        }
+
+        flightHud?.classList.toggle('flight-hud--visible', enabled);
+        toggleFreeFlightBtn?.classList.toggle('active', enabled);
+        if (toggleFreeFlightBtn) {
+            toggleFreeFlightBtn.textContent = enabled ? 'Exit free flight' : 'Free flight';
+        }
+    }
+
     document.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event && (event.target as HTMLElement).tagName === 'INPUT' || (event.target as HTMLElement).tagName === 'TEXTAREA') {
             return;
         }
 
         switch (event.key.toLowerCase()) {
+            case 'f':
+                setFreeFlight(!freeFlight.enabled);
+                break;
+            case 'escape':
+                setFreeFlight(false);
+                break;
             case '1':
                 focusOnObject(earth, 3, 1500);
                 break;
@@ -342,13 +464,17 @@ export function initScene() {
         );
     }
 
+    // Both of these stand down while flying: the drag is a look-around, not a pick,
+    // and free flight owns the cursor.
     renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
+        if (freeFlight.enabled) return;
         const picked = pickTarget(event);
         const focusable = picked !== null && !isAlreadyObserving(picked.focus, picked.distance);
         renderer.domElement.style.cursor = focusable ? 'pointer' : 'default';
     });
 
     renderer.domElement.addEventListener('click', (event: MouseEvent) => {
+        if (freeFlight.enabled) return;
         const picked = pickTarget(event);
         if (picked && !isAlreadyObserving(picked.focus, picked.distance)) {
             focusOnObject(picked.focus, picked.distance, 1500);
@@ -427,9 +553,48 @@ export function initScene() {
         }
     });
 
+    // Real elapsed time, tracked separately from the simulated clock. Flying has to
+    // keep working while the simulation is paused, and must not go six times faster
+    // because the user picked a six-times time multiplier.
+    let lastFrameMs = performance.now();
+    let hudRefreshDue = 0;
+
+    /**
+     * Speeds here are true to scale, so they are genuinely enormous — parked three
+     * radii off Earth is already thousands of km/s. Rather than hide that, the
+     * read-out switches to AU/s once km/s stops being legible.
+     */
+    function formatSpeed(unitsPerSecond: number): string {
+        const kilometresPerSecond = unitsPerSecond * EARTH_RADIUS_KM;
+        if (kilometresPerSecond < 100000) {
+            return `${Math.round(kilometresPerSecond).toLocaleString()} km/s`;
+        }
+        return `${(unitsPerSecond / EARTH_ORBIT_RADIUS).toFixed(3)} AU/s`;
+    }
+
+    function updateFlightHud(nowMs: number) {
+        if (!freeFlight.enabled || nowMs < hudRefreshDue) return;
+        hudRefreshDue = nowMs + 100; // 10 Hz is plenty, and keeps the digits readable
+
+        if (flightSpeedValue) {
+            const multiplier = freeFlight.multiplier;
+            const scale = multiplier >= 1 ? multiplier.toFixed(1) : `1/${(1 / multiplier).toFixed(1)}`;
+            flightSpeedValue.textContent = `${formatSpeed(freeFlight.speed)}  ×${scale}`;
+        }
+        if (flightFrameValue) {
+            flightFrameValue.textContent = nearestBody.name;
+        }
+    }
+
     // Animation loop
     function animate() {
         requestAnimationFrame(animate);
+
+        const frameMs = performance.now();
+        // Clamped for the same reason the simulated clock is: a backgrounded tab
+        // should not resume by hurling the camera across the solar system.
+        const realDelta = Math.min((frameMs - lastFrameMs) / 1000, 0.1);
+        lastFrameMs = frameMs;
 
         // Everything below is a pure function of this one date, which is what keeps
         // the spin, both orbits and the seasons consistent at any time speed.
@@ -497,6 +662,17 @@ export function initScene() {
         // before the camera reads them.
         scene.updateMatrixWorld(true);
 
+        updateNearestBody();
+        updateNearPlane();
+
+        if (freeFlight.enabled) {
+            // Fly in the frame of whatever you are nearest. Parked beside Earth in
+            // the Sun's frame you would watch it leave at 30 km/s — and at the higher
+            // time multipliers, considerably faster than that. Inheriting its motion
+            // is what makes "go and hover over Mars" mean anything.
+            followTarget = nearestBody.object;
+        }
+
         if (focusAnimation) {
             const elapsed = Date.now() - focusAnimation.startTime;
             const t = Math.min(elapsed / focusAnimation.duration, 1);
@@ -526,11 +702,21 @@ export function initScene() {
             followInitialised = true;
         }
 
+        // The user's own movement goes on top of the frame drift above, so that
+        // flying and being carried along compose rather than fight.
+        if (freeFlight.enabled) {
+            freeFlight.update(realDelta, nearestClearance);
+            updateFlightHud(frameMs);
+        } else {
+            // Skipped while flying: `update()` finishes by aiming the camera at the
+            // orbit pivot, which would undo the direction just set.
+            controls.update();
+        }
+
         // Stars belong at infinity: pin the backdrop to the camera so travelling
         // 1500 units along the orbit does not fly us out of our own starfield.
         backgroundTexture.position.copy(camera.position);
 
-        controls.update();
         renderer.render(scene, camera);
         labelRenderer.render(scene, camera);
     }

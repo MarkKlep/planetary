@@ -64,6 +64,12 @@ export function NavPanel() {
         </div>
         <div className="nav-section">
             <h2 className="nav-section-title">Controls</h2>
+            {/* Free flight is also bound to F and left with Esc, so script.ts owns
+                this button's label and active state outright rather than mirroring
+                it into React state that the keyboard could desync. */}
+            <button className="nav-btn" id="toggle-free-flight">
+              Free flight
+            </button>
             <button
               className="nav-btn"
               id="reset-camera"
