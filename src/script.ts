@@ -9,11 +9,13 @@ import { backgroundTexture } from './background/background';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
 import { moon, moonTidalRotation } from './planets/earth/moon';
 import { mars } from './planets/mars/mars';
+import { deimos, phobos } from './planets/mars/moons';
 import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { createFreeFlight } from './free-flight';
 import {
+    DEIMOS,
     EARTH_OBLIQUITY,
     earthOrbitPosition,
     earthSpinAngle,
@@ -22,15 +24,21 @@ import {
     MARS_AXIS_ORIENTATION,
     moonEclipticLongitude,
     moonOrbitPosition,
+    PHOBOS,
+    satelliteState,
 } from './orbits';
 import {
     ISS_UPDATE_INTERVAL,
     CLOUD_ANGULAR_VELOCITY_SCALE,
+    DEIMOS_ORBIT_RADIUS,
+    DEIMOS_RADIUS,
     EARTH_RADIUS_KM,
     MARS_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
     MOON_RADIUS,
     EARTH_ORBIT_RADIUS,
+    PHOBOS_ORBIT_RADIUS,
+    PHOBOS_RADIUS,
     SUN_RADIUS,
 } from './constants/planets.const';
 
@@ -94,7 +102,9 @@ export function initScene() {
     //   │       └── moon
     //   └── marsSystem             <- same shape, one orbit further out
     //       ├── marsAxis           <- fixed IAU pole direction, likewise never touched
-    //       │   └── mars           <- spins inside the tilt
+    //       │   ├── mars           <- spins inside the tilt
+    //       │   ├── phobos         <- in Mars's *equatorial* plane, not the ecliptic
+    //       │   └── deimos
     //       └── marsAtmosphere
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
@@ -125,6 +135,13 @@ export function initScene() {
     marsAxis.quaternion.copy(MARS_AXIS_ORIENTATION);
 
     marsAxis.add(mars);
+    // Phobos and Deimos hang off the axis node rather than the system node, which is
+    // the one structural thing that separates them from the Moon: Mars's equatorial
+    // bulge, not the Sun, is what rules their orbits, so they lie in the plane of
+    // the equator above them and inherit its fixed lean. Their planes also precess,
+    // so the tilt is applied per frame in `satelliteState` rather than by a pivot.
+    marsAxis.add(phobos);
+    marsAxis.add(deimos);
     marsSystem.add(marsAxis);
     marsSystem.add(marsAtmosphere);
 
@@ -183,6 +200,11 @@ export function initScene() {
         { ...createLabel('Moon', moon, 0.18), body: moon, radius: MOON_RADIUS, hideBeyond: 400 },
         { ...createLabel('Sun', sun, SUN_RADIUS * 1.15), body: sun, radius: SUN_RADIUS, hideBeyond: Infinity },
         { ...createLabel('Mars', marsSystem, MARS_RADIUS * 1.25), body: marsSystem, radius: MARS_RADIUS, hideBeyond: Infinity },
+        // Scaled from the Moon's cutoff by orbit radius, so each label survives to
+        // roughly the same *apparent* separation from its planet before the two
+        // chips would start sitting on top of each other.
+        { ...createLabel('Phobos', phobos, PHOBOS_RADIUS * 2), body: phobos, radius: PHOBOS_RADIUS, hideBeyond: 10 },
+        { ...createLabel('Deimos', deimos, DEIMOS_RADIUS * 2), body: deimos, radius: DEIMOS_RADIUS, hideBeyond: 24 },
     ];
 
     // Distance markers so the planets stay findable once the whole system is in
@@ -195,11 +217,17 @@ export function initScene() {
         createBodyMarker(0xcfcfcf, MOON_RADIUS),
         createBodyMarker(0xfff2d8, SUN_RADIUS, 14),
         createBodyMarker(0xff9c6b, MARS_RADIUS),
+        // Smaller dots, and given their orbit radii so they fade out rather than
+        // piling additively onto Mars's marker once the orbits shrink to nothing.
+        createBodyMarker(0xd9cfc2, PHOBOS_RADIUS, 5, PHOBOS_ORBIT_RADIUS),
+        createBodyMarker(0xd9cfc2, DEIMOS_RADIUS, 5, DEIMOS_ORBIT_RADIUS),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
     sun.add(markers[2].sprite);
     marsSystem.add(markers[3].sprite);
+    phobos.add(markers[4].sprite);
+    deimos.add(markers[5].sprite);
 
     // Start parked next to Earth. Earth is a full AU (23,481 units) from the origin,
     // so the old `camera.position.z = 3` would drop the camera inside the Sun.
@@ -211,7 +239,11 @@ export function initScene() {
     controls.target.copy(earthSystem.position);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
-    controls.minDistance = 0.1;
+    // 0.1 units is 640 km, which was fine while the smallest thing you could focus on
+    // was the ISS, and is hopeless for a 6 km moon — it would park the camera a
+    // hundred Deimos-radii away and leave it a speck. The floor now comes from the
+    // smallest body in the scene, which is also what the dynamic near plane assumes.
+    controls.minDistance = DEIMOS_RADIUS;
     // Framing Mars's orbit needs roughly 1.67 AU/tan(fov/2) ~ 2.2 AU, so this leaves
     // comfortable headroom past that.
     controls.maxDistance = EARTH_ORBIT_RADIUS * 4;
@@ -221,6 +253,11 @@ export function initScene() {
     // that framing means measuring the distance in *its* radii rather than reusing
     // the number.
     const MARS_VIEW_DISTANCE = MARS_RADIUS * 3.5;
+    // The moons need a wider berth in their own radii, because they are not round:
+    // framing on the mean radius would crop the long axis, which on Phobos is 18%
+    // longer again.
+    const PHOBOS_VIEW_DISTANCE = PHOBOS_RADIUS * 4.5;
+    const DEIMOS_VIEW_DISTANCE = DEIMOS_RADIUS * 4.5;
 
     /**
      * "What am I nearest, and by how much?" — recomputed every frame.
@@ -234,6 +271,11 @@ export function initScene() {
         { name: 'Earth', object: earthSystem, radius: 1 },
         { name: 'Moon', object: moon, radius: MOON_RADIUS },
         { name: 'Mars', object: marsSystem, radius: MARS_RADIUS },
+        // Without these, flying near Phobos would take its speed from Mars — nearly
+        // a whole Mars radius of clearance away — and carry you past an 11 km rock
+        // at several thousand km/s before you saw it.
+        { name: 'Phobos', object: phobos, radius: PHOBOS_RADIUS },
+        { name: 'Deimos', object: deimos, radius: DEIMOS_RADIUS },
     ];
     let nearestBody = flightBodies[1];
     let nearestClearance = 1;
@@ -419,6 +461,12 @@ export function initScene() {
             case '4':
                 focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
                 break;
+            case '5':
+                focusOnObject(phobos, PHOBOS_VIEW_DISTANCE, 2500);
+                break;
+            case '6':
+                focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
+                break;
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
@@ -436,6 +484,8 @@ export function initScene() {
         { hit: moon, focus: moon, distance: 3 },
         { hit: sun, focus: sun, distance: SUN_RADIUS * 4 },
         { hit: mars, focus: mars, distance: MARS_VIEW_DISTANCE },
+        { hit: phobos, focus: phobos, distance: PHOBOS_VIEW_DISTANCE },
+        { hit: deimos, focus: deimos, distance: DEIMOS_VIEW_DISTANCE },
     ];
 
     function pickTarget(event: MouseEvent) {
@@ -510,6 +560,12 @@ export function initScene() {
                     break;
                 case 'mars':
                     focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
+                    break;
+                case 'phobos':
+                    focusOnObject(phobos, PHOBOS_VIEW_DISTANCE, 2500);
+                    break;
+                case 'deimos':
+                    focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
                     break;
                 case 'sun':
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
@@ -615,6 +671,13 @@ export function initScene() {
         marsOrbitPosition(now, marsSystem.position);
         // The IAU prime-meridian angle, applied inside the fixed axis node.
         mars.rotation.y = marsSpinAngle(now);
+
+        // Position and facing together — both moons are tidally locked, so the
+        // direction back to Mars that places them is also the direction that aims
+        // them. Phobos gets round three times a sol, which is fast enough to watch
+        // even at the "Real" time setting.
+        satelliteState(PHOBOS, now, phobos.position, phobos.quaternion);
+        satelliteState(DEIMOS, now, deimos.position, deimos.quaternion);
 
         // Sunlight direction, now genuinely geometric: each planet sits somewhere on
         // its orbit and the Sun is at the origin, so this is simply the way back.

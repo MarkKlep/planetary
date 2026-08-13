@@ -70,6 +70,54 @@ export const MARS_ORBITAL_PERIOD_DAYS = 686.980;
  */
 export const MARS_ATMOSPHERE_RADIUS = MARS_RADIUS * 1.015;
 
+// Phobos and Deimos
+//
+// Neither is remotely round: they are too small for gravity to have pulled them into
+// spheres, so their shapes are given as triaxial ellipsoids (JPL Horizons physical
+// data). Both are tidally locked, and the convention below is the one that fact
+// imposes — the longest axis is pulled toward Mars, the shortest ends up along the
+// spin axis, and the middle one lies along the direction of travel.
+//
+//   [ toward Mars, along the spin axis, along the orbit ]
+export const PHOBOS_SEMI_AXES_KM = [13.1, 9.3, 11.1] as const;
+export const DEIMOS_SEMI_AXES_KM = [7.8, 5.1, 6.0] as const;
+
+/** Volumetric mean radius of a triaxial ellipsoid: the cube root of the product. */
+function ellipsoidMeanRadius([a, b, c]: readonly [number, number, number]): number {
+    return Math.cbrt(a * b * c) / EARTH_RADIUS_KM;
+}
+
+/** ~11.1 km, so 0.0017 units — three thousandths of Earth. */
+export const PHOBOS_RADIUS = ellipsoidMeanRadius(PHOBOS_SEMI_AXES_KM);
+/** ~6.2 km. Small enough that the Sun's disc would still cover it from Mars. */
+export const DEIMOS_RADIUS = ellipsoidMeanRadius(DEIMOS_SEMI_AXES_KM);
+
+/**
+ * Orbit semi-major axes, fitted to JPL's ephemeris (see `orbits.ts`).
+ *
+ * Phobos sits 2.77 Mars radii out — under 6,000 km above the surface, closer to its
+ * planet than any other moon in the solar system, and *below* the areostationary
+ * radius of ~20,400 km. Deimos, at 6.92 radii, is above it. That is why the two are
+ * going opposite ways: Phobos orbits faster than Mars turns and is being dragged
+ * down, Deimos slower and is drifting away.
+ */
+export const PHOBOS_ORBIT_RADIUS = 9378.54 / EARTH_RADIUS_KM;
+export const DEIMOS_ORBIT_RADIUS = 23458.95 / EARTH_RADIUS_KM;
+
+/**
+ * Among the darkest surfaces in the solar system: about as reflective as fresh
+ * asphalt, and little more than half the Moon's already-dark 0.12. Being this sooty
+ * is most of the case for both moons being captured outer-belt asteroids rather than
+ * anything born at Mars.
+ *
+ * This is the *geometric* albedo, i.e. brightness at full phase against a perfect
+ * diffuse disc, which is the figure that gets quoted but not the one a diffuse
+ * material wants — see `moons.ts`, which converts. There is no texture for either
+ * body; the surfaces are generated, so unlike every other body here the albedo is
+ * authored directly rather than measured off a map.
+ */
+export const MARTIAN_MOON_GEOMETRIC_ALBEDO = 0.068;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

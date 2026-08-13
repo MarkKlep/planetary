@@ -1,6 +1,7 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { latLonToDirection } from './geo';
 import {
+    DEIMOS_ORBIT_RADIUS,
     EARTH_OBLIQUITY_DEG,
     EARTH_ORBIT_RADIUS,
     MARS_POLE_DEC_DEG,
@@ -8,6 +9,7 @@ import {
     MARS_PRIME_MERIDIAN_DEG,
     MARS_ROTATION_DEG_PER_DAY,
     MOON_DISTANCE,
+    PHOBOS_ORBIT_RADIUS,
 } from './constants/planets.const';
 
 const DEG = Math.PI / 180;
@@ -329,4 +331,219 @@ export const MARS_AXIS_ORIENTATION = (() => {
 export function marsSpinAngle(date: Date): number {
     const W = MARS_PRIME_MERIDIAN_DEG + MARS_ROTATION_DEG_PER_DAY * daysSinceJ2000(date);
     return wrapAngle(W * DEG);
+}
+
+// ---------------------------------------------------------------------------
+// Phobos and Deimos
+//
+// These do not work like the Moon, and the difference is not a detail — it is the
+// reason they are modelled here at all rather than being hung off a fixed pivot.
+//
+// The Moon is far enough out that the Sun dominates it, so its orbit stays near the
+// *ecliptic* and merely nods 5.14° to it. Phobos and Deimos are deep inside Mars's
+// gravity well, where the planet's equatorial bulge dominates instead, and it drags
+// them into the *equatorial* plane. Each settles on its own local Laplace plane, the
+// compromise between the two: for Phobos, only 0.01° off Mars's equator; for Deimos,
+// three times further out and so slightly more swayed by the Sun, 0.89° off it.
+//
+// The orbit then precesses around that plane rather than sitting still in it, and
+// quickly — 2.27 years for Phobos, 54.4 for Deimos. Over a session at 10 days/second
+// that is a cycle every 82 milliseconds, so it is not something that can be pinned
+// to a starting value and forgotten.
+//
+// Elements below were fitted to JPL's MAR099 ephemeris over 2000-2030, in the frame
+// this scene actually uses (Mars's equator, `eclipticDirection` handedness), so they
+// drop straight in with no convention shim. Compared back against JPL's published
+// mean elements, none of which the fit was given:
+//
+//                        fitted            JPL published
+//   Phobos Laplace pole  RA 317.670        317.671
+//                        Dec  52.896        52.893
+//          a             9378.5 km         9376
+//          e             0.01515           0.0151
+//          i             1.069°            1.075°
+//          node period   2.267 yr          2.3 yr
+//          apse period   1.132 yr          1.1 yr
+//          period        0.31891008 d      0.31891023 d
+//   Deimos Laplace pole  RA 316.626        316.657
+//                        Dec  53.514        53.529
+//          a             23459.0 km        23458
+//          e             0.000272          0.00033
+//          i             1.789°            1.788°
+//          node period   54.36 yr          54.5 yr
+//          period        1.26244072 d      1.26244
+//
+// Positions run back against Horizons over the whole 2000-2030 span stay within
+// 0.65° / 105 km for Phobos and 0.37° / 152 km for Deimos — about a hundredth of an
+// orbit radius each, and well under the marker dot that stands in for these bodies
+// at any distance where their orbits are in frame.
+//
+// Eccentricity is worth carrying even though Phobos's 0.0151 sounds negligible: it
+// is the single largest term after the plane itself. Dropping it left Phobos 2.3°
+// and 371 km out, three times everything else combined.
+// ---------------------------------------------------------------------------
+
+const MARS_NORTH = new Vector3(0, 1, 0);
+const MARS_AXIS_INVERSE = MARS_AXIS_ORIENTATION.clone().invert();
+
+export interface SatelliteElements {
+    /** Pole of the satellite's local Laplace plane, J2000 equatorial. */
+    laplacePoleRaDeg: number;
+    laplacePoleDecDeg: number;
+    /** Scene units. */
+    semiMajorAxis: number;
+    eccentricity: number;
+    /** To the Laplace plane, not to Mars's equator. */
+    inclinationDeg: number;
+    nodeJ2000Deg: number;
+    nodeRateDegPerDay: number;
+    /** Longitude of periapsis, i.e. measured from the node, not from the apse. */
+    periapsisJ2000Deg: number;
+    periapsisRateDegPerDay: number;
+    meanLongitudeJ2000Deg: number;
+    meanMotionDegPerDay: number;
+}
+
+interface Satellite extends SatelliteElements {
+    /** All three in Mars's own equatorial frame, i.e. `marsAxis`'s local space. */
+    laplacePole: Vector3;
+    laplaceX: Vector3;
+    laplaceZ: Vector3;
+    inclination: number;
+}
+
+/** A fixed J2000 equatorial direction, re-expressed in Mars's equatorial frame. */
+function marsFrameDirection(raDeg: number, decDeg: number): Vector3 {
+    const ra = raDeg * DEG;
+    const dec = decDeg * DEG;
+    return equatorialToScene(
+        new Vector3(Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec))
+    ).applyQuaternion(MARS_AXIS_INVERSE);
+}
+
+function defineSatellite(elements: SatelliteElements): Satellite {
+    const laplacePole = marsFrameDirection(elements.laplacePoleRaDeg, elements.laplacePoleDecDeg);
+
+    // A fixed reference direction inside the Laplace plane to measure the node from:
+    // its own ascending node on Mars's equator. Phobos's Laplace plane is only 0.01°
+    // off the equator, so these two are very nearly parallel and the cross product is
+    // small — but it is never zero, and normalising it is exact at double precision.
+    const laplaceX = new Vector3().crossVectors(MARS_NORTH, laplacePole).normalize();
+    const laplaceZ = new Vector3().crossVectors(laplaceX, laplacePole);
+
+    return {
+        ...elements,
+        laplacePole,
+        laplaceX,
+        laplaceZ,
+        inclination: elements.inclinationDeg * DEG,
+    };
+}
+
+export const PHOBOS = defineSatellite({
+    laplacePoleRaDeg: 317.6703,
+    laplacePoleDecDeg: 52.8960,
+    semiMajorAxis: PHOBOS_ORBIT_RADIUS,
+    eccentricity: 0.015150,
+    inclinationDeg: 1.0690,
+    nodeJ2000Deg: 313.2995,
+    nodeRateDegPerDay: -0.4346798,
+    periapsisJ2000Deg: 170.0291,
+    // Note how nearly this cancels the node rate above. Both are driven by the same
+    // equatorial bulge, which regresses the node and advances the apse at almost
+    // exactly matching rates.
+    periapsisRateDegPerDay: 0.4355682,
+    meanLongitudeJ2000Deg: 359.5732,
+    // 1128.8°/day against Mars's own 350.9°: Phobos laps the surface below it three
+    // times a sol, so from the ground it rises in the *west* and sets in the east.
+    meanMotionDegPerDay: 1128.8448458,
+});
+
+export const DEIMOS = defineSatellite({
+    laplacePoleRaDeg: 316.6257,
+    laplacePoleDecDeg: 53.5137,
+    semiMajorAxis: DEIMOS_ORBIT_RADIUS,
+    // Almost perfectly circular — 6 km of variation on a 23,459 km orbit. Carried
+    // anyway so both moons run the same path; the Kepler solver converges on the
+    // first pass at this eccentricity and costs nothing.
+    eccentricity: 0.000272,
+    inclinationDeg: 1.7891,
+    nodeJ2000Deg: 189.3796,
+    nodeRateDegPerDay: -0.0181330,
+    periapsisJ2000Deg: 25.7307,
+    periapsisRateDegPerDay: 0.0177336,
+    // Just slower than Mars turns, so Deimos crawls the other way across the Martian
+    // sky and takes 2.7 days to get from one horizon to the other.
+    meanLongitudeJ2000Deg: 33.8856,
+    meanMotionDegPerDay: 285.1619039,
+});
+
+const satelliteNode = new Vector3();
+const satellitePole = new Vector3();
+const satelliteAcross = new Vector3();
+const satelliteApse = new Vector3();
+const satelliteToMars = new Vector3();
+const satelliteBasis = new Matrix4();
+
+/**
+ * Where a satellite is and which way it is facing, in Mars's equatorial frame.
+ *
+ * Position and orientation come out together because they are the same geometry: the
+ * orbit pole and the direction back to Mars are what place the body, and being
+ * tidally locked, they are also what aim it.
+ */
+export function satelliteState(
+    satellite: Satellite,
+    date: Date,
+    position: Vector3,
+    orientation: Quaternion
+): void {
+    const days = daysSinceJ2000(date);
+    const node = (satellite.nodeJ2000Deg + satellite.nodeRateDegPerDay * days) * DEG;
+    const periapsis = (satellite.periapsisJ2000Deg + satellite.periapsisRateDegPerDay * days) * DEG;
+    const meanLongitude =
+        (satellite.meanLongitudeJ2000Deg + satellite.meanMotionDegPerDay * days) * DEG;
+
+    // The ascending node sweeps round the Laplace plane; the orbit pole is the
+    // Laplace pole tipped by the inclination about it, so the orbit keeps a constant
+    // tilt while the direction of that tilt turns.
+    satelliteNode
+        .copy(satellite.laplaceX)
+        .multiplyScalar(Math.cos(node))
+        .addScaledVector(satellite.laplaceZ, -Math.sin(node));
+    satellitePole.copy(satellite.laplacePole).applyAxisAngle(satelliteNode, satellite.inclination);
+    satelliteAcross.crossVectors(satellitePole, satelliteNode);
+
+    // The apse line, swung round from the node by the argument of periapsis.
+    const argument = periapsis - node;
+    satelliteApse
+        .copy(satelliteNode)
+        .multiplyScalar(Math.cos(argument))
+        .addScaledVector(satelliteAcross, Math.sin(argument));
+    satelliteAcross.crossVectors(satellitePole, satelliteApse);
+
+    const e = satellite.eccentricity;
+    const E = eccentricAnomaly(wrapAngle(meanLongitude - periapsis), e);
+    position
+        .copy(satelliteApse)
+        .multiplyScalar(satellite.semiMajorAxis * (Math.cos(E) - e))
+        .addScaledVector(
+            satelliteAcross,
+            satellite.semiMajorAxis * Math.sqrt(1 - e * e) * Math.sin(E)
+        );
+
+    // Tidal lock. Both bodies turn once per orbit, so the same face is always toward
+    // Mars — and because they are lumpy rather than round, that shows: the long axis
+    // is held pointing at the planet, which is the state tides drive them into. Local
+    // +X is carried to Mars and +Y to the spin axis, matching the axis order the
+    // semi-axis constants are written in.
+    //
+    // Strictly the spin is *uniform* rather than aimed, so an eccentric orbit swings
+    // the long axis back and forth about the sub-Mars direction — ±1.7° for Phobos.
+    // Aiming it is simpler and the difference is a fraction of a pixel.
+    satelliteToMars.copy(position).normalize().negate();
+    satelliteAcross.crossVectors(satelliteToMars, satellitePole);
+    orientation.setFromRotationMatrix(
+        satelliteBasis.makeBasis(satelliteToMars, satellitePole, satelliteAcross)
+    );
 }

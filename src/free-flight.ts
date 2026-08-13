@@ -1,4 +1,5 @@
 import { PerspectiveCamera, Euler, Vector3, MathUtils } from 'three';
+import { DEIMOS_RADIUS } from './constants/planets.const';
 
 /**
  * Free-flight camera — fly the scene directly instead of orbiting a chosen body.
@@ -33,8 +34,17 @@ const WORLD_UP = new Vector3(0, 1, 0);
 
 /** Fraction of the clearance to the nearest surface covered per second at ×1. */
 const BASE_RATE = 0.8;
-/** Keeps movement possible when parked on a surface, where clearance is ~0. */
-const MIN_CLEARANCE = 0.002;
+/**
+ * Keeps movement possible when parked on a surface, where clearance is ~0.
+ *
+ * It also sets the slowest you can ever go, so it has to stay well under the
+ * smallest thing worth stopping at — and that is now Deimos, 6 km of rock. The old
+ * flat 0.002 units was 12.7 km, wider than Deimos itself: the floor alone carried
+ * you across the whole moon in about a second, and no amount of trimming the
+ * multiplier could slow it down. A twentieth of the smallest body leaves the floor
+ * at ~300 m, which is a walking pace next to anything in the scene.
+ */
+const MIN_CLEARANCE = DEIMOS_RADIUS * 0.05;
 const LOOK_SENSITIVITY = 0.0022; // radians per pixel dragged
 /** Exponential ease on the velocity, so starting and stopping are not a step. */
 const SMOOTHING_SECONDS = 0.11;

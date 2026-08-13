@@ -22,3 +22,20 @@ the colour maps are kept at full resolution since the camera can zoom close.
 rescaled linearly onto 0–255 across its true range (−8177 m in Hellas to +21171 m at
 the summit of Olympus Mons) and rolled 180°, since the PDS grid starts at 0°E while
 an equirectangular texture starts at 180°W.
+
+## Phobos and Deimos have no files here
+
+They are generated in `src/planets/mars/moons.ts` rather than textured, because
+neither is a sphere and there is nothing sensible to wrap a rectangular map onto. The
+figures they are built from are still measured, not invented:
+
+| Quantity | Source |
+|---|---|
+| Triaxial radii — 13.1 × 11.1 × 9.3 km and 7.8 × 6.0 × 5.1 km | JPL Horizons satellite physical data |
+| Geometric albedo 0.068 | JPL Horizons |
+| Stickney: 9.5 km across, ~2 km deep, at 1°N 49°W | USGS Gazetteer of Planetary Nomenclature / Viking |
+| Orbits (see `src/orbits.ts`) | fitted to JPL's MAR099 ephemeris, 2000–2030 |
+
+The relief between those landmarks is fractal noise and a synthetic crater
+population, so the *shapes* are plausible rather than surveyed. Only the overall
+figure, the albedo and Stickney are real.

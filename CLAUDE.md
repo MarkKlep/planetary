@@ -35,13 +35,14 @@ When changing anything heatmap-related, check whether the edit belongs in the ro
 
 ### Main 3D scene (`src/script.ts`)
 
-`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`/`1`/`2`/`3`/`4` to focus Earth-reset/Earth/Moon/ISS/Mars, `F`/`Esc` for free flight) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
+`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`–`6` to focus Earth-reset/Earth/Moon/ISS/Mars/Phobos/Deimos, `F`/`Esc` for free flight) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
 
 Scene objects are each defined in their own module and imported into `script.ts` as pre-built Three.js objects (not factories):
 - `src/planets/earth/earth.ts` — Earth mesh. `MeshStandardMaterial` with day/height/land-mask maps, plus an `onBeforeCompile` patch that adds night-side city lights (the night texture is added to `totalEmissiveRadiance` masked by the surface's angle to the sun, since a plain `emissiveMap` would also glow through the daylit face). Exports `earthSunDirectionView`, which the render loop must keep updated in **view** space.
 - `src/planets/earth/clouds.ts`, `src/planets/earth/atmosphere.ts` — separate shells at radius 1.006 / 1.035. The atmosphere is a `BackSide` additive Fresnel shell, scaled by sun alignment so it only glows on the lit limb.
 - `src/planets/earth/moon.ts` — Moon mesh. Orbital motion is computed per-frame in `script.ts`, not inside this module. Lit by the same sun, so it runs through real phases. `moonTidalRotation(orbitalAngle)` returns the spin that keeps the near side facing Earth — the mesh must be rotated every frame or it holds a fixed world orientation and slowly turns its far side toward us.
 - `src/planets/mars/mars.ts`, `src/planets/mars/atmosphere.ts` — Mars mesh (Viking colour + MOLA relief) and its much thinner limb haze. Deliberately carries *no* albedo correction, unlike the Moon: see the comment there, the arithmetic is not the obvious one.
+- `src/planets/mars/moons.ts` — Phobos and Deimos, the only bodies here that are **generated rather than textured**. They are not spheres, so there is nothing to wrap an equirectangular map onto; the measured triaxial radii are scaled into the mesh and the relief on top is fractal noise plus a synthetic crater population (with Stickney placed at its real coordinates). Deimos runs the same generator shallower, because its craters really are buried in regolith. Both are lit through their real geometric albedo of 0.068, converted to a diffuse reflectance — the two are not the same quantity, and using the quoted figure directly makes them a third too dark.
 - `src/iss.ts` — ISS model (built from primitives) plus `updateISSPosition()`, which polls `http://api.open-notify.org/iss-now.json` on an interval (`ISS_UPDATE_INTERVAL`) and converts lat/lon to a 3D position accounting for Earth's current rotation. Position updates are interpolated (lerp) between fetches in the animation loop rather than snapping.
 - `src/background/background.ts` — procedural starfield (`Points`).
 - `src/constants/planets.const.ts` — single source of truth for orbital/rotation constants, all derived from real-world values (sidereal day, km radii/distances) then scaled relative to Earth's radius = 1 unit. Add new celestial-body constants here rather than inlining magic numbers.
@@ -67,9 +68,13 @@ scene
 │       └── moon
 └── marsSystem              same shape, one orbit out
     ├── marsAxis            fixed IAU pole orientation; likewise never touched
-    │   └── mars            spins inside it
+    │   ├── mars            spins inside it
+    │   ├── phobos          Mars's *equatorial* plane, not the ecliptic
+    │   └── deimos
     └── marsAtmosphere
 ```
+
+Note where the two Martian moons hang, and that it is not where the Moon hangs. The Moon is far enough out that the Sun rules it, so its orbit stays near the ecliptic and `moonOrbitPlane` tilts to *that*. Phobos and Deimos are deep in Mars's gravity well, where the equatorial bulge rules instead and forces them into the plane of the equator — so they go under `marsAxis` and inherit its fixed lean. Their planes also precess (2.3 years for Phobos), fast enough that it cannot be baked into a pivot, so `satelliteState()` applies the node rotation per frame instead.
 
 The tilt living *above* the spin, and never being updated, is the whole mechanism: the axis stays pointing at a fixed direction in space while the planet goes round, so the seasons fall out of the geometry. Verified — Earth's solstice declination of ±23.44° is not imposed anywhere, it emerges and matches the almanac formula to 0.004°; likewise Mars's 25.19° obliquity emerges from its pole direction alone. **Add new planets by copying this shape**, not by rotating a system node per frame.
 
@@ -79,6 +84,9 @@ Two traps when adding a body to `orbits.ts`, both already hit:
 
 - **Frames.** Earth's position comes from an almanac series, which is referred to the *equinox of date*; orbital elements are referred to *J2000*. Mixing them silently is a 0.37° error today, growing forever. `marsOrbitPosition()` ends with a `precessionSinceJ2000()` rotation for exactly this reason — any new body built from elements needs the same.
 - **Axes.** Textbook coordinates are z-up; this scene is y-up. `eclipticToScene()` / `equatorialToScene()` do the conversion; don't hand-roll the sign juggling.
+- **Eccentricity is not optional, even when it sounds small.** Phobos's 0.0151 looks like a rounding error and is in fact the largest term after the orbit plane: dropping it left Phobos 2.3° and 371 km out of position, three times everything else combined. Carrying it costs one call to the `eccentricAnomaly()` solver that is already in the file.
+
+Every body's elements were fitted to JPL's own ephemeris and then run back against Horizons over 2000–2030; the residuals are recorded in the comments beside each one. Do the same for anything new rather than trusting a table transcription — the published node angles in particular are measured from a different reference direction than this scene uses.
 
 `src/geo.ts` is still the single source of truth for latitude/longitude: **`(cos·cos, sin(lat), −cos·sin(lon))`**, derived from three.js's `SphereGeometry` UV layout. Note the negative z.
 
@@ -96,9 +104,10 @@ The cost is that Earth is 1 unit against a 23,481-unit orbit, so it falls far be
 
 The huge far plane (400,000) costs nothing: depth resolution goes as `z²/(near · 2²⁴)` and so is set by the *near* plane, not the far one.
 
-Two traps at this scale, both already hit once:
+Three traps at this scale, all already hit once:
 - **Label offsets must be in screen pixels, not world units.** A world-space offset shrinks with distance, so labels collapsed onto their bodies and their opaque backgrounds hid the very thing they labelled. `createLabel()` anchors a zero-size div and offsets the visible chip with CSS.
 - **Marker/glow textures need flat-topped gradients.** Drawn at ~10px, a gradient that starts falling off at the centre leaves a solid core barely 2px wide and reads as a smudge.
+- **A moon's marker has to fade out as well as in.** Markers hold a fixed pixel size at any distance, so once a moon's whole orbit is narrower than that, its dot and its planet's land on the same pixels — and they blend additively, so the pair reads as one body that is brighter and fatter than it should be. Phobos and Deimos make it obvious: their orbits are 1.5 and 3.7 units wide against the 23,481 it takes to frame Mars's own. Pass `orbitRadius` to `createBodyMarker()` for anything that orbits something else.
 
 Because bodies move, the camera **follows**: `focusOnObject()` stores the target object plus an offset and re-derives its endpoint every frame (a snapshot would miss, since the body moves during the fly-to), and `followTarget` then translates the camera by the body's per-frame delta so the user's orbit angle survives. Anything comparing positions must use `getWorldPosition()` — `.position` is now a local coordinate for everything under `earthSystem`. The star dome is pinned to the camera each frame, otherwise travelling 1500 units along the orbit flies you out of your own starfield.
 
@@ -108,7 +117,7 @@ Because bodies move, the camera **follows**: `focusOnObject()` stores the target
 
 `updateNearestBody()` answers "what am I nearest, and by how much" once per frame, and three separate things depend on it:
 
-- **Flight speed** is proportional to the clearance to the nearest surface. At true scale there is no workable fixed speed — inspecting the ISS wants ~0.01 units/s and reaching Mars wants ~1000 — so making it scale-invariant is the only thing that works. **Don't replace this with a constant.**
+- **Flight speed** is proportional to the clearance to the nearest surface. At true scale there is no workable fixed speed — inspecting the ISS wants ~0.01 units/s and reaching Mars wants ~1000 — so making it scale-invariant is the only thing that works. **Don't replace this with a constant.** The one constant it does have, `MIN_CLEARANCE`, is the floor that keeps you moving when parked on a surface, and it therefore also sets the slowest you can ever go: it has to stay well under the smallest body in the scene. It is derived from `DEIMOS_RADIUS` for that reason. Adding a body smaller than Deimos means revisiting it — at the old flat value the floor alone carried you clean across a moon in about a second.
 - **The near plane** is derived from it too, in `updateNearPlane()`. A fixed 0.1 clipped everything within 640 km, so you could never actually reach a surface; but depth resolution goes as `z²/(near · 2²⁴)`, so a permanently tiny near plane would wreck the depth buffer at solar-system range. Only the nearest thing matters, so scaling it is what satisfies both.
 - **The reference frame** you fly in. Free flight sets `followTarget` to the nearest body, so parking beside a planet inherits its motion instead of watching it leave at 30 km/s (much more at high time multipliers).
 

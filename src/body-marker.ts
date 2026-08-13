@@ -54,9 +54,26 @@ export interface BodyMarker {
     bodyRadius: number;
     /** On-screen size the marker settles at, in CSS pixels. */
     pixelSize: number;
+    /**
+     * Distance to the body this one orbits, in world units, for moons.
+     *
+     * A marker is a fixed number of pixels across however far away it is, so once a
+     * moon's whole orbit is narrower than that, its dot and its planet's are drawn
+     * on top of each other — and additively, so the pair reads as one body that is
+     * mysteriously brighter and fatter than it should be. Phobos and Deimos make
+     * this unmissable: their orbits are 1.5 and 3.7 units wide, against the 23,481
+     * units it takes to see Mars's own orbit. Fading them out once they stop being
+     * separable is the only way the planet's marker stays honest.
+     */
+    orbitRadius?: number;
 }
 
-export function createBodyMarker(color: number, bodyRadius: number, pixelSize = 7): BodyMarker {
+export function createBodyMarker(
+    color: number,
+    bodyRadius: number,
+    pixelSize = 7,
+    orbitRadius?: number
+): BodyMarker {
     const sprite = new Sprite(
         new SpriteMaterial({
             map: getDotTexture(),
@@ -71,7 +88,7 @@ export function createBodyMarker(color: number, bodyRadius: number, pixelSize = 
         })
     );
     sprite.visible = false;
-    return { sprite, bodyRadius, pixelSize };
+    return { sprite, bodyRadius, pixelSize, orbitRadius };
 }
 
 const markerWorldPosition = new Vector3();
@@ -101,7 +118,14 @@ export function updateBodyMarker(
 
     // Fully on once the body is smaller than the marker, off again by the time it is
     // comfortably resolvable, so the two never visibly overlap.
-    const opacity = 1 - smoothstep(marker.pixelSize, marker.pixelSize * 3.5, bodyPixels);
+    let opacity = 1 - smoothstep(marker.pixelSize, marker.pixelSize * 3.5, bodyPixels);
+
+    // The mirror image of the same test, one level up: a moon's marker earns its
+    // place only while the moon is drawn clear of its planet.
+    if (marker.orbitRadius !== undefined) {
+        const orbitPixels = marker.orbitRadius * pixelsPerWorldUnit;
+        opacity *= smoothstep(marker.pixelSize, marker.pixelSize * 3, orbitPixels);
+    }
 
     marker.sprite.material.opacity = opacity;
     marker.sprite.visible = opacity > 0.01;
