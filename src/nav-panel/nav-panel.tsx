@@ -2,38 +2,121 @@ import { useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import './nav-panel.scss';
 
+interface Satellite {
+  id: string;
+  label: string;
+}
+
+interface Planet {
+  id: string;
+  label: string;
+  satellites: Satellite[];
+}
+
+const PLANETS: Planet[] = [
+  {
+    id: 'earth',
+    label: 'Earth',
+    satellites: [
+      { id: 'moon', label: 'Moon' },
+      { id: 'iss', label: 'ISS' },
+    ],
+  },
+  {
+    id: 'mars',
+    label: 'Mars',
+    satellites: [
+      { id: 'phobos', label: 'Phobos' },
+      { id: 'deimos', label: 'Deimos' },
+    ],
+  },
+];
+
 export function NavPanel() {
   const [activeTarget, setActiveTarget] = useState<string | null>(null);
   const [activeSpeed, setActiveSpeed] = useState<number>(DEFAULT_TIME_SPEED);
   const [paused, setPaused] = useState(false);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpanded((previous) => {
+      const next = new Set(previous);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
 
   // The actual behaviour is wired up in script.ts, which listens on the data-*
   // attributes and ids below. These handlers only drive the button styling.
-  const objects = [
-    { id: 'sun', label: 'Sun' },
-    { id: 'earth', label: 'Earth' },
-    { id: 'moon', label: 'Moon' },
-    { id: 'iss', label: 'ISS' },
-    { id: 'mars', label: 'Mars' },
-    { id: 'phobos', label: 'Phobos' },
-    { id: 'deimos', label: 'Deimos' },
-  ];
-
   return (
     <nav className="navigation-panel">
         <h1 className="nav-title">Planetary</h1>
         <div className="nav-section">
             <h2 className="nav-section-title">Objects</h2>
-            {objects.map(({ id, label }) => (
-              <button
-                key={id}
-                className={`nav-btn ${activeTarget === id ? 'active' : ''}`}
-                data-target={id}
-                onClick={() => setActiveTarget(id)}
-              >
-                {label}
-              </button>
-            ))}
+            <button
+              className={`nav-btn ${activeTarget === 'sun' ? 'active' : ''}`}
+              data-target="sun"
+              onClick={() => setActiveTarget('sun')}
+            >
+              Sun
+            </button>
+            {PLANETS.map((planet) => {
+              const isExpanded = expanded.has(planet.id);
+              return (
+                <div className="nav-planet" key={planet.id}>
+                  <div className="nav-planet-row">
+                    <button
+                      className={`nav-btn nav-planet-btn ${activeTarget === planet.id ? 'active' : ''}`}
+                      data-target={planet.id}
+                      onClick={() => setActiveTarget(planet.id)}
+                    >
+                      {planet.label}
+                    </button>
+                    <button
+                      type="button"
+                      className={`nav-expand-btn ${isExpanded ? 'nav-expand-btn--open' : ''}`}
+                      aria-expanded={isExpanded}
+                      aria-label={`${isExpanded ? 'Hide' : 'Show'} ${planet.label}'s moons`}
+                      onClick={() => toggleExpanded(planet.id)}
+                    >
+                      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                        <path
+                          d="M2 4l4 4 4-4"
+                          stroke="currentColor"
+                          strokeWidth="1.6"
+                          fill="none"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  {/* Always mounted — never conditionally rendered on `isExpanded`.
+                      script.ts collects every `.nav-btn[data-target]` once when the
+                      scene initialises; a satellite button that doesn't exist yet
+                      while collapsed would never pick up its click handler. Showing
+                      and hiding it is CSS-only. */}
+                  <div className={`nav-satellites ${isExpanded ? 'nav-satellites--open' : ''}`}>
+                    <div className="nav-satellites__inner">
+                      {planet.satellites.map((satellite) => (
+                        <button
+                          key={satellite.id}
+                          className={`nav-btn nav-btn--satellite ${activeTarget === satellite.id ? 'active' : ''}`}
+                          data-target={satellite.id}
+                          onClick={() => setActiveTarget(satellite.id)}
+                        >
+                          {satellite.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
             <button
               className={`nav-btn ${activeTarget === 'system' ? 'active' : ''}`}
               data-target="system"
