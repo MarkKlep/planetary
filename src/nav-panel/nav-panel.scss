@@ -66,8 +66,18 @@
     padding-top: 6px;
 }
 
-.nav-btn--satellite {
+// The indentation lives here rather than on the button itself, so a row with a
+// visibility toggle attached still lines up with a plain one — the button inside
+// just becomes the flexible part of a wider indented row instead of being indented
+// on its own.
+.nav-satellite-row {
+    display: flex;
+    gap: 6px;
     margin-left: 18px;
+}
+
+.nav-btn--satellite {
+    flex: 1;
     padding: 9px 14px;
     font-size: 13px;
     background: rgba(255, 255, 255, 0.04);
@@ -75,5 +85,37 @@
 
     &:hover {
         background: rgba(255, 255, 255, 0.1);
+    }
+}
+
+// Doubled up with `.nav-btn` (`.nav-btn.nav-visibility-btn`, not just
+// `.nav-visibility-btn`) so this padding actually wins: both are single-class
+// selectors of equal specificity, and `.nav-btn`'s own `padding: 12px 16px` in the
+// global stylesheet happened to win the source-order tiebreak, leaving only 24px of
+// a 56px button for "Show"'s text to render in — it wasn't clipped, just spilling
+// past the button's own edge into the canvas, which looked like a layout overflow
+// but was really a losing cascade fight.
+.nav-btn.nav-visibility-btn {
+    flex-shrink: 0;
+    width: 56px;
+    padding: 9px 0;
+    // Same cascade fight as the padding above: `.nav-btn`'s own `text-align: left`
+    // is defined *after* `.nav-btn--compact`'s `text-align: center` in the base
+    // stylesheet, so at equal specificity it wins and left-aligns the label inside
+    // this fixed-width button instead of centering it.
+    text-align: center;
+    font-size: 11px;
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.08);
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    // script.ts toggles this the same way it toggles `.active` on the free-flight
+    // button — dim when the overlay is off, so the button's own state reads at a
+    // glance without needing to parse its label.
+    &--off {
+        color: rgba(255, 255, 255, 0.4);
     }
 }

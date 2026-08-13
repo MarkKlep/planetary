@@ -142,4 +142,4 @@ export const TIME_SPEEDS = [
     { label: '10 d/s', secondsPerSecond: 864000 },
 ] as const;
 
-export const DEFAULT_TIME_SPEED = 3600;
+export const DEFAULT_TIME_SPEED = 1;

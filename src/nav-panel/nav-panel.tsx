@@ -20,6 +20,7 @@ const PLANETS: Planet[] = [
     satellites: [
       { id: 'moon', label: 'Moon' },
       { id: 'iss', label: 'ISS' },
+      { id: 'analemma', label: 'Analemma' },
     ],
   },
   {
@@ -103,14 +104,34 @@ export function NavPanel() {
                   <div className={`nav-satellites ${isExpanded ? 'nav-satellites--open' : ''}`}>
                     <div className="nav-satellites__inner">
                       {planet.satellites.map((satellite) => (
-                        <button
-                          key={satellite.id}
-                          className={`nav-btn nav-btn--satellite ${activeTarget === satellite.id ? 'active' : ''}`}
-                          data-target={satellite.id}
-                          onClick={() => setActiveTarget(satellite.id)}
-                        >
-                          {satellite.label}
-                        </button>
+                        <div className="nav-satellite-row" key={satellite.id}>
+                          <button
+                            className={`nav-btn nav-btn--satellite ${activeTarget === satellite.id ? 'active' : ''}`}
+                            data-target={satellite.id}
+                            onClick={() => setActiveTarget(satellite.id)}
+                          >
+                            {satellite.label}
+                          </button>
+                          {/* Analemma is the one thing here that's a permanent overlay
+                              rather than a body to fly to, so it's the one thing worth
+                              being able to switch off. script.ts owns the label and
+                              visibility state outright — same reasoning as free flight's
+                              button — since focusing it (button, keyboard, or a direct
+                              click in the scene) also has to turn it back on, and that
+                              path shouldn't have to fight React state to do it. */}
+                          {satellite.id === 'analemma' && (
+                            // Matches script.ts's own default (hidden) so there's no
+                            // flash of "Hide" before initScene's deferred effect runs
+                            // and corrects it.
+                            <button
+                              type="button"
+                              className="nav-btn nav-btn--compact nav-visibility-btn nav-visibility-btn--off"
+                              id="toggle-analemma"
+                            >
+                              Show
+                            </button>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>

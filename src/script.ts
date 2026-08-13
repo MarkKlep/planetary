@@ -8,6 +8,7 @@ import { sun, sunLight, updateSun } from './sun';
 import { backgroundTexture } from './background/background';
 import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
 import { moon, moonTidalRotation } from './planets/earth/moon';
+import { ANALEMMA_RADIUS, analemmaAnchor, analemmaLine } from './planets/earth/analemma';
 import { mars } from './planets/mars/mars';
 import { deimos, phobos } from './planets/mars/moons';
 import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
@@ -127,6 +128,13 @@ export function initScene() {
     earthTilt.add(earth);
     earthTilt.add(clouds);
     earthTilt.add(iss);
+    // Children of `earth` itself, not of `earthTilt`: they need to inherit the
+    // mesh's own per-frame spin, since the loop's shape was built in that spin's
+    // *un-rotated* local frame and relies on the scene graph to carry it into world
+    // space — see the comment in analemma.ts for why that trick is what makes the
+    // curve hold still relative to the ground point instead of sliding around it.
+    earth.add(analemmaLine);
+    earth.add(analemmaAnchor);
     moonOrbitPlane.add(moon);
     earthSystem.add(earthTilt);
     earthSystem.add(atmosphere);
@@ -213,6 +221,10 @@ export function initScene() {
         // chips would start sitting on top of each other.
         { ...createLabel('Phobos', phobos, PHOBOS_RADIUS * 2), body: phobos, radius: PHOBOS_RADIUS, hideBeyond: 10 },
         { ...createLabel('Deimos', deimos, DEIMOS_RADIUS * 2), body: deimos, radius: DEIMOS_RADIUS, hideBeyond: 24 },
+        // A local Earth-surface feature, not a findable body — meaningful only once
+        // you're already close, so this gets a short `hideBeyond` like the ISS's
+        // framing rather than the "visible across the whole system" bodies above.
+        { ...createLabel('Analemma', analemmaAnchor, 0.05), body: analemmaAnchor, radius: ANALEMMA_RADIUS, hideBeyond: 15 },
     ];
 
     // Distance markers so the planets stay findable once the whole system is in
@@ -266,6 +278,11 @@ export function initScene() {
     // longer again.
     const PHOBOS_VIEW_DISTANCE = PHOBOS_RADIUS * 4.5;
     const DEIMOS_VIEW_DISTANCE = DEIMOS_RADIUS * 4.5;
+    // The loop itself already reaches ANALEMMA_RADIUS (1.4) out from Earth's centre,
+    // so framing it "3 radii out" the way Earth is would put the camera practically
+    // inside the curve. Measuring from its own radius instead keeps the whole
+    // figure-8 in frame with headroom.
+    const ANALEMMA_VIEW_DISTANCE = ANALEMMA_RADIUS * 1.8;
 
     /**
      * "What am I nearest, and by how much?" — recomputed every frame.
@@ -333,6 +350,35 @@ export function initScene() {
     const flightFrameValue = document.getElementById('flight-frame');
     const toggleFreeFlightBtn = document.getElementById('toggle-free-flight');
     toggleFreeFlightBtn?.addEventListener('click', () => setFreeFlight(!freeFlight.enabled));
+
+    // The analemma is a permanent overlay rather than a body, so it is the one thing
+    // here worth switching off outright. The button's label and dim state are owned
+    // here entirely, same reasoning as free flight's button: three separate paths
+    // (this button, keyboard `7`, and a direct click in the scene) all need to be
+    // able to turn it back *on*, and none of them should have to fight React state
+    // to do it.
+    let analemmaVisible = true;
+    const toggleAnalemmaBtn = document.getElementById('toggle-analemma');
+
+    function setAnalemmaVisible(visible: boolean) {
+        analemmaVisible = visible;
+        analemmaLine.visible = visible;
+        analemmaAnchor.visible = visible;
+        toggleAnalemmaBtn?.classList.toggle('nav-visibility-btn--off', !visible);
+        if (toggleAnalemmaBtn) {
+            toggleAnalemmaBtn.textContent = visible ? 'Hide' : 'Show';
+        }
+    }
+
+    // This button only ever toggles — it never focuses the camera, so it does not
+    // route through `focusOnObject`.
+    toggleAnalemmaBtn?.addEventListener('click', () => setAnalemmaVisible(!analemmaVisible));
+    // Off by default: it's the one thing in the scene that's a permanent overlay
+    // rather than a body, so unlike everything else here it shouldn't just be sitting
+    // there on a first visit — routing through the setter keeps the three.js
+    // visibility flags, the JS state, and the button's own label in sync from a
+    // single call rather than trying to hand-set each one to match.
+    setAnalemmaVisible(false);
 
     /**
      * Camera focus.
@@ -475,6 +521,10 @@ export function initScene() {
             case '6':
                 focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
                 break;
+            case '7':
+                setAnalemmaVisible(true);
+                focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
+                break;
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
@@ -494,6 +544,7 @@ export function initScene() {
         { hit: mars, focus: mars, distance: MARS_VIEW_DISTANCE },
         { hit: phobos, focus: phobos, distance: PHOBOS_VIEW_DISTANCE },
         { hit: deimos, focus: deimos, distance: DEIMOS_VIEW_DISTANCE },
+        { hit: analemmaAnchor, focus: analemmaAnchor, distance: ANALEMMA_VIEW_DISTANCE },
     ];
 
     function pickTarget(event: MouseEvent) {
@@ -535,6 +586,12 @@ export function initScene() {
         if (freeFlight.enabled) return;
         const picked = pickTarget(event);
         if (picked && !isAlreadyObserving(picked.focus, picked.distance)) {
+            // Raycasting doesn't check `.visible` on its own, so a click landing
+            // where the anchor used to be would otherwise focus an overlay the user
+            // had just switched off — surfacing it again is the more useful outcome.
+            if (picked.focus === analemmaAnchor) {
+                setAnalemmaVisible(true);
+            }
             focusOnObject(picked.focus, picked.distance, 1500);
         }
     });
@@ -565,6 +622,10 @@ export function initScene() {
                     break;
                 case 'iss':
                     focusOnObject(iss, 0.5, 1500);
+                    break;
+                case 'analemma':
+                    setAnalemmaVisible(true);
+                    focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
                     break;
                 case 'mars':
                     focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
@@ -737,7 +798,11 @@ export function initScene() {
                 controls.target.distanceTo(position) < label.radius * 1.2 &&
                 cameraDistance < label.radius * 12;
 
-            const target = observing || cameraDistance > label.hideBeyond ? 0 : 1;
+            // Everything else here is a body you can always find; the analemma is an
+            // overlay you might have switched off, and its chip shouldn't linger
+            // once the curve it's labelling is gone.
+            const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
+            const target = forcedHidden || observing || cameraDistance > label.hideBeyond ? 0 : 1;
             const current = parseFloat(label.element.style.opacity || '0');
             const next = current + (target - current) * 0.15;
             label.element.style.opacity = next.toFixed(2);
