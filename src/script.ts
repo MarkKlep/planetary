@@ -14,6 +14,7 @@ import { deimos, phobos } from './planets/mars/moons';
 import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
+import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
 import {
     DEIMOS,
@@ -165,6 +166,11 @@ export function initScene() {
     scene.add(marsSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
+    // Added to the scene root, not to the system nodes they belong to: an orbit is
+    // the path a body traces *through* the Sun's frame, so it has to stay put while
+    // the body moves along it. Parenting each one to the node that carries its planet
+    // would drag the whole curve around with the planet.
+    orbitPaths.forEach((path) => scene.add(path));
 
     // A point light sitting inside the Sun, so every body is lit from the direction
     // the Sun really is — and dimmed by however far out it orbits.
@@ -249,14 +255,33 @@ export function initScene() {
     phobos.add(markers[4].sprite);
     deimos.add(markers[5].sprite);
 
-    // Start parked next to Earth. Earth is a full AU (23,481 units) from the origin,
-    // so the old `camera.position.z = 3` would drop the camera inside the Sun.
+    // Far enough back from the Sun to take in the whole system, viewed obliquely from
+    // above the ecliptic so the orbits read as circles rather than edge-on. Mars
+    // reaches 1.67 AU at aphelion and a 75° vertical field sees 0.77 AU per AU of
+    // distance, so anything under ~2.2 AU back would crop its orbit.
+    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 2.6;
+    const SYSTEM_VIEW_DIRECTION = new Vector3(0.3, 0.78, 0.55).normalize();
+    // Longer than any nav fly-to: this one crosses 2.6 AU to end up 3 Earth-radii out,
+    // and the nav buttons' 1.5–2.5s over that range reads as a jump rather than a move.
+    // Not longer still, though — the fly-to eases out over a distance ratio of 20,000,
+    // so the last fifth of it covers well under a percent of the way and is already
+    // sub-pixel. Time past that point is not slower movement, it is the camera being
+    // held against the user while nothing visibly happens.
+    const INTRO_FLIGHT_DURATION = 2500;
+    // Covers the splash's 400ms fade with a beat to spare, so the opening shot is
+    // actually seen before the camera starts moving.
+    const INTRO_HOLD_DURATION = 800;
+
+    // Open on the whole system with the Sun centred, which the intro fly-to at the end
+    // of initScene then leaves for Earth. The bodies still need placing first: the
+    // fly-to reads Earth's world position, and it is only correct once the orbit has
+    // been evaluated for the current date and the matrices flushed.
     earthOrbitPosition(getSimulatedDate(), earthSystem.position);
     scene.updateMatrixWorld(true);
-    camera.position.copy(earthSystem.position).add(new Vector3(0, 0.6, 3));
+    camera.position.copy(SYSTEM_VIEW_DIRECTION).multiplyScalar(SYSTEM_VIEW_DISTANCE);
 
     const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.copy(earthSystem.position);
+    controls.target.copy(sun.position);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     // 0.1 units is 640 km, which was fine while the smallest thing you could focus on
@@ -283,6 +308,9 @@ export function initScene() {
     // inside the curve. Measuring from its own radius instead keeps the whole
     // figure-8 in frame with headroom.
     const ANALEMMA_VIEW_DISTANCE = ANALEMMA_RADIUS * 1.8;
+    // Earth is framed from 3 of its radii — named because the opening fly-in has to
+    // land on exactly the framing the Earth nav button gives you.
+    const EARTH_VIEW_DISTANCE = 3;
 
     /**
      * "What am I nearest, and by how much?" — recomputed every frame.
@@ -379,6 +407,29 @@ export function initScene() {
     // visibility flags, the JS state, and the button's own label in sync from a
     // single call rather than trying to hand-set each one to match.
     setAnalemmaVisible(false);
+
+    // Same shape as the analemma toggle above, and for the same reason: the orbit
+    // paths are diagram, not scenery, so their visibility is state this file owns and
+    // the button merely reflects.
+    let orbitsVisible = true;
+    const toggleOrbitsBtn = document.getElementById('toggle-orbits');
+
+    function setOrbitsVisible(visible: boolean) {
+        orbitsVisible = visible;
+        orbitPaths.forEach((path) => (path.visible = visible));
+        toggleOrbitsBtn?.classList.toggle('nav-visibility-btn--off', !visible);
+        if (toggleOrbitsBtn) {
+            toggleOrbitsBtn.textContent = visible ? 'Hide' : 'Show';
+        }
+    }
+
+    toggleOrbitsBtn?.addEventListener('click', () => setOrbitsVisible(!orbitsVisible));
+    // Off by default. An orbit line is drawn at true scale like everything else, so
+    // from anywhere near a planet it is not a ring at all — it is a straight line
+    // through the whole view, since you are standing on a curve 23,481 units across.
+    // It only reads as an orbit from far enough out to see the shape, which is where
+    // the button that reveals it lives.
+    setOrbitsVisible(false);
 
     /**
      * Camera focus.
@@ -504,7 +555,7 @@ export function initScene() {
                 setFreeFlight(false);
                 break;
             case '1':
-                focusOnObject(earth, 3, 1500);
+                focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
                 break;
             case '2':
                 focusOnObject(moon, 3, 1500);
@@ -615,7 +666,7 @@ export function initScene() {
 
             switch (target) {
                 case 'earth':
-                    focusOnObject(earth, 3, 1500);
+                    focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
                     break;
                 case 'moon':
                     focusOnObject(moon, 3, 1500);
@@ -640,12 +691,7 @@ export function initScene() {
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
                     break;
                 case 'system':
-                    // Far enough back from the Sun to take in the whole system,
-                    // viewed obliquely from above the ecliptic so the orbits read as
-                    // circles rather than edge-on. Mars reaches 1.67 AU at aphelion
-                    // and a 75° vertical field sees 0.77 AU per AU of distance, so
-                    // anything under ~2.2 AU back would crop its orbit.
-                    focusOnObject(sun, EARTH_ORBIT_RADIUS * 2.6, 2500, new Vector3(0.3, 0.78, 0.55));
+                    focusOnObject(sun, SYSTEM_VIEW_DISTANCE, 2500, SYSTEM_VIEW_DIRECTION.clone());
                     break;
             }
         });
@@ -883,4 +929,28 @@ export function initScene() {
     });
 
     animate();
+
+    // Open on the whole system, then fly straight in to Earth, so the first thing you
+    // see is where Earth actually sits before the camera commits to it. Routed through
+    // the same `focusOnObject` as the nav buttons rather than a bespoke path: it
+    // re-derives Earth's position every frame, which matters here more than anywhere
+    // else, since Earth moves a long way along its orbit during a fly-to this long.
+    //
+    // The hold before it buys two things that both need the same beat. The splash
+    // takes SPLASH_FADE_MS to fade out, so a fly-to starting immediately would spend
+    // its opening — the part that shows the system whole, and the part an ease-out
+    // spends most of its distance on — behind it. And the first rendered frame stalls
+    // the thread compiling shaders and uploading textures, which a fly-to driven by
+    // wall-clock elapsed time would sit out and then jump to catch up on.
+    window.setTimeout(() => {
+        // A nav button or a click on a body during the hold has already started its
+        // own fly-to, and free flight means the user is driving: either way the intro
+        // is no longer what they asked for.
+        if (focusAnimation || freeFlight.enabled) return;
+
+        // Marked active only now, with the flight, because until it starts the honest
+        // answer to "where is the camera" is the system view, not Earth.
+        document.querySelector('.nav-btn[data-target="earth"]')?.classList.add('active');
+        focusOnObject(earth, EARTH_VIEW_DISTANCE, INTRO_FLIGHT_DURATION);
+    }, INTRO_HOLD_DURATION);
 }

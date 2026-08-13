@@ -1,3 +1,5 @@
+@use '../variables.scss' as *;
+
 .flight-hud {
     position: fixed;
     right: 24px;
@@ -6,7 +8,7 @@
     width: 232px;
     padding: 16px 18px;
     border-radius: 10px;
-    background: rgba(15, 15, 25, 0.92);
+    background: var(--primary-black);
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);

@@ -1,12 +1,135 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- Inline rather than in styles.scss: Vite injects that stylesheet with JS in
+     dev, so the bare document paints white before it ever applies. -->
+<html lang="en" style="background: #050508">
+
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Planetary</title>
+    <!--
+      The splash lives in the document rather than in a React component, and its
+      CSS is inline rather than imported, because of what it has to cover: the
+      main thread is blocked solid from the moment the module graph starts
+      evaluating (three.js, every planet module) until initScene returns, and
+      React's own bundle is part of that block. A React loader therefore cannot
+      paint before the freeze it exists to cover — measured, it never got a
+      single painted frame. Static markup in the initial HTML is on screen at
+      first paint, before any of that JavaScript runs, so the race disappears.
+      App.tsx fades it out once the scene is up.
+    -->
+    <style>
+        #splash {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 28px;
+            background: radial-gradient(circle at 50% 40%, #14141f 0%, #0f0f19 60%, #050508 100%);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            opacity: 1;
+            transition: opacity 0.4s ease;
+        }
+
+        #splash.splash--done {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .splash__orbit {
+            position: relative;
+            width: 72px;
+            height: 72px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .splash__sun {
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            box-shadow: 0 0 16px 4px rgba(118, 75, 162, 0.55);
+        }
+
+        /* Only the top edge is lit, so the ring reads as the orbit path while the
+           bright arc sweeping around it reads as motion. */
+        .splash__ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top-color: rgba(255, 255, 255, 0.7);
+            animation: splash-spin 1.1s linear infinite;
+        }
+
+        .splash__ring--outer {
+            inset: -18px;
+            border-color: rgba(255, 255, 255, 0.06);
+            border-top-color: rgba(118, 75, 162, 0.6);
+            animation-duration: 2s;
+            animation-direction: reverse;
+        }
+
+        .splash__planet {
+            position: absolute;
+            top: -3px;
+            left: 50%;
+            width: 6px;
+            height: 6px;
+            margin-left: -3px;
+            border-radius: 50%;
+            background: #fff;
+            box-shadow: 0 0 8px 2px rgba(255, 255, 255, 0.5);
+        }
+
+        .splash__text {
+            font-size: 12px;
+            font-weight: 600;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: rgba(255, 255, 255, 0.5);
+            animation: splash-pulse 1.8s ease-in-out infinite;
+        }
+
+        @keyframes splash-spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes splash-pulse {
+
+            0%,
+            100% {
+                opacity: 0.35;
+            }
+
+            50% {
+                opacity: 0.9;
+            }
+        }
+    </style>
 </head>
+
 <body>
     <div id="root"></div>
+    <div id="splash">
+        <div class="splash__orbit">
+            <div class="splash__ring splash__ring--outer"></div>
+            <div class="splash__ring">
+                <div class="splash__planet"></div>
+            </div>
+            <div class="splash__sun"></div>
+        </div>
+        <div class="splash__text">Loading solar system</div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
 </body>
+
 </html>

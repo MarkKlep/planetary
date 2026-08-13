@@ -138,13 +138,57 @@ export function NavPanel() {
                 </div>
               );
             })}
-            <button
-              className={`nav-btn ${activeTarget === 'system' ? 'active' : ''}`}
-              data-target="system"
-              onClick={() => setActiveTarget('system')}
-            >
-              Solar system
-            </button>
+            <div className="nav-planet">
+              <div className="nav-planet-row">
+                <button
+                  className={`nav-btn nav-planet-btn ${activeTarget === 'system' ? 'active' : ''}`}
+                  data-target="system"
+                  onClick={() => setActiveTarget('system')}
+                >
+                  Solar system
+                </button>
+                <button
+                  type="button"
+                  className={`nav-expand-btn ${expanded.has('system') ? 'nav-expand-btn--open' : ''}`}
+                  aria-expanded={expanded.has('system')}
+                  aria-label={`${expanded.has('system') ? 'Hide' : 'Show'} solar system options`}
+                  onClick={() => toggleExpanded('system')}
+                >
+                  <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                    <path
+                      d="M2 4l4 4 4-4"
+                      stroke="currentColor"
+                      strokeWidth="1.6"
+                      fill="none"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
+              {/* Same always-mounted rule as the satellite lists above: script.ts looks
+                  this button up by id once, at scene init, so it has to exist even
+                  while the dropdown is collapsed. */}
+              <div className={`nav-satellites ${expanded.has('system') ? 'nav-satellites--open' : ''}`}>
+                <div className="nav-satellites__inner">
+                  <div className="nav-satellite-row">
+                    {/* Not a `data-target` button: there is nothing to fly to here.
+                        The row is a label for the toggle beside it, which is why it
+                        carries no click handler and no active state. */}
+                    <span className="nav-btn nav-btn--satellite nav-btn--static">Orbits</span>
+                    {/* Mirrors script.ts's own default (hidden) so there's no flash of
+                        "Hide" before initScene runs and corrects it. */}
+                    <button
+                      type="button"
+                      className="nav-btn nav-btn--compact nav-visibility-btn nav-visibility-btn--off"
+                      id="toggle-orbits"
+                    >
+                      Show
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
         </div>
         <div className="nav-section">
             <h2 className="nav-section-title">Time</h2>

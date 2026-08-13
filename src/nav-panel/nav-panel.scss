@@ -88,6 +88,23 @@
     }
 }
 
+// A row label that borrows the satellite button's shape without being a control:
+// there is nothing to fly to, so it must not offer a pointer, a hover lift, or a
+// press. Doubled with `.nav-btn` for the same cascade reason as the toggle below —
+// the base rule's `cursor: pointer` and `:hover` transform are single-class and
+// would otherwise win on source order.
+.nav-btn.nav-btn--static {
+    display: flex;
+    align-items: center;
+    cursor: default;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.04);
+        border-color: rgba(255, 255, 255, 0.08);
+        transform: none;
+    }
+}
+
 // Doubled up with `.nav-btn` (`.nav-btn.nav-visibility-btn`, not just
 // `.nav-visibility-btn`) so this padding actually wins: both are single-class
 // selectors of equal specificity, and `.nav-btn`'s own `padding: 12px 16px` in the
