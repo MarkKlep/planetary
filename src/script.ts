@@ -62,7 +62,15 @@ export function initScene() {
 
     const renderer = new WebGLRenderer({ antialias: true });
     renderer.setSize(initialWidth, initialHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    // Fragment cost is quadratic in pixel ratio, and this scene spends most of a
+    // frame in fragment shaders: several transparent, additively blended shells
+    // (the atmospheres, the corona, the clouds) overdraw the same pixels more than
+    // once with no early-Z rejection, since blending needs depth writes off. A
+    // Retina display's devicePixelRatio of 2 was asking for that four times over
+    // for a sharpness difference that is barely visible. 1.5 keeps it close to
+    // native while cutting the fragment workload roughly in half.
+    const MAX_PIXEL_RATIO = 1.5;
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     // Filmic tone mapping keeps the sunlit face from clipping to flat white where
     // deserts and cloud tops are brightest.
     renderer.toneMapping = ACESFilmicToneMapping;
@@ -615,6 +623,14 @@ export function initScene() {
     let lastFrameMs = performance.now();
     let hudRefreshDue = 0;
 
+    // Nothing here needs more than 60fps — camera moves are either an eased fly-to
+    // or a scale-invariant drift, neither of which reads any smoother at 120. A
+    // ProMotion display drives `requestAnimationFrame` at up to 120Hz regardless,
+    // which would otherwise run every one of those overdrawn shells twice as often
+    // as the scene has any use for. The 1ms slack keeps a 60Hz display from
+    // occasionally dropping a frame to timer jitter sitting right at the threshold.
+    const TARGET_FRAME_INTERVAL_MS = 1000 / 60 - 1;
+
     /**
      * Speeds here are true to scale, so they are genuinely enormous — parked three
      * radii off Earth is already thousands of km/s. Rather than hide that, the
@@ -647,6 +663,14 @@ export function initScene() {
         requestAnimationFrame(animate);
 
         const frameMs = performance.now();
+        // Skip the whole frame — physics and all — until roughly a 60Hz interval has
+        // passed, rather than let a high-refresh display drive it faster. `lastFrameMs`
+        // only advances on a frame that actually proceeds, so realDelta below still
+        // measures real elapsed time between rendered frames, not between rAF ticks.
+        if (frameMs - lastFrameMs < TARGET_FRAME_INTERVAL_MS) {
+            return;
+        }
+
         // Clamped for the same reason the simulated clock is: a backgrounded tab
         // should not resume by hurling the camera across the solar system.
         const realDelta = Math.min((frameMs - lastFrameMs) / 1000, 0.1);
