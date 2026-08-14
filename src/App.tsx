@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { initScene } from './script';
+import { Analytics } from "@vercel/analytics/react";
 
 const SPLASH_FADE_MS = 400;
 
@@ -29,6 +30,7 @@ export function App() {
       <div id="app"></div>
       <NavPanel />
       <FlightHud />
+      <Analytics />
     </>
   );
 }
