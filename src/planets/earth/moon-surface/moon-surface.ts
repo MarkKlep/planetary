@@ -11,10 +11,12 @@ import {
     WebGLRenderer,
 } from 'three';
 import { MOON_HORIZON_M } from '../../../constants/planets.const';
-import { buildTerrain, regolithSunDirectionView, type Terrain } from './terrain';
+import { buildTerrain, regolithSunDirectionView, SHADOW_ONLY_LAYER, type Terrain } from './terrain';
 import { primeSiteSamples, sampleSite } from './site-samples';
 import { createSky, SKY_ZOOM_FOV, SURFACE_FOV, type Sky, type SkyState } from './sky';
 import { createWalker, type Walker } from './walk';
+import { createDust } from './dust';
+import { createArtefacts, type Artefacts } from './artefacts';
 import { createRover } from './rover';
 import { createDriver, type Driver } from './drive';
 import { DEFAULT_SITE, type LandingSite } from './sites';
@@ -173,6 +175,11 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     // the Moon the light is grazing most of the time.
     sunLight.shadow.bias = -0.0006;
     sunLight.shadow.normalBias = 0.05;
+    // The ground casts through a decimated proxy that lives on its own layer — the
+    // depth map is 23 cm a texel, so casting the full-resolution terrain into it is
+    // eight times the triangles for the same shadow. Enabling the layer here is what
+    // lets the shadow camera see it; the colour camera still cannot.
+    sunLight.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
     scene.add(sunLight);
     scene.add(sunLight.target);
 
@@ -184,13 +191,19 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     scene.add(earthLight);
     scene.add(earthLight.target);
 
-    const walker = createWalker(camera, domElement);
+    // One dust system, shared by both ways of getting about — the grains do not care
+    // what threw them, and a second buffer would only be a second draw call.
+    const dust = createDust();
+    scene.add(dust.object);
+
+    const walker = createWalker(camera, domElement, dust);
     const rover = createRover();
-    const driver = createDriver(rover, camera, domElement);
+    const driver = createDriver(rover, camera, domElement, dust);
     scene.add(rover.object);
 
     let sky: Sky | null = null;
     let terrain: Terrain | null = null;
+    let artefacts: Artefacts | null = null;
     let site = DEFAULT_SITE;
     let state: SkyState | null = null;
     let active = false;
@@ -205,6 +218,10 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     const dismount = new Vector3();
     const dishAim = new Vector3();
     const roverToLocal = new Quaternion();
+    const viewDirection = new Vector3();
+    // The grain size is converted to pixels in the vertex shader, which needs the
+    // viewport height to do it — so the mode has to remember what it was resized to.
+    let viewportHeight = 800;
 
     // The two mode keys live here rather than in either controller, because each of
     // them concerns *both*: Z is the same long lens whether you are standing or
@@ -223,6 +240,11 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             terrain.dispose();
             terrain = null;
         }
+        if (artefacts) {
+            scene.remove(artefacts.object);
+            artefacts.dispose();
+            artefacts = null;
+        }
         if (sky) {
             sky.dispose();
             sky = null;
@@ -233,9 +255,19 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         teardown();
         site = next;
 
-        terrain = buildTerrain(site, sampleSite(site.latitude, site.longitude));
+        const sample = sampleSite(site.latitude, site.longitude);
+        terrain = buildTerrain(site, sample);
+        // Thrown grains are the same material as the ground they came off, so a landing
+        // on Tycho's bright ejecta throws bright dust and one on mare basalt does not.
+        dust.setAlbedo(sample.albedo);
+        dust.reset();
         scene.add(terrain.ground);
         scene.add(terrain.boulders);
+
+        // Only where somebody has actually been, which is two of the six. Everywhere
+        // else this returns null and nothing is built at all.
+        artefacts = createArtefacts(site, terrain.heightAt);
+        if (artefacts) scene.add(artefacts.object);
 
         sky = createSky(site);
         // The starfield comes along, at whatever scale this scene needs. `add` detaches
@@ -352,6 +384,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             walker.disable();
             driver.disable();
             driving = false;
+            dust.reset();
 
             // Hand the stars back the way they were found.
             stars.scale.setScalar(1);
@@ -399,11 +432,23 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             // is nothing else to orient by.
             if (needsFacing) {
                 needsFacing = false;
-                const facing = state.earthVisible ? state.earthAzimuth : state.sunAzimuth;
-                walker.face(
-                    facing,
-                    state.earthVisible ? state.earthAltitude : state.sunAltitude
-                );
+                // Somewhere worth looking. At Tranquility Base and Hadley that is the
+                // lander — you did not come here for the view — and everywhere else it
+                // is Earth, or the Sun on the far side where there is no Earth to find.
+                let facing: number;
+                let pitch: number;
+                if (artefacts) {
+                    const { x, z } = artefacts.landerPosition;
+                    facing = Math.atan2(x - walker.position.x, -(z - walker.position.z));
+                    pitch = 0;
+                } else if (state.earthVisible) {
+                    facing = state.earthAzimuth;
+                    pitch = state.earthAltitude;
+                } else {
+                    facing = state.sunAzimuth;
+                    pitch = state.sunAltitude;
+                }
+                walker.face(facing, pitch);
                 // And the rover goes where it will be seen: off to one side of that
                 // first look, turned broadside so it reads as a vehicle rather than as
                 // a shape. Parked here rather than in `build` because until the sky has
@@ -432,6 +477,18 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             } else {
                 rover.aimDish(null);
             }
+
+            // Dust is stepped after the controllers, because they are what emits into
+            // it, and its whole per-frame cost is the four uniforms below — every grain
+            // in flight is evaluated on the GPU from its launch conditions.
+            camera.getWorldDirection(viewDirection);
+            dust.update(realDeltaSeconds, {
+                sunAltitude: state.sunAltitude,
+                sunDirection: state.sunDirection,
+                viewDirection,
+                viewportHeight,
+                fieldOfView: camera.fov,
+            });
 
             // --- lights ---
             const observer = driving ? driver.position : walker.position;
@@ -487,6 +544,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         resize(width, height) {
             camera.aspect = width / height;
             camera.updateProjectionMatrix();
+            viewportHeight = height;
         },
     };
 

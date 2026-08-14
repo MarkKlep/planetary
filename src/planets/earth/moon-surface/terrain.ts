@@ -4,12 +4,15 @@ import {
     Color,
     Float32BufferAttribute,
     IcosahedronGeometry,
+    Group,
     InstancedMesh,
     Matrix4,
     Mesh,
     MeshStandardMaterial,
+    Object3D,
     Quaternion,
     RepeatWrapping,
+    Sphere,
     Uint32BufferAttribute,
     Vector3,
 } from 'three';
@@ -58,8 +61,50 @@ import type { SiteSample } from './site-samples';
 
 // --- the grid --------------------------------------------------------------
 
-const RINGS = 128;
-const SPOKES = 256;
+const RINGS = 160;
+const SPOKES = 320;
+/**
+ * How many wedges the grid is cut into for culling, and the one number here that is
+ * about the renderer rather than the Moon.
+ *
+ * The patch is a disc centred on the observer, so as a single mesh its bounding sphere
+ * always contains the camera and it can *never* be frustum-culled — every triangle is
+ * submitted every frame regardless of which way you are facing, and you are facing
+ * about a quarter of it. Cut into wedges, each with its own bounds, three.js throws
+ * away the ones behind you before they cost anything.
+ *
+ * It pays twice. The shadow camera only covers 120 m around the observer, so the depth
+ * pass drops nearly every wedge as well.
+ *
+ * 16 wedges of 22.5°: enough that an 85° horizontal field keeps only five or six, few
+ * enough that the draw calls stay cheaper than the geometry they save. It has to
+ * divide `SPOKES`.
+ */
+const SECTORS = 16;
+const SPOKES_PER_SECTOR = SPOKES / SECTORS;
+/**
+ * How far out the *shadow* proxy reaches, and how coarsely it is built.
+ *
+ * The wedges themselves cast nothing. A wedge running the full 6 km has a bounding
+ * sphere some 3 km across, which intersects the shadow camera's 120 m box whichever
+ * way the observer faces — so letting them cast means drawing all 102,000 triangles
+ * into a depth map covering 0.04% of their area, every frame, and no amount of
+ * splitting fixes it because the shadow region genuinely surrounds you.
+ *
+ * What fixes it is noticing that the shadow map is 1024 texels over 240 m, or 23 cm a
+ * texel. Terrain detail finer than that cannot be represented in the map at all, so
+ * casting it is work thrown away. One decimated proxy — every fourth ring, every
+ * second spoke, sharing the same vertices — carries the same surface at 1/8 the
+ * triangles and produces an identical shadow.
+ *
+ * It lives on its own layer so the colour camera never sees it, which is cleaner than
+ * trying to make a mesh invisible but still casting.
+ */
+const SHADOW_PROXY_RADIUS_M = 150;
+const SHADOW_PROXY_RING_STEP = 4;
+const SHADOW_PROXY_SPOKE_STEP = 2;
+/** The layer the colour camera does not draw and the shadow camera does. */
+export const SHADOW_ONLY_LAYER = 1;
 /** Inner radius of the first ring; inside it, a fan to a single centre vertex. */
 const INNER_RADIUS_M = 0.35;
 /**
@@ -85,7 +130,7 @@ const CRATER_DENSITY = 0.1;
  * A crater is only worth putting into geometry while it is larger than the local
  * vertex spacing — and that spacing grows with distance, so the smallest crater
  * generated grows with it too. This is the ratio: a crater at distance r is given a
- * radius of at least 0.06·r, just under one ring of spacing.
+ * radius of at least 0.05·r, just under one ring of spacing.
  *
  * It has a useful consequence. The expected count per octave of distance works out
  * *independent* of the distance, so the field is scale-free in the same way the grid
@@ -93,7 +138,7 @@ const CRATER_DENSITY = 0.1;
  * hundred craters cover three kilometres; a uniform field at the same density and the
  * same smallest size would need some three million.
  */
-const CRATER_MIN_RADIUS_FACTOR = 0.06;
+const CRATER_MIN_RADIUS_FACTOR = 0.05;
 /** Largest crater relative to the smallest generated at the same distance. */
 const CRATER_SIZE_SPAN = 40;
 const CRATER_MAX_DIAMETER_M = 1200;
@@ -103,6 +148,25 @@ const CRATER_FIELD_RADIUS_M = 2800;
 const CRATER_FIELD_INNER_M = 1.5;
 /** Depth of a fresh simple crater as a fraction of its diameter. */
 const FRESH_DEPTH_RATIO = 0.2;
+
+/**
+ * Rays: the bright streaks thrown clear of a young impact, and the most recognisably
+ * lunar thing the ground can do. They are not relief at all — the surface under a ray
+ * is flat — they are *albedo*, fresh material scattered on top of ground that has been
+ * darkening under the solar wind for a billion years. Which is exactly why they fade:
+ * the ray is only bright until it has been weathered as long as everything around it.
+ *
+ * So they go into the vertex colours and never touch `heightAt`. They also reach far
+ * beyond the crater that threw them — Tycho's run a third of the way round the Moon —
+ * which is why they need their own list rather than riding the height sweep, whose
+ * craters drop out at 1.7 radii.
+ */
+const RAY_REACH_RADII = 15;
+/** Only young, sizeable craters have them; everything older has lost them. */
+const RAY_MIN_FRESHNESS = 0.72;
+const RAY_MIN_RADIUS_M = 10;
+/** How many streaks each one throws. Real ray systems are a handful, not a halo. */
+const RAY_COUNT = 7;
 
 interface Crater {
     x: number;
@@ -116,6 +180,8 @@ interface Crater {
     /** Radial band this crater can touch, for the sweep in `buildTerrain`. */
     nearest: number;
     farthest: number;
+    /** Fixes where this crater's rays fall, so they do not all point the same way. */
+    phase: number;
 }
 
 function buildCraterField(site: LandingSite): Crater[] {
@@ -153,6 +219,7 @@ function buildCraterField(site: LandingSite): Crater[] {
                 reach,
                 nearest: distance - reach,
                 farthest: distance + reach,
+                phase: random(),
             });
         }
     }
@@ -312,9 +379,12 @@ export const regolithSunDirectionView = new Vector3(1, 0, 0);
  *
  * Hapke's shadow-hiding term, B(α) = B₀/(1 + tan(α/2)/h). The width h is small, about
  * 0.06, so the surge stays confined to a few degrees instead of just brightening
- * everything.
+ * everything. B₀ is at the low end of the measured range for the Moon, which matters
+ * because it multiplies terms that are already generous: on a bright-ejecta site, a
+ * slope tilted into a low Sun is picking up full N·L *and* fresh-ejecta brightening,
+ * and a surge of 1.0 on top of that clips it to white.
  */
-const OPPOSITION_AMPLITUDE = 1.0;
+const OPPOSITION_AMPLITUDE = 0.7;
 const OPPOSITION_WIDTH = 0.06;
 
 function buildSurfaceMaterial(): MeshStandardMaterial {
@@ -349,8 +419,10 @@ function buildSurfaceMaterial(): MeshStandardMaterial {
 // --- assembly --------------------------------------------------------------
 
 export interface Terrain {
-    readonly ground: Mesh;
-    readonly boulders: InstancedMesh;
+    /** A `Group` of angular wedges — see the note on `SECTORS`. */
+    readonly ground: Object3D;
+    /** Two `InstancedMesh`es, split by size — see `buildBoulders`. */
+    readonly boulders: Object3D;
     /** Ground height in metres at a point in the local frame. */
     heightAt(x: number, z: number): number;
     dispose(): void;
@@ -359,8 +431,8 @@ export interface Terrain {
 const noisePoint = new Vector3();
 
 /** `noise.ts`'s fBm, handed metres rather than a direction. The lattice does not mind. */
-function relief(x: number, z: number, seed: number): number {
-    return fbm(noisePoint.set(x, 0, z), seed, 2);
+function relief(x: number, z: number, seed: number, octaves = 2): number {
+    return fbm(noisePoint.set(x, 0, z), seed, octaves);
 }
 
 export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
@@ -376,8 +448,8 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
      * apart the first time either was touched.
      *
      * `subset` is the sweep optimisation and nothing more — the geometry pass hands
-     * in only the craters whose reach covers the current ring, since all 256 vertices
-     * of a ring share a radius. Callers who do not know which craters are relevant,
+     * in only the craters whose reach covers the current ring, since every vertex
+     * of a ring shares its radius. Callers who do not know which craters are relevant,
      * which is to say the walker, simply get all of them.
      */
     function heightAt(x: number, z: number, subset: readonly Crater[] = craters): number {
@@ -389,11 +461,14 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
         // The km-scale setting, out of LOLA. -z is north.
         height += (sample.slopeEast * x + sample.slopeNorth * -z) * slopeTaper(radius);
 
-        // Metre-scale undulation: the slow roll of a surface that has been churned by
-        // impacts for four billion years and never once rained on.
+        // Undulation, in two bands: a slow roll from about 20 m down to 4, and a
+        // hummocky texture from 4 m down to under one. The second band is what a
+        // surface looks like after four billion years of overlapping impacts too small
+        // and too degraded to read as craters any more — and its absence is why smooth
+        // fractal ground always looks like a sand dune instead of regolith.
         height +=
-            site.relief * 0.6 * relief(x / 14, z / 14, site.seed) +
-            site.relief * 0.3 * relief(x / 4.5, z / 4.5, site.seed + 13);
+            site.relief * 0.85 * relief(x / 45, z / 45, site.seed, 3) +
+            site.relief * 0.34 * relief(x / 9, z / 9, site.seed + 13, 3);
 
         for (const crater of subset) {
             const dx = x - crater.x;
@@ -416,6 +491,15 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
     const tint = new Color();
     const ejecta = new Color();
 
+    // The few craters young enough and large enough to still have a ray system. Kept
+    // apart from the height sweep because rays reach fifteen radii and the sweep drops
+    // a crater at 1.7 — and because there are only ever a handful, so testing all of
+    // them against every vertex costs less than maintaining a second sweep would.
+    const rayCraters = craters
+        .filter((crater) => crater.freshness > RAY_MIN_FRESHNESS && crater.radius > RAY_MIN_RADIUS_M)
+        .sort((a, b) => b.radius - a.radius)
+        .slice(0, 6);
+
     function writeVertex(index: number, x: number, z: number, subset: readonly Crater[]): void {
         positions[index * 3] = x;
         positions[index * 3 + 1] = heightAt(x, z, subset);
@@ -437,7 +521,7 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
         // rays are visible from Earth with the naked eye.
         let brightening = 0;
         for (const crater of subset) {
-            if (crater.freshness < 0.45) continue;
+            if (crater.freshness < 0.62) continue;
             const dx = x - crater.x;
             const dz = z - crater.z;
             const distanceSq = dx * dx + dz * dz;
@@ -448,9 +532,31 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
             const across = (distance - inner) / (crater.reach - inner);
             brightening = Math.max(brightening, (1 - across) * crater.freshness);
         }
+        // Rays. Streaks rather than a halo: the azimuth is folded into a handful of
+        // bands, so most directions get nothing and a few get a bright lane running
+        // out to fifteen radii. The noise term is what stops them being drawn with a
+        // ruler — real rays are ragged and braided, and split as they go.
+        for (const crater of rayCraters) {
+            const dx = x - crater.x;
+            const dz = z - crater.z;
+            const distance = Math.sqrt(dx * dx + dz * dz);
+            const outer = crater.radius * RAY_REACH_RADII;
+            if (distance > outer || distance < crater.radius) continue;
+
+            const lane = (Math.atan2(dz, dx) / (Math.PI * 2)) * RAY_COUNT + crater.phase * RAY_COUNT;
+            const across = Math.abs((lane - Math.floor(lane)) - 0.5) * 2;
+            // Narrow bright core, and the width wanders with distance out.
+            const wander = relief(x / 26, z / 26, crater.phase * 1000) * 0.28;
+            const lane_ = Math.min(1, Math.max(0, across + wander));
+            const strength = 1 - lane_ * lane_ * (3 - 2 * lane_);
+
+            const fade = 1 - (distance - crater.radius) / (outer - crater.radius);
+            brightening = Math.max(brightening, strength * fade * fade * crater.freshness * 0.85);
+        }
+
         if (brightening > 0) {
-            ejecta.copy(sample.albedo).multiplyScalar(mottle * 1.75);
-            tint.lerp(ejecta, brightening);
+            ejecta.copy(sample.albedo).multiplyScalar(mottle * 1.4);
+            tint.lerp(ejecta, Math.min(brightening, 1));
         }
 
         colours[index * 3] = tint.r;
@@ -494,46 +600,135 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
         }
     }
 
-    // --- triangles ---
-    const indices = new Uint32Array(SPOKES * 3 + (RINGS - 1) * SPOKES * 6);
-    let cursor = 0;
+    // --- triangles, cut into cullable wedges ---
+    //
+    // Every quad belongs to the sector its *inner* spoke falls in, so the wedges tile
+    // the disc exactly once. Crucially they share vertices rather than duplicating
+    // them along the seams: one position buffer, one normal buffer, one of everything,
+    // and a separate index per wedge. That is what keeps the seams invisible — split
+    // buffers would mean `computeVertexNormals` averaging over different triangle sets
+    // on either side of a boundary, and a lighting crease every 22.5° all the way to
+    // the horizon.
+    const quadsPerSector = SPOKES_PER_SECTOR * (RINGS - 1);
+    const wedges: Uint32Array[] = [];
 
-    // The cap: a fan from the centre vertex out to the first ring.
-    for (let spoke = 0; spoke < SPOKES; spoke++) {
-        indices[cursor++] = 0;
-        indices[cursor++] = 1 + spoke;
-        indices[cursor++] = 1 + ((spoke + 1) % SPOKES);
+    for (let sector = 0; sector < SECTORS; sector++) {
+        const indices = new Uint32Array(SPOKES_PER_SECTOR * 3 + quadsPerSector * 6);
+        let cursor = 0;
+        const firstSpoke = sector * SPOKES_PER_SECTOR;
+
+        // The cap: a fan from the centre vertex out to the first ring.
+        for (let k = 0; k < SPOKES_PER_SECTOR; k++) {
+            const spoke = firstSpoke + k;
+            indices[cursor++] = 0;
+            indices[cursor++] = 1 + spoke;
+            indices[cursor++] = 1 + ((spoke + 1) % SPOKES);
+        }
+
+        for (let ring = 0; ring < RINGS - 1; ring++) {
+            const inner = 1 + ring * SPOKES;
+            const outer = inner + SPOKES;
+            for (let k = 0; k < SPOKES_PER_SECTOR; k++) {
+                const spoke = firstSpoke + k;
+                const next = (spoke + 1) % SPOKES;
+                indices[cursor++] = inner + spoke;
+                indices[cursor++] = outer + spoke;
+                indices[cursor++] = outer + next;
+                indices[cursor++] = inner + spoke;
+                indices[cursor++] = outer + next;
+                indices[cursor++] = inner + next;
+            }
+        }
+
+        wedges.push(indices);
     }
 
-    for (let ring = 0; ring < RINGS - 1; ring++) {
-        const inner = 1 + ring * SPOKES;
-        const outer = inner + SPOKES;
-        for (let spoke = 0; spoke < SPOKES; spoke++) {
-            const next = (spoke + 1) % SPOKES;
-            indices[cursor++] = inner + spoke;
-            indices[cursor++] = outer + spoke;
-            indices[cursor++] = outer + next;
-            indices[cursor++] = inner + spoke;
-            indices[cursor++] = outer + next;
-            indices[cursor++] = inner + next;
+    // The shadow proxy: the same surface, every fourth ring and every second spoke,
+    // out to where the shadow camera stops. Same vertices, so it cannot disagree with
+    // the ground it is standing in for.
+    const proxyRings: number[] = [];
+    for (let ring = 0; ring < RINGS - 1; ring += SHADOW_PROXY_RING_STEP) {
+        proxyRings.push(ring);
+        if (INNER_RADIUS_M * Math.pow(RING_GROWTH, ring) > SHADOW_PROXY_RADIUS_M) break;
+    }
+    const proxySpokes = Math.floor(SPOKES / SHADOW_PROXY_SPOKE_STEP);
+    const proxyIndex = new Uint32Array((proxyRings.length - 1) * proxySpokes * 6);
+    let proxyCursor = 0;
+    for (let i = 0; i < proxyRings.length - 1; i++) {
+        const inner = 1 + proxyRings[i] * SPOKES;
+        const outer = 1 + proxyRings[i + 1] * SPOKES;
+        for (let k = 0; k < proxySpokes; k++) {
+            const spoke = k * SHADOW_PROXY_SPOKE_STEP;
+            const next = (spoke + SHADOW_PROXY_SPOKE_STEP) % SPOKES;
+            proxyIndex[proxyCursor++] = inner + spoke;
+            proxyIndex[proxyCursor++] = outer + spoke;
+            proxyIndex[proxyCursor++] = outer + next;
+            proxyIndex[proxyCursor++] = inner + spoke;
+            proxyIndex[proxyCursor++] = outer + next;
+            proxyIndex[proxyCursor++] = inner + next;
         }
     }
 
-    const geometry = new BufferGeometry();
-    geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
-    geometry.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
-    geometry.setAttribute('color', new Float32BufferAttribute(colours, 3));
-    geometry.setIndex(new Uint32BufferAttribute(indices, 1));
-    geometry.computeVertexNormals();
+    // A master geometry carrying the whole index, purely so `computeVertexNormals`
+    // sees every triangle every vertex belongs to. It is never added to the scene; the
+    // wedges below borrow its attributes.
+    const master = new BufferGeometry();
+    master.setAttribute('position', new Float32BufferAttribute(positions, 3));
+    master.setAttribute('uv', new Float32BufferAttribute(uvs, 2));
+    master.setAttribute('color', new Float32BufferAttribute(colours, 3));
+    const fullIndex = new Uint32Array(wedges.reduce((n, w) => n + w.length, 0));
+    let offset = 0;
+    for (const wedge of wedges) {
+        fullIndex.set(wedge, offset);
+        offset += wedge.length;
+    }
+    master.setIndex(new Uint32BufferAttribute(fullIndex, 1));
+    master.computeVertexNormals();
 
     const detailMap = buildDetailNormalMap(site.seed);
     const groundMaterial = buildSurfaceMaterial();
     groundMaterial.vertexColors = true;
     groundMaterial.normalMap = detailMap;
 
-    const ground = new Mesh(geometry, groundMaterial);
-    ground.receiveShadow = true;
-    ground.castShadow = true;
+    const ground = new Group();
+    const sectorGeometries: BufferGeometry[] = [];
+
+    for (const indices of wedges) {
+        const wedge = new BufferGeometry();
+        // The *same* attribute objects, not copies. three.js caches the GPU buffer
+        // against the attribute, so all sixteen wedges are drawn out of one upload of
+        // the vertex data — the split is purely in the index.
+        wedge.setAttribute('position', master.getAttribute('position'));
+        wedge.setAttribute('normal', master.getAttribute('normal'));
+        wedge.setAttribute('uv', master.getAttribute('uv'));
+        wedge.setAttribute('color', master.getAttribute('color'));
+        wedge.setIndex(new Uint32BufferAttribute(indices, 1));
+        // Computed by hand over this wedge's own indices, because the built-in walks
+        // the whole position attribute — which every wedge shares, so every one would
+        // come back with the bounding sphere of the entire six-kilometre disc and none
+        // of them would ever be culled. That is the whole point, undone in one line.
+        wedge.boundingSphere = sectorBounds(positions, indices);
+
+        const mesh = new Mesh(wedge, groundMaterial);
+        mesh.receiveShadow = true;
+        // Receives, never casts — the proxy below does the casting for all of them.
+        mesh.castShadow = false;
+        ground.add(mesh);
+        sectorGeometries.push(wedge);
+    }
+
+    const proxyGeometry = new BufferGeometry();
+    proxyGeometry.setAttribute('position', master.getAttribute('position'));
+    proxyGeometry.setIndex(new Uint32BufferAttribute(proxyIndex, 1));
+    proxyGeometry.boundingSphere = sectorBounds(positions, proxyIndex);
+    const proxy = new Mesh(proxyGeometry, groundMaterial);
+    proxy.castShadow = true;
+    proxy.receiveShadow = false;
+    // Only on the shadow layer, so the colour camera never draws it and the shadow
+    // camera draws nothing else from the ground.
+    proxy.layers.set(SHADOW_ONLY_LAYER);
+    ground.add(proxy);
+    sectorGeometries.push(proxyGeometry);
 
     const boulders = buildBoulders(sample, craters, random, heightAt);
 
@@ -542,13 +737,45 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
         boulders,
         heightAt,
         dispose() {
-            geometry.dispose();
+            // The attributes are shared, so disposing the master releases the vertex
+            // buffers; the wedges only own their own index.
+            master.dispose();
+            for (const wedge of sectorGeometries) wedge.dispose();
             groundMaterial.dispose();
             detailMap.dispose();
-            boulders.geometry.dispose();
-            (boulders.material as MeshStandardMaterial).dispose();
+            boulders.traverse((child) => {
+                if (child instanceof InstancedMesh) {
+                    child.geometry.dispose();
+                    (child.material as MeshStandardMaterial).dispose();
+                }
+            });
         },
     };
+}
+
+/** A tight bounding sphere over just the vertices one wedge actually references. */
+function sectorBounds(positions: Float32Array, indices: Uint32Array): Sphere {
+    let minX = Infinity, minY = Infinity, minZ = Infinity;
+    let maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+
+    for (let i = 0; i < indices.length; i++) {
+        const at = indices[i] * 3;
+        const x = positions[at];
+        const y = positions[at + 1];
+        const z = positions[at + 2];
+        if (x < minX) minX = x;
+        if (y < minY) minY = y;
+        if (z < minZ) minZ = z;
+        if (x > maxX) maxX = x;
+        if (y > maxY) maxY = y;
+        if (z > maxZ) maxZ = z;
+    }
+
+    const centre = new Vector3((minX + maxX) / 2, (minY + maxY) / 2, (minZ + maxZ) / 2);
+    const radius = Math.sqrt(
+        ((maxX - minX) / 2) ** 2 + ((maxY - minY) / 2) ** 2 + ((maxZ - minZ) / 2) ** 2
+    );
+    return new Sphere(centre, radius);
 }
 
 // --- boulders --------------------------------------------------------------
@@ -569,13 +796,21 @@ const BOULDER_MIN_M = 0.18;
 const BOULDER_MAX_M = 3;
 /** How many are thrown out around fresh crater rims rather than scattered at random. */
 const BOULDER_EJECTA_FRACTION = 0.65;
+/**
+ * Clear ground at the landing point. Not physics — nobody sets a spacecraft down on
+ * top of a boulder, and a two-metre block a metre from your visor on the first frame
+ * reads as a bug rather than as terrain.
+ */
+const BOULDER_KEEP_OUT_M = 4;
+/** Blocks at least this wide get the subdivided icosahedron. See `buildBoulders`. */
+const BOULDER_DETAIL_THRESHOLD_M = 0.75;
 
 function buildBoulders(
     sample: SiteSample,
     craters: Crater[],
     random: () => number,
     heightAt: (x: number, z: number) => number
-): InstancedMesh {
+): Object3D {
     // Blocks large enough to see are thrown out of impacts, so most of them lie in
     // the ejecta blankets of the fresher craters rather than being sprinkled evenly
     // about. That clustering is the whole reason to place them deliberately.
@@ -586,26 +821,18 @@ function buildBoulders(
             Math.hypot(crater.x, crater.z) < BOULDER_FIELD_RADIUS_M * 1.5
     );
 
-    const material = buildSurfaceMaterial();
-    // Exposed blocks are brighter than the powder around them — that powder is what a
-    // few billion years of micrometeorite grinding did to rock exactly like this.
-    material.color.copy(sample.albedo).multiplyScalar(1.35);
+    interface Placement {
+        x: number;
+        z: number;
+        size: number;
+        sink: number;
+        axis: Vector3;
+        angle: number;
+        scale: Vector3;
+    }
+    const placements: Placement[] = [];
 
-    const mesh = new InstancedMesh(new IcosahedronGeometry(1, 1), material, BOULDER_COUNT);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
-    // The instance matrices scatter these over 160 m; the geometry's own bounds are a
-    // unit sphere at the origin, so culling on them would drop the whole field the
-    // moment the observer looked away from their own feet.
-    mesh.frustumCulled = false;
-
-    const matrix = new Matrix4();
-    const position = new Vector3();
-    const quaternion = new Quaternion();
-    const scale = new Vector3();
-    const axis = new Vector3();
-
-    for (let i = 0; i < BOULDER_COUNT; i++) {
+    for (let attempt = 0; placements.length < BOULDER_COUNT && attempt < BOULDER_COUNT * 4; attempt++) {
         let x: number;
         let z: number;
 
@@ -622,28 +849,72 @@ function buildBoulders(
             z = -distance * Math.sin(theta);
         }
 
+        if (x * x + z * z < BOULDER_KEEP_OUT_M * BOULDER_KEEP_OUT_M) continue;
+
         // The same power law as the craters — the rock came apart the same way, and
         // small blocks vastly outnumber large ones.
         const size = craterDiameter(random(), BOULDER_MIN_M, BOULDER_MAX_M) / 2;
-        // Partly buried. A block sitting exactly on the surface reads as dropped
-        // there; most of these have been worked into the regolith for an age.
-        const sink = size * (0.2 + random() * 0.45);
 
-        position.set(x, heightAt(x, z) - sink, z);
-        axis.set(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1).normalize();
-        quaternion.setFromAxisAngle(axis, random() * Math.PI * 2);
-        // Angular rather than round: these are fragments, so the icosahedron is
-        // squashed on all three axes to keep any two from looking alike.
-        scale.set(
-            size * (0.7 + random() * 0.6),
-            size * (0.6 + random() * 0.5),
-            size * (0.7 + random() * 0.6)
-        );
-
-        matrix.compose(position, quaternion, scale);
-        mesh.setMatrixAt(i, matrix);
+        placements.push({
+            x,
+            z,
+            size,
+            // Partly buried. A block sitting exactly on the surface reads as dropped
+            // there; most of these have been worked into the regolith for an age.
+            sink: size * (0.2 + random() * 0.45),
+            axis: new Vector3(random() * 2 - 1, random() * 2 - 1, random() * 2 - 1).normalize(),
+            angle: random() * Math.PI * 2,
+            // Angular rather than round: these are fragments, so the icosahedron is
+            // squashed on all three axes to keep any two from looking alike.
+            scale: new Vector3(
+                size * (0.7 + random() * 0.6),
+                size * (0.6 + random() * 0.5),
+                size * (0.7 + random() * 0.6)
+            ),
+        });
     }
 
-    mesh.instanceMatrix.needsUpdate = true;
-    return mesh;
+    // Two meshes, split by size, and the split is what makes the budget work. The size
+    // distribution is a power law, so the overwhelming majority are 20 cm chips that
+    // never cover more than a few pixels and are perfectly served by a bare
+    // icosahedron's twenty faces — faceted is what a shattered block looks like. The
+    // handful of metre-plus blocks are the ones you walk up to, and at twenty faces
+    // those read as cut glass. Subdividing *those* costs 80 triangles each on maybe
+    // sixty instances; subdividing all of them cost four times the whole boulder
+    // field, in both the colour pass and the shadow pass.
+    const coarse = placements.filter((p) => p.size * 2 < BOULDER_DETAIL_THRESHOLD_M);
+    const fine = placements.filter((p) => p.size * 2 >= BOULDER_DETAIL_THRESHOLD_M);
+
+    const material = buildSurfaceMaterial();
+    // Exposed blocks are brighter than the powder around them — that powder is what a
+    // few billion years of micrometeorite grinding did to rock exactly like this.
+    material.color.copy(sample.albedo).multiplyScalar(1.35);
+
+    const group = new Group();
+    const matrix = new Matrix4();
+    const position = new Vector3();
+    const quaternion = new Quaternion();
+
+    for (const [batch, detail] of [[coarse, 0], [fine, 1]] as const) {
+        if (batch.length === 0) continue;
+        const mesh = new InstancedMesh(new IcosahedronGeometry(1, detail), material, batch.length);
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+        // The instance matrices scatter these over tens of metres; the geometry's own
+        // bounds are a unit sphere at the origin, so culling on them would drop the
+        // whole field the moment the observer looked away from their own feet.
+        mesh.frustumCulled = false;
+
+        batch.forEach((placement, i) => {
+            position.set(placement.x, heightAt(placement.x, placement.z) - placement.sink, placement.z);
+            quaternion.setFromAxisAngle(placement.axis, placement.angle);
+            matrix.compose(position, quaternion, placement.scale);
+            mesh.setMatrixAt(i, matrix);
+        });
+
+        mesh.instanceMatrix.needsUpdate = true;
+        group.add(mesh);
+    }
+
+    return group;
 }

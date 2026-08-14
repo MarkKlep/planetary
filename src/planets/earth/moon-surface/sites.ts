@@ -23,6 +23,28 @@
  *    said out loud, and that is what `craterDensity` is.
  */
 
+/**
+ * What was left behind, for the two sites where anyone has been.
+ *
+ * Four of the six sites here have nothing on them and never have, and that is worth
+ * saying out loud rather than quietly decorating every landing: walking out at
+ * Copernicus and finding an untouched surface is the correct outcome, and the more
+ * striking one for standing beside Eagle five minutes earlier.
+ */
+export interface SiteArtefacts {
+    mission: string;
+    /** The lunar module's name. Only the descent stage is still there. */
+    lander: string;
+    /**
+     * Apollo 11's flag was knocked flat by the ascent engine on liftoff — Aldrin
+     * watched it go over through the window. It is the only one of the six that fell,
+     * and it is still lying where it landed.
+     */
+    flagStanding: boolean;
+    /** One line for the read-out. */
+    note: string;
+}
+
 export interface LandingSite {
     id: string;
     label: string;
@@ -41,6 +63,8 @@ export interface LandingSite {
     relief: number;
     /** Fixes the crater field, so a site looks the same every time you return to it. */
     seed: number;
+    /** Present only where somebody has actually been. */
+    artefacts?: SiteArtefacts;
 }
 
 export const LANDING_SITES: LandingSite[] = [
@@ -53,6 +77,12 @@ export const LANDING_SITES: LandingSite[] = [
         craterDensity: 1,
         relief: 0.35,
         seed: 1969,
+        artefacts: {
+            mission: 'Apollo 11',
+            lander: 'Eagle',
+            flagStanding: false,
+            note: "Eagle's descent stage and the fallen flag.",
+        },
     },
     {
         id: 'hadley',
@@ -63,6 +93,12 @@ export const LANDING_SITES: LandingSite[] = [
         craterDensity: 1.4,
         relief: 0.6,
         seed: 1971,
+        artefacts: {
+            mission: 'Apollo 15',
+            lander: 'Falcon',
+            flagStanding: true,
+            note: "Falcon's descent stage, the first rover's tracks, and the Fallen Astronaut.",
+        },
     },
     {
         id: 'copernicus',

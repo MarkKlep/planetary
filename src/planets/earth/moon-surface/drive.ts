@@ -6,6 +6,7 @@ import {
     LRV_WHEELBASE_M,
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
+import { WHEEL_BURST_SPACING_M, type Dust } from './dust';
 import type { Rover } from './rover';
 
 /**
@@ -45,6 +46,14 @@ const REVERSE_SPEED_MS = 1.2;
 const STEER_RATE = 1.5;
 const STEER_RETURN_RATE = 2.4;
 
+/**
+ * Below this the wheels are turning too slowly to fling anything clear: the grains
+ * leave the mesh at wheel speed, so at a crawl they simply fall back where they were.
+ * The crews noticed the opposite end of the same effect — the tails only got dramatic
+ * once they were really moving.
+ */
+const SPRAY_THRESHOLD_MS = 0.4;
+
 const LOOK_SENSITIVITY = 0.0022;
 const PITCH_LIMIT = MathUtils.degToRad(85);
 /** How far you can turn in the seat before the suit stops you. */
@@ -57,7 +66,7 @@ const YAW_LIMIT = MathUtils.degToRad(115);
  * and moving the eye forward by 20 cm is the difference between driving the thing and
  * looking at the back of its own hardware.
  */
-const SEAT_OFFSET = new Vector3(-0.4, 1.32, 0.42);
+const SEAT_OFFSET = new Vector3(-0.36, 1.26, 0.4);
 
 const HALF_BASE = LRV_WHEELBASE_M / 2;
 const HALF_TRACK = LRV_TRACK_M / 2;
@@ -87,7 +96,8 @@ export interface Driver {
 export function createDriver(
     rover: Rover,
     camera: PerspectiveCamera,
-    domElement: HTMLElement
+    domElement: HTMLElement,
+    dust: Dust
 ): Driver {
     const held = new Set<string>();
     // The look direction is relative to the *vehicle*, not to the world: turning your
@@ -97,6 +107,11 @@ export function createDriver(
     const orientation = new Quaternion();
     const seat = new Vector3();
     const spin = new Quaternion();
+    const heading3 = new Vector3();
+    // Where each wheel is actually touching, filled in by `settle`. Kept rather than
+    // recomputed, because the dust has to come off the same four points the vehicle's
+    // attitude was derived from.
+    const contacts = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 
     let ground: (x: number, z: number) => number = () => 0;
     let enabled = false;
@@ -105,6 +120,7 @@ export function createDriver(
     let speed = 0;
     let steer = 0;
     let odometer = 0;
+    let nextSpray = WHEEL_BURST_SPACING_M;
 
     /**
      * Attitude from the ground under the wheels.
@@ -125,12 +141,14 @@ export function createDriver(
         let left = 0;
         let right = 0;
 
-        for (const [dx, dz] of WHEEL_OFFSETS) {
+        for (let i = 0; i < WHEEL_OFFSETS.length; i++) {
+            const [dx, dz] = WHEEL_OFFSETS[i];
             // Rotate the wheel offset into the world by the current heading. Same
             // rotation `Object3D.rotation.y` applies: x' = x·cos + z·sin, z' = z·cos - x·sin.
             const x = position.x + dx * cos + dz * sin;
             const z = position.z + dz * cos - dx * sin;
             const height = ground(x, z);
+            contacts[i].set(x, height, z);
 
             mean += height * 0.25;
             if (dz < 0) front += height * 0.5;
@@ -256,6 +274,7 @@ export function createDriver(
             speed = 0;
             steer = 0;
             odometer = 0;
+            nextSpray = WHEEL_BURST_SPACING_M;
             settle();
             rover.object.position.copy(position);
             rover.object.quaternion.copy(orientation);
@@ -316,6 +335,19 @@ export function createDriver(
             odometer += Math.abs(travelled);
 
             settle();
+
+            // Off distance travelled rather than off the clock, so the tails hold the
+            // same density whatever the frame rate is doing and stop dead the instant
+            // the wheels do.
+            if (odometer >= nextSpray) {
+                nextSpray = odometer + WHEEL_BURST_SPACING_M;
+                if (Math.abs(speed) > SPRAY_THRESHOLD_MS) {
+                    heading3.set(-Math.sin(heading), 0, -Math.cos(heading));
+                    for (const contact of contacts) {
+                        dust.wheelSpray(contact, heading3, Math.abs(speed));
+                    }
+                }
+            }
             rover.roll(travelled);
             rover.object.position.copy(position);
             rover.object.quaternion.copy(orientation);

@@ -707,7 +707,13 @@ export function initScene() {
         }
         if (site) {
             if (surfaceSiteSelect) surfaceSiteSelect.value = site.id;
-            if (surfaceNote) surfaceNote.textContent = site.note;
+            if (surfaceNote) {
+                // Two of the six sites have hardware on them. The other four get their
+                // own line and nothing else, which is the honest thing to say.
+                surfaceNote.textContent = site.artefacts
+                    ? `${site.note} ${site.artefacts.note}`
+                    : site.note;
+            }
         }
     }
 

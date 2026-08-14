@@ -4,6 +4,7 @@ import {
     MOON_SURFACE_GRAVITY,
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
+import type { Dust } from './dust';
 
 /**
  * Walking, which is a different problem from flying.
@@ -52,6 +53,13 @@ const SMOOTHING_SECONDS = 0.16;
  */
 const BOB_AMPLITUDE = 0.035;
 const BOB_WAVELENGTH = 1.6;
+/**
+ * One footfall per half-cycle of the bob, because a stride is two feet. Kicking dust
+ * off *distance travelled* rather than off a timer is what keeps the spray tied to the
+ * ground: it does not thin out at high frame rates or bunch up at low ones, and
+ * standing still emits nothing at all.
+ */
+const FOOTFALL_SPACING = BOB_WAVELENGTH / 2;
 
 export interface Walker {
     /** Eye position in the local scene frame, metres. */
@@ -77,7 +85,8 @@ const UP = new Vector3(0, 1, 0);
 
 export function createWalker(
     camera: PerspectiveCamera,
-    domElement: HTMLElement
+    domElement: HTMLElement,
+    dust: Dust
 ): Walker {
     const held = new Set<string>();
     // 'YXZ' is what keeps this roll-free: yaw about the world up, pitch about the
@@ -95,7 +104,9 @@ export function createWalker(
     let verticalSpeed = 0;
     let airborne = false;
     let distanceWalked = 0;
+    let nextFootfall = FOOTFALL_SPACING;
     let speed = 0;
+    const contact = new Vector3();
 
     function standingHeight(): number {
         return ground(position.x, position.z) + MOON_EYE_HEIGHT_M;
@@ -203,6 +214,7 @@ export function createWalker(
             verticalSpeed = 0;
             airborne = false;
             distanceWalked = 0;
+            nextFootfall = FOOTFALL_SPACING;
         },
 
         face(azimuth, altitude = 0) {
@@ -259,11 +271,21 @@ export function createWalker(
                 verticalSpeed -= MOON_SURFACE_GRAVITY * deltaSeconds;
                 position.y += verticalSpeed * deltaSeconds;
                 if (position.y <= standing && verticalSpeed <= 0) {
+                    // Touchdown throws a ring outward, scaled by how hard you arrived.
+                    // A two-second fall at a sixth of a gravity still lands at 1.6 m/s.
+                    contact.set(position.x, standing - MOON_EYE_HEIGHT_M, position.z);
+                    dust.impact(contact, Math.min(Math.abs(verticalSpeed) * 0.55, 1.4));
                     position.y = standing;
                     verticalSpeed = 0;
                     airborne = false;
+                    nextFootfall = distanceWalked + FOOTFALL_SPACING;
                 }
             } else {
+                if (distanceWalked >= nextFootfall) {
+                    nextFootfall = distanceWalked + FOOTFALL_SPACING;
+                    contact.set(position.x, standing - MOON_EYE_HEIGHT_M, position.z);
+                    dust.footfall(contact, orientation.y, speed);
+                }
                 // Glued to the ground, which is also what carries you over crater rims
                 // and down into bowls without any collision work: the surface *is* the
                 // constraint, and `heightAt` is the same function the vertices used.

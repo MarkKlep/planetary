@@ -103,17 +103,17 @@ export function NavPanel() {
   // attributes and ids below. These handlers only drive the button styling.
   return (
     <nav className={`navigation-panel ${isCollapsed ? 'navigation-panel--collapsed' : ''}`}>
-        <button
-          type="button"
-          className="nav-panel-toggle"
-          aria-label={isCollapsed ? 'Show navigation panel' : 'Hide navigation panel'}
-          aria-expanded={!isCollapsed}
-          onClick={() => setIsCollapsed((collapsed) => !collapsed)}
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path d="m14.5 5-7 7 7 7" />
-          </svg>
-        </button>
+      <button
+        type="button"
+        className="nav-panel-toggle"
+        aria-label={isCollapsed ? 'Show navigation panel' : 'Hide navigation panel'}
+        aria-expanded={!isCollapsed}
+        onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="m14.5 5-7 7 7 7" />
+        </svg>
+      </button>
       <div className="nav-panel-content">
         <header className="nav-header">
           <div>
@@ -122,8 +122,8 @@ export function NavPanel() {
           </div>
         </header>
         <div className="nav-section nav-section--objects">
-            <h2 className="nav-section-title">Objects</h2>
-            <div className="nav-object-list">
+          <h2 className="nav-section-title">Objects</h2>
+          <div className="nav-object-list">
             <button
               className={`nav-btn nav-object-btn ${activeTarget === 'sun' ? 'active' : ''}`}
               data-target="sun"
@@ -194,9 +194,8 @@ export function NavPanel() {
                           {satellite.toggle && (
                             <button
                               type="button"
-                              className={`nav-btn nav-btn--compact nav-visibility-btn ${
-                                satellite.toggle.startsOff ? 'nav-visibility-btn--off' : ''
-                              }`}
+                              className={`nav-btn nav-btn--compact nav-visibility-btn ${satellite.toggle.startsOff ? 'nav-visibility-btn--off' : ''
+                                }`}
                               id={satellite.toggle.toggleId}
                             >
                               {satellite.toggle.initialLabel}
@@ -283,54 +282,54 @@ export function NavPanel() {
                 </div>
               </div>
             </div>
-            </div>
+          </div>
         </div>
         <div className="nav-section">
-            <h2 className="nav-section-title">Simulation</h2>
-            <div className="nav-speeds" role="group" aria-label="Simulation speed">
-              {TIME_SPEEDS.map(({ label, secondsPerSecond }) => (
-                <button
-                  key={label}
-                  className={`nav-btn nav-btn--compact ${activeSpeed === secondsPerSecond ? 'active' : ''}`}
-                  data-speed={secondsPerSecond}
-                  onClick={() => setActiveSpeed(secondsPerSecond)}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="nav-btn nav-action-btn"
-              id="toggle-rotation"
-              onClick={() => setPaused(!paused)}
-            >
-              {paused ? 'Resume' : 'Pause'}
-            </button>
+          <h2 className="nav-section-title">Simulation</h2>
+          <div className="nav-speeds" role="group" aria-label="Simulation speed">
+            {TIME_SPEEDS.map(({ label, secondsPerSecond }) => (
+              <button
+                key={label}
+                className={`nav-btn nav-btn--compact ${activeSpeed === secondsPerSecond ? 'active' : ''}`}
+                data-speed={secondsPerSecond}
+                onClick={() => setActiveSpeed(secondsPerSecond)}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+          <button
+            className="nav-btn nav-action-btn"
+            id="toggle-rotation"
+            onClick={() => setPaused(!paused)}
+          >
+            {paused ? 'Resume' : 'Pause'}
+          </button>
         </div>
         <div className="nav-section nav-section--utilities">
-            <h2 className="nav-section-title">Controls</h2>
-            {/* Free flight is also bound to F and left with Esc, so script.ts owns
+          <h2 className="nav-section-title">Controls</h2>
+          {/* Free flight is also bound to F and left with Esc, so script.ts owns
                 this button's label and active state outright rather than mirroring
                 it into React state that the keyboard could desync. */}
-            <button className="nav-btn nav-action-btn" id="toggle-free-flight">
-              <span className="nav-action-icon" aria-hidden="true">⌁</span>Free flight
-            </button>
-            <button
-              className="nav-btn nav-action-btn nav-action-btn--secondary"
-              id="reset-camera"
-              onClick={() => setActiveTarget(null)}
-            >
-              <span className="nav-action-icon" aria-hidden="true">↺</span>Reset camera
-            </button>
+          <button className="nav-btn nav-action-btn" id="toggle-free-flight">
+            <span className="nav-action-icon" aria-hidden="true">⌁</span>Free flight
+          </button>
+          <button
+            className="nav-btn nav-action-btn nav-action-btn--secondary"
+            id="reset-camera"
+            onClick={() => setActiveTarget(null)}
+          >
+            <span className="nav-action-icon" aria-hidden="true">↺</span>Reset camera
+          </button>
         </div>
         <div className="nav-section nav-section--data">
-            <h2 className="nav-section-title">Data layers</h2>
-            <a
-              className="nav-btn nav-action-btn nav-action-btn--secondary"
-              href="/heatmap.html"
-            >
-              <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
-            </a>
+          <h2 className="nav-section-title">Data layers</h2>
+          <a
+            className="nav-btn nav-action-btn nav-action-btn--secondary"
+            href="/heatmap.html"
+          >
+            <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
+          </a>
         </div>
       </div>
     </nav>

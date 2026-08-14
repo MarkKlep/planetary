@@ -85,6 +85,9 @@
 
     &:hover {
         background: rgba(255, 255, 255, 0.1);
+        // `.nav-btn` has a navigation-row hover translation. These controls live in
+        // a clipped satellite row, so shifting them sideways cuts off their edge.
+        transform: none;
     }
 }
 

@@ -82,11 +82,30 @@ export const MOON_REGOLITH_ALBEDO = 0.12 * 1.5;
 // back end loose, and why Young managed to get all four wheels off the ground at once
 // on the "Grand Prix" run.
 
-export const LRV_WHEELBASE_M = 2.29;
+/** 7.5 ft. */
+export const LRV_WHEELBASE_M = 2.286;
 /** Wheel centre to wheel centre across the vehicle. */
 export const LRV_TRACK_M = 1.83;
-/** 81.8 cm wire-mesh wheels, woven from zinc-coated piano wire. */
-export const LRV_WHEEL_RADIUS_M = 0.409;
+/** 10 ft over the wheels, and only 3.6 ft tall — it is nearly as wide as it is long. */
+export const LRV_LENGTH_M = 3.05;
+/**
+ * 3.6 ft, to the top of the seat backs. Everything above that — the antenna mast, the
+ * TV camera — was deployed on the surface and is not part of the packaged height.
+ */
+export const LRV_HEIGHT_M = 1.14;
+/** 14 in. The chassis clears the ground by less than half a wheel radius. */
+export const LRV_GROUND_CLEARANCE_M = 0.36;
+/** 32 in diameter, woven from 0.84 mm zinc-coated steel strand. */
+export const LRV_WHEEL_RADIUS_M = 0.4064;
+/** 9 in. */
+export const LRV_WHEEL_WIDTH_M = 0.23;
+/**
+ * The titanium bump-stop frame *inside* the mesh, 25.5 in across. Wire this fine
+ * deflects flat under load, and the frame is what it lands on when it does — visible
+ * straight through the tyre, which is most of why an LRV wheel looks like nothing
+ * else.
+ */
+export const LRV_BUMP_STOP_RADIUS_M = 0.3239;
 /**
  * Design top speed, 13 km/h. Both axles steer, in opposite directions, which is what
  * gets a 3.1 m turning circle out of a 3.1 m vehicle.

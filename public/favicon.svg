@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Same palette and shape language as the splash screen in index.html: a
+       sun rendered in the app's purple/blue gradient, one visible orbit ring,
+       one planet on it. Kept to three flat shapes on a dark ground so it stays
+       legible at 16px in a browser tab, where gradients and glows disappear. -->
+  <rect width="32" height="32" rx="7" fill="#0b0b14" />
+  <circle cx="16" cy="16" r="10.5" fill="none" stroke="#3a3a52" stroke-width="1.4" />
+  <circle cx="16" cy="16" r="4.6" fill="#7c6fe8" />
+  <circle cx="16" cy="5.5" r="2.3" fill="#ffffff" />
+</svg>

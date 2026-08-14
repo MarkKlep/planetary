@@ -38,6 +38,15 @@ const COLOR_SAMPLE_HEIGHT = 512;
 const LUNAR_ELEVATION_RANGE_M = 19930;
 
 /**
+ * The real span of lunar surface reflectance, converted for a diffuse material the
+ * same way `MOON_REGOLITH_ALBEDO` is: about 0.06 geometric for the darkest mare basalt
+ * and 0.24 for the freshest crater material, times the 3/2 that turns a full-phase
+ * disc comparison into a hemispherical reflectance.
+ */
+const MIN_DIFFUSE_ALBEDO = 0.06 * 1.5;
+const MAX_DIFFUSE_ALBEDO = 0.24 * 1.5;
+
+/**
  * Regional slopes on the Moon, measured over a baseline this long, are almost all
  * under a couple of degrees — the dramatic-looking relief is nearly all at scales
  * far below one texel here. The cap is a guard on an 8-bit gradient rather than a
@@ -189,6 +198,15 @@ export function sampleSite(latitude: number, longitude: number): SiteSample {
     const samples = patch.length / 4;
     const scale = MOON_REGOLITH_ALBEDO / colorMapMean / samples;
     const albedo = new Color(r * scale, g * scale, b * scale);
+
+    // ...and then clamped, because a ratio has no ceiling and the Moon does. The whole
+    // surface spans roughly 0.06 to 0.24 geometric — darkest mare to the freshest
+    // crater material anywhere on it — and the mosaic's contrast stretch can push a
+    // bright site well past the top of that. Left uncapped, Tycho comes out at an
+    // albedo no lunar material has, and every slope facing a low Sun clips to white.
+    const luminance = albedo.r * 0.2126 + albedo.g * 0.7152 + albedo.b * 0.0722;
+    const capped = Math.min(Math.max(luminance, MIN_DIFFUSE_ALBEDO), MAX_DIFFUSE_ALBEDO);
+    albedo.multiplyScalar(capped / Math.max(luminance, 1e-4));
 
     // --- regional slope ---
     // Central differences over one texel each way. At this resolution a texel is
