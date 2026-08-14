@@ -41,6 +41,47 @@
     margin-bottom: 12px;
 }
 
+// Walking and driving both keep their rows and their key legend in the DOM the whole
+// time — script.ts flips one class on the panel and the cascade picks a set. Same
+// always-mounted rule the nav panel's satellite lists follow, and for the same reason:
+// script.ts looks these up by id once, and an element that does not exist yet never
+// gets found.
+//
+// Scoped under `.surface-hud` rather than left as a bare class, which is not cosmetic:
+// `.surface-hud__keys` sets `display: flex` and is a single-class selector defined
+// further down this file, so at equal specificity it would win the source-order
+// tiebreak and both legends would render at once. Two classes beats one.
+.surface-hud .surface-hud__drive-only {
+    display: none;
+}
+
+.surface-hud--driving {
+    .surface-hud__walk-only {
+        display: none;
+    }
+
+    .surface-hud__drive-only {
+        display: block;
+    }
+
+    // ...and the legend is a flex column, not a block, or its rows stack wrong.
+    .surface-hud__keys.surface-hud__drive-only {
+        display: flex;
+    }
+
+    // The site picker is for choosing where to be set down; while you are driving,
+    // where you are is a thing you have earned rather than chosen.
+    .surface-hud__site,
+    .surface-hud__note {
+        display: none;
+    }
+
+    .surface-hud__readout {
+        border-top: none;
+        padding-top: 0;
+    }
+}
+
 .surface-hud__site {
     pointer-events: auto;
     width: 100%;

@@ -74,6 +74,33 @@ export const MOON_HORIZON_M = Math.sqrt(2 * MOON_RADIUS_M * MOON_EYE_HEIGHT_M);
  */
 export const MOON_REGOLITH_ALBEDO = 0.12 * 1.5;
 
+// --- Lunar Roving Vehicle -------------------------------------------------
+//
+// Boeing/Delco, flown on Apollo 15, 16 and 17. Every figure here is the real one, and
+// between them they are why it handles the way it does: 2.29 m of wheelbase against
+// 1.83 m of track is nearly square, which is exactly why the crews kept getting the
+// back end loose, and why Young managed to get all four wheels off the ground at once
+// on the "Grand Prix" run.
+
+export const LRV_WHEELBASE_M = 2.29;
+/** Wheel centre to wheel centre across the vehicle. */
+export const LRV_TRACK_M = 1.83;
+/** 81.8 cm wire-mesh wheels, woven from zinc-coated piano wire. */
+export const LRV_WHEEL_RADIUS_M = 0.409;
+/**
+ * Design top speed, 13 km/h. Both axles steer, in opposite directions, which is what
+ * gets a 3.1 m turning circle out of a 3.1 m vehicle.
+ */
+export const LRV_TOP_SPEED_MS = 13 / 3.6;
+/**
+ * 18 km/h, downhill, Cernan on Apollo 17 — the lunar land speed record, and still
+ * standing. Not a limit the driving model imposes; it is simply what the slope gives
+ * you if you point it downhill, the same way it did then.
+ */
+export const LRV_RECORD_SPEED_MS = 18 / 3.6;
+/** Both axles turn this far, in opposite senses. */
+export const LRV_MAX_STEER_RAD = (22 * Math.PI) / 180;
+
 // Mercury constants
 export const MERCURY_RADIUS_KM = 2439.4; // volumetric mean radius
 /** Barely a third of Earth's, and smaller than two of the moons in the solar system. */

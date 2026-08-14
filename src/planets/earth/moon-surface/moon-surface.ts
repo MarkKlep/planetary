@@ -15,6 +15,8 @@ import { buildTerrain, regolithSunDirectionView, type Terrain } from './terrain'
 import { primeSiteSamples, sampleSite } from './site-samples';
 import { createSky, SKY_ZOOM_FOV, SURFACE_FOV, type Sky, type SkyState } from './sky';
 import { createWalker, type Walker } from './walk';
+import { createRover } from './rover';
+import { createDriver, type Driver } from './drive';
 import { DEFAULT_SITE, type LandingSite } from './sites';
 
 /**
@@ -51,7 +53,7 @@ import { DEFAULT_SITE, type LandingSite } from './sites';
  * f-stop on the Hasselblads the crews actually carried. Everything on the surface is
  * lit by one light of one strength; the choice is only how bright to develop it.
  */
-const SUNLIGHT_INTENSITY = 6.0;
+const SUNLIGHT_INTENSITY = 8.5;
 /**
  * Bounce off the ground. Real, and the reason the shadowed side of a boulder is not
  * simply black in the Apollo photography — with nothing in the sky to scatter light,
@@ -94,6 +96,17 @@ const SHADOW_DISTANCE_M = 900;
 /** Seconds for the field of view to travel between standing and the long lens. */
 const ZOOM_SECONDS = 0.28;
 
+/**
+ * How close you have to be to climb aboard. Generous — the LRV is 3.1 m long and you
+ * are aiming at it with a mouse.
+ */
+const BOARDING_RANGE_M = 4.5;
+/** Where the rover is set down relative to where you land, metres and radians. */
+const ROVER_PARK_DISTANCE_M = 8;
+const ROVER_PARK_BEARING_OFFSET = 0.38;
+/** Parked broadside-on, so the first thing you see of it is its silhouette. */
+const ROVER_PARK_HEADING_OFFSET = 1.85;
+
 export interface MoonSurfaceOptions {
     renderer: WebGLRenderer;
     domElement: HTMLElement;
@@ -115,6 +128,12 @@ export interface MoonSurface {
     readonly site: LandingSite;
     readonly state: SkyState | null;
     readonly walker: Walker;
+    readonly driver: Driver;
+    readonly driving: boolean;
+    /** Metres from the observer to the rover, however they are getting about. */
+    readonly roverDistance: number;
+    /** Board it if you are near enough, or step off it if you are on it. */
+    toggleRover(): void;
     enter(site: LandingSite): void;
     exit(): void;
     /** Move to another site without leaving the surface. */
@@ -166,6 +185,9 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     scene.add(earthLight.target);
 
     const walker = createWalker(camera, domElement);
+    const rover = createRover();
+    const driver = createDriver(rover, camera, domElement);
+    scene.add(rover.object);
 
     let sky: Sky | null = null;
     let terrain: Terrain | null = null;
@@ -174,10 +196,25 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     let active = false;
     let fieldOfView = SURFACE_FOV;
     let shadowsConfigured = false;
+    let zoomed = false;
+    let driving = false;
     /** Aim the first look somewhere worth looking, once the sky is known. */
     let needsFacing = false;
 
     const sunPosition = new Vector3();
+    const dismount = new Vector3();
+    const dishAim = new Vector3();
+    const roverToLocal = new Quaternion();
+
+    // The two mode keys live here rather than in either controller, because each of
+    // them concerns *both*: Z is the same long lens whether you are standing or
+    // driving, and R is the handover between them.
+    function onKeyDown(event: KeyboardEvent): void {
+        const tag = (event.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+        if (event.code === 'KeyZ') zoomed = !zoomed;
+        if (event.code === 'KeyR') surface.toggleRover();
+    }
 
     function teardown(): void {
         if (terrain) {
@@ -208,11 +245,31 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         sky.scene.add(stars);
 
         walker.setGround(terrain.heightAt);
+        driver.setGround(terrain.heightAt);
+        // Parked at the origin for now; the real spot needs the sky, because it is
+        // placed in front of wherever the first look ends up pointing.
+        driver.park(0, 0, 0);
+        driving = false;
         state = null;
         needsFacing = true;
     }
 
-    return {
+    /**
+     * How far the walker is from the rover. Horizontal only — the vertical component
+     * is never the question — and always measured from the walker, whose position is
+     * simply left where they got on from while they are driving.
+     */
+    function roverDistance(): number {
+        return Math.hypot(
+            walker.position.x - driver.position.x,
+            walker.position.z - driver.position.z
+        );
+    }
+
+    // Named, because `onKeyDown` above needs to reach `toggleRover` and the two are
+    // mutually recursive by nature: the key handler is the mode's, not either
+    // controller's.
+    const surface: MoonSurface = {
         get active() {
             return active;
         },
@@ -222,13 +279,50 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         get state() {
             return state;
         },
+        get driving() {
+            return driving;
+        },
+        get roverDistance() {
+            return roverDistance();
+        },
         walker,
+        driver,
+
+        toggleRover() {
+            if (!active) return;
+
+            if (driving) {
+                // Step off on the left, past the wheel, and turn to look back at it.
+                // Clear of the vehicle, not beside it: the LRV is 1.83 m across
+                // the wheels, so anything under about 2.5 m puts the camera inside its
+                // own fender.
+                dismount.set(-3.1, 0, 0.5).applyQuaternion(rover.object.quaternion);
+                driver.disable();
+                driving = false;
+                walker.placeAt(driver.position.x + dismount.x, driver.position.z + dismount.z);
+                walker.enable();
+                // Azimuth of the way back to the rover: the scene points -Z north, so
+                // this is the same convention the sky read-outs use.
+                walker.face(Math.atan2(-dismount.x, dismount.z));
+                return;
+            }
+
+            // Out of reach is simply out of reach — there is no summoning it. The
+            // read-out says how far, which on foot at 1.1 m/s is the useful number.
+            if (roverDistance() > BOARDING_RANGE_M) return;
+
+            walker.disable();
+            driver.enable();
+            driving = true;
+        },
 
         enter(next) {
             if (active) {
                 this.landAt(next);
                 return;
             }
+
+            window.addEventListener('keydown', onKeyDown);
 
             if (!shadowsConfigured) {
                 // Hard-edged, because the only thing softening a lunar shadow is the
@@ -242,6 +336,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             build(next);
             walker.enable();
             fieldOfView = SURFACE_FOV;
+            zoomed = false;
             active = true;
         },
 
@@ -253,7 +348,10 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         exit() {
             if (!active) return;
             active = false;
+            window.removeEventListener('keydown', onKeyDown);
             walker.disable();
+            driver.disable();
+            driving = false;
 
             // Hand the stars back the way they were found.
             stars.scale.setScalar(1);
@@ -270,11 +368,20 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             // Real seconds, never simulated ones: walking has to work while the
             // simulation is paused, and picking a larger time multiplier to watch the
             // shadows move must not also make the astronaut sprint.
-            const targetFov = walker.zoomed ? SKY_ZOOM_FOV : SURFACE_FOV;
+            const targetFov = zoomed ? SKY_ZOOM_FOV : SURFACE_FOV;
             const blend = 1 - Math.exp(-realDeltaSeconds / ZOOM_SECONDS);
             fieldOfView += (targetFov - fieldOfView) * blend;
 
-            walker.update(realDeltaSeconds, fieldOfView);
+            if (driving) {
+                driver.update(realDeltaSeconds, fieldOfView);
+            } else {
+                walker.update(realDeltaSeconds, fieldOfView, zoomed);
+                // Still called while parked: it is what settles the rover onto the
+                // ground under its own four wheels, which has to keep happening or a
+                // vehicle you walked away from would sit at whatever attitude it had
+                // when you got out of it.
+                driver.update(realDeltaSeconds, fieldOfView);
+            }
             camera.updateMatrixWorld();
 
             // The sky rides the same orientation from the origin — it is the same view
@@ -292,18 +399,43 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             // is nothing else to orient by.
             if (needsFacing) {
                 needsFacing = false;
+                const facing = state.earthVisible ? state.earthAzimuth : state.sunAzimuth;
                 walker.face(
-                    state.earthVisible ? state.earthAzimuth : state.sunAzimuth,
+                    facing,
                     state.earthVisible ? state.earthAltitude : state.sunAltitude
                 );
-                walker.update(0, fieldOfView);
+                // And the rover goes where it will be seen: off to one side of that
+                // first look, turned broadside so it reads as a vehicle rather than as
+                // a shape. Parked here rather than in `build` because until the sky has
+                // been evaluated there is no telling which way "in front" is.
+                const bearing = facing + ROVER_PARK_BEARING_OFFSET;
+                driver.park(
+                    walker.position.x + Math.sin(bearing) * ROVER_PARK_DISTANCE_M,
+                    walker.position.z - Math.cos(bearing) * ROVER_PARK_DISTANCE_M,
+                    bearing + ROVER_PARK_HEADING_OFFSET
+                );
+                walker.update(0, fieldOfView, zoomed);
                 camera.updateMatrixWorld();
                 sky.camera.quaternion.copy(camera.quaternion);
                 state = sky.update(context);
             }
 
+            // The antenna follows Earth, which is what the crews spent part of every
+            // stop doing by hand. Earth's direction is known in the *scene* frame, and
+            // the dish hangs off a vehicle that is pitched and rolled by the ground
+            // under its wheels, so it has to be carried into the rover's own frame
+            // first — otherwise it would swing away from Earth every time you crossed
+            // a crater rim.
+            if (state.earthVisible) {
+                roverToLocal.copy(rover.object.quaternion).invert();
+                rover.aimDish(dishAim.copy(state.earthDirection).applyQuaternion(roverToLocal));
+            } else {
+                rover.aimDish(null);
+            }
+
             // --- lights ---
-            sunLight.target.position.set(walker.position.x, 0, walker.position.z);
+            const observer = driving ? driver.position : walker.position;
+            sunLight.target.position.set(observer.x, 0, observer.z);
             sunPosition
                 .copy(state.sunDirection)
                 .multiplyScalar(SHADOW_DISTANCE_M)
@@ -317,7 +449,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             // Bounce is light off the ground, so it goes out with the Sun.
             bounce.intensity = state.sunAltitude > 0 ? BOUNCE_INTENSITY : 0.02;
 
-            earthLight.target.position.set(walker.position.x, 0, walker.position.z);
+            earthLight.target.position.set(observer.x, 0, observer.z);
             earthLight.position
                 .copy(state.earthDirection)
                 .multiplyScalar(SHADOW_DISTANCE_M)
@@ -357,6 +489,8 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             camera.updateProjectionMatrix();
         },
     };
+
+    return surface;
 }
 
 /**

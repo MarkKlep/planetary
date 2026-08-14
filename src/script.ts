@@ -681,12 +681,21 @@ export function initScene() {
     const surfaceHud = document.getElementById('surface-hud');
     const surfaceSunValue = document.getElementById('surface-sun');
     const surfaceEarthValue = document.getElementById('surface-earth');
+    const surfaceRoverValue = document.getElementById('surface-rover');
+    const surfaceSpeedValue = document.getElementById('surface-speed');
+    const surfaceTripValue = document.getElementById('surface-trip');
+    const surfaceHomeValue = document.getElementById('surface-home');
     const surfaceNote = document.getElementById('surface-note');
     const surfaceSiteSelect = document.getElementById('surface-site') as HTMLSelectElement | null;
     const toggleMoonSurfaceBtn = document.getElementById('toggle-moon-surface');
 
     function updateSurfaceChrome(landed: boolean, site?: LandingSite) {
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
+        // The CSS2D labels are a DOM overlay, not something the renderer draws, so
+        // skipping `labelRenderer.render()` while landed leaves them frozen on screen
+        // at whatever opacity they last had — "Earth" hanging in the lunar sky, 384,000
+        // km from the thing it labels. They have to be hidden outright.
+        labelRenderer.domElement.style.display = landed ? 'none' : '';
         // CSS2D labels are rendered into their own DOM layer. Surface mode swaps the
         // WebGL scene, so they are not re-rendered there — but their last positions
         // would otherwise remain painted over the lunar horizon. Hide that layer for
@@ -1030,6 +1039,45 @@ export function initScene() {
                 ? `${Math.round(state.earthPhase * 100)}% lit · ${degrees(state.earthAltitude).toFixed(0)}° up`
                 : 'never rises';
         }
+
+        // The panel swaps which half of itself is showing, so only one of these two
+        // branches is ever on screen.
+        surfaceHud?.classList.toggle('surface-hud--driving', moonSurface.driving);
+
+        if (moonSurface.driving) {
+            const { driver } = moonSurface;
+            if (surfaceSpeedValue) {
+                surfaceSpeedValue.textContent = `${(Math.abs(driver.speed) * 3.6).toFixed(1)} km/h`;
+            }
+            if (surfaceTripValue) {
+                surfaceTripValue.textContent = formatRange(driver.odometer);
+            }
+            if (surfaceHomeValue) {
+                // Range and bearing back to where you were set down — the LRV's own
+                // navigation box, which is the only reason it was safe to drive out of
+                // sight of the lunar module. Dead reckoned, because there is no GPS up
+                // there and no magnetic field to hang a compass on.
+                const range = Math.hypot(driver.position.x, driver.position.z);
+                const bearing = Math.atan2(-driver.position.x, driver.position.z);
+                surfaceHomeValue.textContent =
+                    range < 1 ? 'you are here' : `${formatRange(range)} ${compass(bearing)}`;
+            }
+        } else if (surfaceRoverValue) {
+            const distance = moonSurface.roverDistance;
+            surfaceRoverValue.textContent =
+                distance <= 4.5 ? 'press R to board' : `${formatRange(distance)} away`;
+        }
+    }
+
+    function formatRange(metres: number): string {
+        return metres >= 1000 ? `${(metres / 1000).toFixed(2)} km` : `${Math.round(metres)} m`;
+    }
+
+    /** Radians east of north to a point of the compass. */
+    function compass(bearing: number): string {
+        const points = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+        const index = Math.round(((bearing * 180) / Math.PI / 45 + 8) % 8);
+        return points[index % 8];
     }
 
     // Animation loop

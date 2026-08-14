@@ -198,9 +198,9 @@ function tileNoise(x: number, y: number, period: number, seed: number): number {
 
 const DETAIL_TEXTURE_SIZE = 512;
 /** Metres covered by one tile of the detail map. */
-const DETAIL_TILE_M = 3;
+const DETAIL_TILE_M = 2.2;
 /** Height of the finest relief, metres — the pitting and gardening of the regolith. */
-const DETAIL_RELIEF_M = 0.045;
+const DETAIL_RELIEF_M = 0.06;
 
 /**
  * The relief below one grid cell, carried as a normal map rather than as geometry.

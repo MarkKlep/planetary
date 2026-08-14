@@ -57,19 +57,20 @@ export interface Walker {
     /** Eye position in the local scene frame, metres. */
     readonly position: Vector3;
     readonly airborne: boolean;
-    readonly zoomed: boolean;
     /** Ground speed, m/s — for the read-out. */
     readonly speed: number;
     enable(): void;
     disable(): void;
     /** Re-derive the standing height, after a landing or a change of site. */
     setGround(heightAt: (x: number, z: number) => number): void;
+    /** Stand somewhere else — used when stepping off the rover. */
+    placeAt(x: number, z: number): void;
     /**
      * Point the observer at a bearing, radians east of north, and tilt toward
      * something at `altitude` radians above the horizon.
      */
     face(azimuth: number, altitude?: number): void;
-    update(deltaSeconds: number, fieldOfView: number): void;
+    update(deltaSeconds: number, fieldOfView: number, zoomed: boolean): void;
 }
 
 const UP = new Vector3(0, 1, 0);
@@ -91,7 +92,6 @@ export function createWalker(
     let ground: (x: number, z: number) => number = () => 0;
     let enabled = false;
     let looking = false;
-    let zoomed = false;
     let verticalSpeed = 0;
     let airborne = false;
     let distanceWalked = 0;
@@ -143,7 +143,6 @@ export function createWalker(
                 airborne = true;
             }
         }
-        if (event.code === 'KeyZ') zoomed = !zoomed;
     }
 
     // Not gated on `enabled`: a key released after the mode is switched off would
@@ -170,9 +169,6 @@ export function createWalker(
         get airborne() {
             return airborne;
         },
-        get zoomed() {
-            return zoomed;
-        },
         get speed() {
             return speed;
         },
@@ -183,7 +179,6 @@ export function createWalker(
             velocity.set(0, 0, 0);
             verticalSpeed = 0;
             airborne = false;
-            zoomed = false;
             domElement.style.cursor = 'grab';
         },
 
@@ -198,7 +193,11 @@ export function createWalker(
 
         setGround(heightAt) {
             ground = heightAt;
-            position.set(0, 0, 0);
+            this.placeAt(0, 0);
+        },
+
+        placeAt(x, z) {
+            position.set(x, 0, z);
             position.y = standingHeight();
             velocity.set(0, 0, 0);
             verticalSpeed = 0;
@@ -218,7 +217,7 @@ export function createWalker(
             orientation.x = MathUtils.clamp(altitude, 0, LANDING_PITCH_LIMIT);
         },
 
-        update(deltaSeconds, fieldOfView) {
+        update(deltaSeconds, fieldOfView, zoomed) {
             if (!enabled) return;
 
             // Only when it actually moved: rebuilding a projection matrix every frame
