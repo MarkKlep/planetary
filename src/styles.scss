@@ -130,16 +130,14 @@ body {
     width: 288px;
     height: 100vh;
     backdrop-filter: blur(10px);
-    padding: 20px;
+    padding: 0;
     color: white;
     z-index: 1000;
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
+    display: block;
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
     border-right: 1px solid rgba(255, 255, 255, 0.1);
     transition: transform 0.25s ease;
-    overflow-y: auto;
+    overflow: visible;
 
     &--collapsed {
         transform: translateX(-100%);

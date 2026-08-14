@@ -687,6 +687,11 @@ export function initScene() {
 
     function updateSurfaceChrome(landed: boolean, site?: LandingSite) {
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
+        // CSS2D labels are rendered into their own DOM layer. Surface mode swaps the
+        // WebGL scene, so they are not re-rendered there — but their last positions
+        // would otherwise remain painted over the lunar horizon. Hide that layer for
+        // the whole time we are standing on the Moon, then restore it on exit.
+        labelRenderer.domElement.style.display = landed ? 'none' : 'block';
         toggleMoonSurfaceBtn?.classList.toggle('nav-visibility-btn--off', !landed);
         if (toggleMoonSurfaceBtn) {
             toggleMoonSurfaceBtn.textContent = landed ? 'Leave' : 'Land';

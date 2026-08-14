@@ -114,6 +114,7 @@ export function NavPanel() {
             <path d="m14.5 5-7 7 7 7" />
           </svg>
         </button>
+      <div className="nav-panel-content">
         <header className="nav-header">
           <div>
             <h1 className="nav-title">Planetary</h1>
@@ -331,6 +332,7 @@ export function NavPanel() {
               <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
             </a>
         </div>
+      </div>
     </nav>
   );
 }
