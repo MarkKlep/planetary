@@ -2,14 +2,31 @@ import { useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import './nav-panel.scss';
 
+/**
+ * A button sitting beside a row that switches something rather than flying to it.
+ * `script.ts` owns the label and the state outright — same reasoning as free flight's
+ * button: several paths (this button, a keyboard shortcut, a click in the scene) all
+ * have to be able to drive it, and none of them should have to fight React state to
+ * do it. Everything here does is put it on the page with the right initial label, so
+ * there is no flash of the wrong one before `initScene`'s deferred effect runs.
+ */
+interface Toggle {
+  toggleId: string;
+  initialLabel: string;
+  /** Renders dimmed, matching the "currently off" state script.ts starts it in. */
+  startsOff?: boolean;
+}
+
 interface Satellite {
   id: string;
   label: string;
+  toggle?: Toggle;
 }
 
 interface Planet {
   id: string;
   label: string;
+  symbol: string;
   satellites: Satellite[];
   /**
    * A row in the dropdown that toggles something rather than flying to it. Venus has
@@ -27,26 +44,35 @@ const PLANETS: Planet[] = [
   {
     id: 'mercury',
     label: 'Mercury',
+    symbol: '☿',
     satellites: [],
   },
   {
     id: 'venus',
     label: 'Venus',
+    symbol: '♀',
     satellites: [],
     toggle: { label: 'Clouds', toggleId: 'toggle-venus-clouds' },
   },
   {
     id: 'earth',
     label: 'Earth',
+    symbol: '●',
     satellites: [
-      { id: 'moon', label: 'Moon' },
+      // The only row here that switches the app into a different mode rather than
+      // pointing the camera somewhere. Its label reads Land / Leave, not Show / Hide,
+      // because there is nowhere in the solar-system scene that "the lunar surface"
+      // could be — at true scale an astronaut's eye is 2.7e-7 of a scene unit off the
+      // ground, so it gets its own scene, in metres.
+      { id: 'moon', label: 'Moon', toggle: { toggleId: 'toggle-moon-surface', initialLabel: 'Land', startsOff: true } },
       { id: 'iss', label: 'ISS' },
-      { id: 'analemma', label: 'Analemma' },
+      { id: 'analemma', label: 'Analemma', toggle: { toggleId: 'toggle-analemma', initialLabel: 'Show', startsOff: true } },
     ],
   },
   {
     id: 'mars',
     label: 'Mars',
+    symbol: '♂',
     satellites: [
       { id: 'phobos', label: 'Phobos' },
       { id: 'deimos', label: 'Deimos' },
@@ -59,6 +85,7 @@ export function NavPanel() {
   const [activeSpeed, setActiveSpeed] = useState<number>(DEFAULT_TIME_SPEED);
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   const toggleExpanded = (id: string) => {
     setExpanded((previous) => {
@@ -75,16 +102,34 @@ export function NavPanel() {
   // The actual behaviour is wired up in script.ts, which listens on the data-*
   // attributes and ids below. These handlers only drive the button styling.
   return (
-    <nav className="navigation-panel">
-        <h1 className="nav-title">Planetary</h1>
-        <div className="nav-section">
+    <nav className={`navigation-panel ${isCollapsed ? 'navigation-panel--collapsed' : ''}`}>
+        <button
+          type="button"
+          className="nav-panel-toggle"
+          aria-label={isCollapsed ? 'Show navigation panel' : 'Hide navigation panel'}
+          aria-expanded={!isCollapsed}
+          onClick={() => setIsCollapsed((collapsed) => !collapsed)}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m14.5 5-7 7 7 7" />
+          </svg>
+        </button>
+        <header className="nav-header">
+          <div>
+            <h1 className="nav-title">Planetary</h1>
+            <p className="nav-subtitle"><span aria-hidden="true" />Solar system simulator</p>
+          </div>
+        </header>
+        <div className="nav-section nav-section--objects">
             <h2 className="nav-section-title">Objects</h2>
+            <div className="nav-object-list">
             <button
-              className={`nav-btn ${activeTarget === 'sun' ? 'active' : ''}`}
+              className={`nav-btn nav-object-btn ${activeTarget === 'sun' ? 'active' : ''}`}
               data-target="sun"
               onClick={() => setActiveTarget('sun')}
             >
-              Sun
+              <span className="nav-object-symbol nav-object-symbol--sun" aria-hidden="true">☀</span>
+              <span>Sun</span>
             </button>
             {PLANETS.map((planet) => {
               const isExpanded = expanded.has(planet.id);
@@ -96,11 +141,12 @@ export function NavPanel() {
                 <div className="nav-planet" key={planet.id}>
                   <div className="nav-planet-row">
                     <button
-                      className={`nav-btn nav-planet-btn ${activeTarget === planet.id ? 'active' : ''}`}
+                      className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === planet.id ? 'active' : ''}`}
                       data-target={planet.id}
                       onClick={() => setActiveTarget(planet.id)}
                     >
-                      {planet.label}
+                      <span className={`nav-object-symbol nav-object-symbol--${planet.id}`} aria-hidden="true">{planet.symbol}</span>
+                      <span>{planet.label}</span>
                     </button>
                     {isExpandable && (
                       <button
@@ -139,23 +185,20 @@ export function NavPanel() {
                           >
                             {satellite.label}
                           </button>
-                          {/* Analemma is the one thing here that's a permanent overlay
-                              rather than a body to fly to, so it's the one thing worth
-                              being able to switch off. script.ts owns the label and
-                              visibility state outright — same reasoning as free flight's
-                              button — since focusing it (button, keyboard, or a direct
-                              click in the scene) also has to turn it back on, and that
-                              path shouldn't have to fight React state to do it. */}
-                          {satellite.id === 'analemma' && (
-                            // Matches script.ts's own default (hidden) so there's no
-                            // flash of "Hide" before initScene's deferred effect runs
-                            // and corrects it.
+                          {/* Two rows carry one of these, and they are the two things
+                              under Earth that aren't simply a body to fly to: the
+                              analemma is a permanent overlay worth switching off, and
+                              the Moon's surface is a mode rather than a place in the
+                              scene. See `Toggle` for why script.ts owns both labels. */}
+                          {satellite.toggle && (
                             <button
                               type="button"
-                              className="nav-btn nav-btn--compact nav-visibility-btn nav-visibility-btn--off"
-                              id="toggle-analemma"
+                              className={`nav-btn nav-btn--compact nav-visibility-btn ${
+                                satellite.toggle.startsOff ? 'nav-visibility-btn--off' : ''
+                              }`}
+                              id={satellite.toggle.toggleId}
                             >
-                              Show
+                              {satellite.toggle.initialLabel}
                             </button>
                           )}
                         </div>
@@ -190,11 +233,12 @@ export function NavPanel() {
             <div className="nav-planet">
               <div className="nav-planet-row">
                 <button
-                  className={`nav-btn nav-planet-btn ${activeTarget === 'system' ? 'active' : ''}`}
+                  className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === 'system' ? 'active' : ''}`}
                   data-target="system"
                   onClick={() => setActiveTarget('system')}
                 >
-                  Solar system
+                  <span className="nav-object-symbol nav-object-symbol--system" aria-hidden="true">◎</span>
+                  <span>Solar system</span>
                 </button>
                 <button
                   type="button"
@@ -238,10 +282,11 @@ export function NavPanel() {
                 </div>
               </div>
             </div>
+            </div>
         </div>
         <div className="nav-section">
-            <h2 className="nav-section-title">Time</h2>
-            <div className="nav-speeds">
+            <h2 className="nav-section-title">Simulation</h2>
+            <div className="nav-speeds" role="group" aria-label="Simulation speed">
               {TIME_SPEEDS.map(({ label, secondsPerSecond }) => (
                 <button
                   key={label}
@@ -254,36 +299,36 @@ export function NavPanel() {
               ))}
             </div>
             <button
-              className="nav-btn"
+              className="nav-btn nav-action-btn"
               id="toggle-rotation"
               onClick={() => setPaused(!paused)}
             >
               {paused ? 'Resume' : 'Pause'}
             </button>
         </div>
-        <div className="nav-section">
+        <div className="nav-section nav-section--utilities">
             <h2 className="nav-section-title">Controls</h2>
             {/* Free flight is also bound to F and left with Esc, so script.ts owns
                 this button's label and active state outright rather than mirroring
                 it into React state that the keyboard could desync. */}
-            <button className="nav-btn" id="toggle-free-flight">
-              Free flight
+            <button className="nav-btn nav-action-btn" id="toggle-free-flight">
+              <span className="nav-action-icon" aria-hidden="true">⌁</span>Free flight
             </button>
             <button
-              className="nav-btn"
+              className="nav-btn nav-action-btn nav-action-btn--secondary"
               id="reset-camera"
               onClick={() => setActiveTarget(null)}
             >
-              Reset Camera
+              <span className="nav-action-icon" aria-hidden="true">↺</span>Reset camera
             </button>
         </div>
-        <div className="nav-section">
-            <h2 className="nav-section-title">Surface data</h2>
+        <div className="nav-section nav-section--data">
+            <h2 className="nav-section-title">Data layers</h2>
             <a
-              className="nav-btn"
+              className="nav-btn nav-action-btn nav-action-btn--secondary"
               href="/heatmap.html"
             >
-              Heat map
+              <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
             </a>
         </div>
     </nav>

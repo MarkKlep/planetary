@@ -1,0 +1,135 @@
+@use '../variables.scss' as *;
+
+// Same shell as `.flight-hud` — they are the two read-outs for the two modes where
+// the user is driving, they are mutually exclusive, and they sit in the same corner.
+.surface-hud {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    width: 232px;
+    padding: 16px 18px;
+    border-radius: 10px;
+    background: var(--primary-black);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    color: white;
+
+    // The canvas underneath is being dragged to look around, so the panel must never
+    // swallow the pointer. The site picker opts back in below.
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+
+    &--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+}
+
+.surface-hud__title {
+    font-size: 12px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 12px;
+}
+
+.surface-hud__site {
+    pointer-events: auto;
+    width: 100%;
+    padding: 8px 10px;
+    border-radius: 7px;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    color: white;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.11);
+    }
+
+    // The list itself is drawn by the OS and does not inherit the panel's palette,
+    // so the options need it stated outright or they render black-on-black.
+    option {
+        background: #14141f;
+        color: white;
+    }
+}
+
+.surface-hud__note {
+    margin: 8px 0 12px;
+    font-size: 11px;
+    line-height: 1.45;
+    color: rgba(255, 255, 255, 0.45);
+    min-height: 2.9em;
+}
+
+.surface-hud__readout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 4px 12px;
+    align-items: baseline;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-top: 12px;
+}
+
+.surface-hud__label {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.surface-hud__value {
+    font-size: 13px;
+    font-weight: 600;
+    text-align: right;
+    // Tabular figures keep the altitude from jittering sideways as digits change.
+    font-variant-numeric: tabular-nums;
+}
+
+.surface-hud__keys {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.surface-hud__key-row {
+    display: grid;
+    grid-template-columns: 84px 1fr;
+    gap: 10px;
+    font-size: 11px;
+
+    dt {
+        color: rgba(255, 255, 255, 0.9);
+        font-weight: 600;
+        text-align: right;
+    }
+
+    dd {
+        color: rgba(255, 255, 255, 0.45);
+    }
+}
+
+@media (max-width: 768px) {
+    .surface-hud {
+        right: 12px;
+        bottom: 12px;
+        width: 190px;
+        padding: 12px 14px;
+    }
+
+    .surface-hud__keys {
+        display: none;
+    }
+}

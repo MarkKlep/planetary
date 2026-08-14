@@ -127,17 +127,61 @@ body {
     position: fixed;
     top: 0;
     left: 0;
-    width: 250px;
+    width: 288px;
     height: 100vh;
     backdrop-filter: blur(10px);
-    padding: 24px;
+    padding: 20px;
     color: white;
     z-index: 1000;
     display: flex;
     flex-direction: column;
-    gap: 24px;
+    gap: 20px;
     box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
     border-right: 1px solid rgba(255, 255, 255, 0.1);
+    transition: transform 0.25s ease;
+    overflow-y: auto;
+
+    &--collapsed {
+        transform: translateX(-100%);
+    }
+}
+
+.nav-panel-toggle {
+    position: absolute;
+    top: 20px;
+    right: -42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    padding: 0;
+    color: white;
+    background: rgba(15, 15, 25, 0.9);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    cursor: pointer;
+
+    svg {
+        width: 20px;
+        height: 20px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        transition: transform 0.25s ease;
+    }
+
+    &:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .navigation-panel--collapsed & svg {
+        transform: rotate(180deg);
+    }
 }
 
 .nav-title {

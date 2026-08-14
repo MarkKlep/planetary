@@ -136,3 +136,248 @@
         color: rgba(255, 255, 255, 0.4);
     }
 }
+
+// Mission-control treatment. Keep this scoped to the panel: `.nav-btn` is also used
+// by the heatmap host, and the scene initialiser relies on its data attributes.
+.navigation-panel {
+    background:
+        linear-gradient(180deg, rgba(13, 18, 32, 0.96), rgba(5, 8, 15, 0.94)),
+        radial-gradient(circle at 0 0, rgba(92, 112, 255, 0.14), transparent 42%);
+
+    .nav-header {
+        padding: 6px 2px 4px;
+    }
+
+    .nav-title {
+        margin: 0;
+        font-size: 32px;
+        line-height: 1;
+        letter-spacing: -1.2px;
+    }
+
+    .nav-subtitle {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-top: 9px;
+        color: rgba(255, 255, 255, 0.45);
+        font-size: 11px;
+        font-weight: 600;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+
+        span {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: #79e0a5;
+            box-shadow: 0 0 9px rgba(121, 224, 165, 0.85);
+        }
+    }
+
+    .nav-section {
+        gap: 7px;
+    }
+
+    .nav-section-title {
+        margin: 0 0 4px 2px;
+        font-size: 10px;
+        letter-spacing: 0.14em;
+    }
+
+    .nav-object-list {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+    }
+
+    .nav-planet-row {
+        gap: 3px;
+    }
+
+    .nav-btn.nav-object-btn {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-height: 42px;
+        padding: 9px 11px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.86);
+        font-size: 14px;
+        font-weight: 500;
+
+        &:hover {
+            background: rgba(255, 255, 255, 0.07);
+            border-color: rgba(255, 255, 255, 0.08);
+            transform: none;
+        }
+
+        &.active {
+            border-color: rgba(137, 150, 255, 0.38);
+            background: linear-gradient(100deg, rgba(100, 119, 244, 0.38), rgba(116, 75, 162, 0.24));
+            box-shadow: inset 3px 0 0 #91a1ff, 0 4px 14px rgba(70, 80, 185, 0.14);
+            color: white;
+        }
+    }
+
+    .nav-object-symbol {
+        display: grid;
+        width: 20px;
+        place-items: center;
+        color: rgba(204, 213, 255, 0.82);
+        font-size: 19px;
+        line-height: 1;
+    }
+
+    .nav-object-symbol--sun { color: #ffc768; }
+    .nav-object-symbol--earth { color: #77bfff; }
+    .nav-object-symbol--mars { color: #ed987c; }
+    .nav-object-symbol--venus { color: #f1c891; }
+    .nav-object-symbol--mercury { color: #b6bccd; }
+
+    .nav-expand-btn {
+        width: 34px;
+        min-height: 42px;
+        border: 1px solid transparent;
+        border-radius: 9px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.48);
+
+        &:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+            background: rgba(255, 255, 255, 0.06);
+        }
+    }
+
+    .nav-satellites__inner {
+        gap: 3px;
+        padding-top: 3px;
+    }
+
+    .nav-satellite-row {
+        gap: 4px;
+        margin-left: 30px;
+    }
+
+    .nav-btn.nav-btn--satellite {
+        min-height: 34px;
+        padding: 7px 10px;
+        border-color: transparent;
+        border-radius: 7px;
+        background: rgba(255, 255, 255, 0.025);
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 12px;
+    }
+
+    .nav-btn.nav-visibility-btn {
+        width: 48px;
+        min-height: 34px;
+        padding: 7px 0;
+        border-radius: 7px;
+        font-size: 10px;
+    }
+
+    .nav-speeds {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 4px;
+        padding: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        border-radius: 10px;
+        background: rgba(0, 0, 0, 0.2);
+    }
+
+    .nav-speeds .nav-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 34px;
+        padding: 6px 2px;
+        border: 0;
+        border-radius: 7px;
+        background: transparent;
+        color: rgba(255, 255, 255, 0.62);
+        font-size: 10px;
+        line-height: 1;
+        text-align: center;
+        font-variant-numeric: tabular-nums;
+
+        &:hover { transform: none; background: rgba(255, 255, 255, 0.08); }
+
+        &.active {
+            background: linear-gradient(135deg, #667eea, #8352b2);
+            color: white;
+            box-shadow: 0 2px 8px rgba(89, 95, 217, 0.35);
+        }
+    }
+
+    .nav-btn.nav-action-btn {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-height: 40px;
+        padding: 9px 12px;
+        border-radius: 8px;
+        border-color: rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.06);
+        font-size: 13px;
+
+        &:hover { transform: none; background: rgba(255, 255, 255, 0.12); }
+    }
+
+    .nav-btn.nav-action-btn--secondary {
+        background: transparent;
+        color: rgba(255, 255, 255, 0.72);
+    }
+
+    .nav-action-icon {
+        width: 16px;
+        color: #aeb9ff;
+        font-size: 18px;
+        line-height: 1;
+        text-align: center;
+    }
+
+    .nav-btn:focus-visible,
+    .nav-expand-btn:focus-visible,
+    .nav-panel-toggle:focus-visible {
+        outline: 2px solid #aab6ff;
+        outline-offset: 2px;
+    }
+
+    // The panel scrolls on smaller viewports. Match its recessed glass treatment
+    // instead of exposing the browser's bright default scrollbar.
+    scrollbar-width: thin;
+    scrollbar-color: rgba(167, 181, 255, 0.34) rgba(255, 255, 255, 0.035);
+
+    &::-webkit-scrollbar {
+        width: 9px;
+    }
+
+    &::-webkit-scrollbar-track {
+        margin: 8px 0;
+        background: rgba(255, 255, 255, 0.035);
+        border-left: 1px solid rgba(255, 255, 255, 0.05);
+    }
+
+    &::-webkit-scrollbar-thumb {
+        background: linear-gradient(180deg, rgba(149, 164, 255, 0.52), rgba(109, 81, 179, 0.48));
+        border: 2px solid rgba(8, 12, 22, 0.9);
+        border-radius: 999px;
+    }
+
+    &::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(180deg, rgba(170, 184, 255, 0.72), rgba(132, 95, 210, 0.68));
+    }
+}
+
+@media (max-height: 760px) {
+    .navigation-panel {
+        gap: 14px;
+
+        .nav-header { padding-top: 2px; }
+        .nav-title { font-size: 28px; }
+        .nav-btn.nav-object-btn { min-height: 38px; }
+    }
+}

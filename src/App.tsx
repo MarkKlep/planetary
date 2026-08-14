@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
+import { SurfaceHud } from './surface-hud/surface-hud';
 import { initScene } from './script';
 import { Analytics } from "@vercel/analytics/react";
 
@@ -30,6 +31,7 @@ export function App() {
       <div id="app"></div>
       <NavPanel />
       <FlightHud />
+      <SurfaceHud />
       <Analytics />
     </>
   );

@@ -1,4 +1,4 @@
-import { PerspectiveCamera, Scene, WebGLRenderer, Vector3, Object3D, Raycaster, Vector2, AmbientLight, ACESFilmicToneMapping, MathUtils } from 'three';
+import { PerspectiveCamera, Quaternion, Scene, WebGLRenderer, Vector3, Object3D, Raycaster, Vector2, AmbientLight, ACESFilmicToneMapping, MathUtils } from 'three';
 import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { earth, earthSunDirectionView } from './planets/earth/earth';
@@ -16,6 +16,8 @@ import { venus } from './planets/venus/venus';
 import { venusClouds } from './planets/venus/clouds';
 import { venusAtmosphere, venusAtmosphereSunDirection } from './planets/venus/atmosphere';
 import { mercury } from './planets/mercury/mercury';
+import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
+import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { orbitPaths } from './orbit-paths';
@@ -572,6 +574,10 @@ export function initScene() {
         // This has to happen *first*: leaving free flight re-parks the orbit pivot,
         // and the animation below captures that pivot as its starting point.
         setFreeFlight(false);
+        // And it is equally the opposite of standing on a surface. Any nav button or
+        // keyboard shortcut therefore lifts off on its own, without needing to know
+        // that the surface mode exists.
+        exitMoonSurface();
 
         const targetPosition = target.getWorldPosition(scratchA).clone();
 
@@ -646,6 +652,87 @@ export function initScene() {
         }
     }
 
+    // --- Standing on the Moon ---------------------------------------------
+    //
+    // The third camera mode, and the only one that is not a camera at all: it swaps
+    // the whole render for a scene measured in metres. Nothing here could be done by
+    // flying the existing camera down, because at true scale an astronaut's eye sits
+    // 2.7e-7 units off the ground and the Moon mesh has one texel every 2.7 km — the
+    // entire visible world from down there falls inside a single texel of a single
+    // triangle. See `moon-surface/terrain.ts`.
+    //
+    // The orbital model keeps running while it is up, because the Sun's position in
+    // that sky, Earth's position and Earth's phase are all read out of it.
+    const moonSurface = createMoonSurface({
+        renderer,
+        domElement: renderer.domElement,
+        // Borrowed, not duplicated: the starfield is a singleton, and standing under
+        // the real Milky Way with no atmosphere in the way is half the reason to go.
+        stars: backgroundTexture,
+        starsHome: scene,
+    });
+    moonSurface.resize(initialWidth, initialHeight);
+
+    const surfaceMoonPosition = new Vector3();
+    const surfaceMoonQuaternion = new Quaternion();
+    const surfaceEarthPosition = new Vector3();
+    const surfaceEarthQuaternion = new Quaternion();
+
+    const surfaceHud = document.getElementById('surface-hud');
+    const surfaceSunValue = document.getElementById('surface-sun');
+    const surfaceEarthValue = document.getElementById('surface-earth');
+    const surfaceNote = document.getElementById('surface-note');
+    const surfaceSiteSelect = document.getElementById('surface-site') as HTMLSelectElement | null;
+    const toggleMoonSurfaceBtn = document.getElementById('toggle-moon-surface');
+
+    function updateSurfaceChrome(landed: boolean, site?: LandingSite) {
+        surfaceHud?.classList.toggle('surface-hud--visible', landed);
+        toggleMoonSurfaceBtn?.classList.toggle('nav-visibility-btn--off', !landed);
+        if (toggleMoonSurfaceBtn) {
+            toggleMoonSurfaceBtn.textContent = landed ? 'Leave' : 'Land';
+        }
+        if (site) {
+            if (surfaceSiteSelect) surfaceSiteSelect.value = site.id;
+            if (surfaceNote) surfaceNote.textContent = site.note;
+        }
+    }
+
+    /**
+     * Leave without deciding where to look next.
+     *
+     * Split out from `setMoonSurface` because `focusOnObject` has to call it — asking
+     * to be taken anywhere at all means the surface is over — and `setMoonSurface`
+     * calls `focusOnObject` on the way out. One of the two has to be the half that
+     * does not aim the camera, or they would call each other forever.
+     */
+    function exitMoonSurface() {
+        if (!moonSurface.active) return;
+        moonSurface.exit();
+        updateSurfaceChrome(false);
+    }
+
+    function setMoonSurface(landed: boolean, site: LandingSite = DEFAULT_SITE) {
+        if (landed) {
+            setFreeFlight(false);
+            focusAnimation = null;
+            moonSurface.enter(site);
+            updateSurfaceChrome(true, site);
+        } else {
+            if (!moonSurface.active) return;
+            exitMoonSurface();
+            // Come back out looking at the body just left, rather than at wherever the
+            // camera happened to be parked when it was entered.
+            focusOnObject(moon, 3, 1200);
+        }
+    }
+
+    toggleMoonSurfaceBtn?.addEventListener('click', () => setMoonSurface(!moonSurface.active));
+    surfaceSiteSelect?.addEventListener('change', () => {
+        const site = findSite(surfaceSiteSelect.value);
+        moonSurface.landAt(site);
+        updateSurfaceChrome(true, site);
+    });
+
     document.addEventListener('keydown', (event: KeyboardEvent) => {
         if (event && (event.target as HTMLElement).tagName === 'INPUT' || (event.target as HTMLElement).tagName === 'TEXTAREA') {
             return;
@@ -655,8 +742,14 @@ export function initScene() {
             case 'f':
                 setFreeFlight(!freeFlight.enabled);
                 break;
+            case 'l':
+                setMoonSurface(!moonSurface.active);
+                break;
             case 'escape':
-                setFreeFlight(false);
+                // Whichever mode is up, Escape is the way out of it. They are mutually
+                // exclusive, so there is never a question of which one it means.
+                if (moonSurface.active) setMoonSurface(false);
+                else setFreeFlight(false);
                 break;
             case '1':
                 focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
@@ -723,10 +816,12 @@ export function initScene() {
         const intersects = raycaster.intersectObjects(clickTargets.map((t) => t.hit), true);
         if (intersects.length === 0) return null;
 
-        // Walk up to whichever registered target owns the mesh that was hit.
+        // Walk up to whichever registered target owns the mesh that was hit. The hit
+        // point comes back too, because a click on the Moon while already parked at it
+        // means "put me down *there*".
         for (let node: Object3D | null = intersects[0].object; node; node = node.parent) {
             const match = clickTargets.find((t) => t.hit === node);
-            if (match) return match;
+            if (match) return { ...match, point: intersects[0].point };
         }
         return null;
     }
@@ -743,15 +838,29 @@ export function initScene() {
     // Both of these stand down while flying: the drag is a look-around, not a pick,
     // and free flight owns the cursor.
     renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
-        if (freeFlight.enabled) return;
+        if (freeFlight.enabled || moonSurface.active) return;
         const picked = pickTarget(event);
-        const focusable = picked !== null && !isAlreadyObserving(picked.focus, picked.distance);
+        // The Moon stays clickable even once you are parked at it, because there the
+        // click means something else — see below.
+        const focusable =
+            picked !== null &&
+            (!isAlreadyObserving(picked.focus, picked.distance) || picked.focus === moon);
         renderer.domElement.style.cursor = focusable ? 'pointer' : 'default';
     });
 
     renderer.domElement.addEventListener('click', (event: MouseEvent) => {
-        if (freeFlight.enabled) return;
+        if (freeFlight.enabled || moonSurface.active) return;
         const picked = pickTarget(event);
+
+        // Click the Moon from across the system and you fly to it. Click it again once
+        // you are there and you land on it, at whichever site is nearest the spot
+        // under the cursor — the same gesture reading as "closer" both times.
+        if (picked?.focus === moon && isAlreadyObserving(moon, picked.distance)) {
+            const local = moon.worldToLocal(picked.point.clone()).normalize();
+            setMoonSurface(true, nearestSite(local));
+            return;
+        }
+
         if (picked && !isAlreadyObserving(picked.focus, picked.distance)) {
             // Raycasting doesn't check `.visible` on its own, so a click landing
             // where the anchor used to be would otherwise focus an overlay the user
@@ -766,6 +875,11 @@ export function initScene() {
     // Update ISS position
     setInterval(updateISSPosition, ISS_UPDATE_INTERVAL);
     updateISSPosition(); // Initial fetch
+
+    // Decode the lunar maps into canvases so a landing can read the site's real albedo
+    // without stalling on it. Deferred to idle: it is several megabytes of decode that
+    // nothing needs until someone presses Land, and it must not land on the intro.
+    prepareMoonSurface();
 
     // Navigation panel functionality
     let paused = false;
@@ -887,6 +1001,32 @@ export function initScene() {
         }
     }
 
+    let surfaceHudRefreshDue = 0;
+
+    function updateSurfaceHud(nowMs: number) {
+        const state = moonSurface.state;
+        if (!state || nowMs < surfaceHudRefreshDue) return;
+        surfaceHudRefreshDue = nowMs + 250; // the Sun moves 0.5° an *hour* up here
+
+        const degrees = (radians: number) => (radians * 180) / Math.PI;
+
+        if (surfaceSunValue) {
+            const altitude = degrees(state.sunAltitude);
+            surfaceSunValue.textContent =
+                altitude >= 0
+                    ? `${altitude.toFixed(1)}° up`
+                    : `${(-altitude).toFixed(1)}° below`;
+        }
+        if (surfaceEarthValue) {
+            // Phase and altitude together, because between them they are the whole
+            // answer to "where is home from here" — and on the far side there is no
+            // answer at all.
+            surfaceEarthValue.textContent = state.earthVisible
+                ? `${Math.round(state.earthPhase * 100)}% lit · ${degrees(state.earthAltitude).toFixed(0)}° up`
+                : 'never rises';
+        }
+    }
+
     // Animation loop
     function animate() {
         requestAnimationFrame(animate);
@@ -942,6 +1082,24 @@ export function initScene() {
         // even at the "Real" time setting.
         satelliteState(PHOBOS, now, phobos.position, phobos.quaternion);
         satelliteState(DEIMOS, now, deimos.position, deimos.quaternion);
+
+        // Standing on the Moon *replaces* the render rather than adding to it, which
+        // is the one reason it costs less than the view it interrupts. The orbital
+        // block above still had to run — the Sun's place in that sky, Earth's place
+        // and Earth's phase all come out of it — but the markers, the labels, the
+        // orbit camera and the main render are all skipped from here.
+        if (moonSurface.active) {
+            scene.updateMatrixWorld(true);
+            moonSurface.update(realDelta, {
+                moonPosition: moon.getWorldPosition(surfaceMoonPosition),
+                moonQuaternion: moon.getWorldQuaternion(surfaceMoonQuaternion),
+                earthPosition: earth.getWorldPosition(surfaceEarthPosition),
+                earthQuaternion: earth.getWorldQuaternion(surfaceEarthQuaternion),
+            });
+            moonSurface.render();
+            updateSurfaceHud(frameMs);
+            return;
+        }
 
         // Sunlight direction, now genuinely geometric: each planet sits somewhere on
         // its orbit and the Sun is at the origin, so this is simply the way back.
@@ -1060,6 +1218,8 @@ export function initScene() {
         camera.updateProjectionMatrix();
         renderer.setSize(width, height);
         labelRenderer.setSize(width, height);
+        // The surface mode keeps its own camera — same canvas, different scene.
+        moonSurface.resize(width, height);
     });
 
     animate();

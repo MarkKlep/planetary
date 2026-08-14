@@ -8,6 +8,7 @@ import {
     Vector3,
 } from 'three';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { craterProfile } from '../../craters';
 import { latLonToDirection } from '../../geo';
 import { fbm, mulberry32 } from '../../noise';
 import {
@@ -40,24 +41,12 @@ interface Crater {
     depth: number;
 }
 
-/**
- * A crater bowl plus its raised rim, as a fraction of the mean radius.
- *
- * Craters on bodies this small are enormous relative to them — Stickney is nearly a
- * quarter of Phobos's circumference — so they have to be laid on as real geometry
- * rather than suggested with a bump map, or the silhouette stays a smooth egg.
- */
-function craterProfile(crater: Crater, angle: number): number {
-    const s = angle / crater.angularRadius;
-    if (s > 1.7) return 0;
-
-    // Parabolic floor, reaching the surrounding surface exactly at the rim.
-    const bowl = s < 1 ? -crater.depth * (1 - s * s) : 0;
-    // Ejecta piled just outside it. Shallow, but it is what stops overlapping
-    // craters from reading as a single dented region.
-    const rim = crater.depth * 0.34 * Math.exp(-(((s - 1) * 2.6) ** 2));
-    return bowl + rim;
-}
+// The profile itself lives in `craters.ts`, shared with the lunar surface patch:
+// it only ever uses distance/radius, so the same curve serves angles on a sphere
+// here and metres on a tangent plane there. Craters on bodies this small are
+// enormous relative to them — Stickney is nearly a quarter of Phobos's
+// circumference — so they have to be laid on as real geometry rather than suggested
+// with a bump map, or the silhouette stays a smooth egg.
 
 interface MoonShape {
     /** [toward Mars, along the spin axis, along the orbit], km. */
@@ -162,7 +151,11 @@ function buildMoon(shape: MoonShape): Mesh {
 
         let displacement = fbm(direction, shape.seed, 5) * shape.relief;
         for (const crater of craters) {
-            displacement += craterProfile(crater, direction.angleTo(crater.centre));
+            displacement += craterProfile(
+                direction.angleTo(crater.centre),
+                crater.angularRadius,
+                crater.depth
+            );
         }
 
         // Relief first, ellipsoid second: the lumps ride on the measured figure

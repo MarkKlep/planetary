@@ -43,6 +43,37 @@ export const MOON_ORBITAL_PERIOD_DAYS = 27.321661; // sidereal
  *  eclipse every single month. */
 export const MOON_ORBIT_INCLINATION_DEG = 5.145;
 
+// --- Standing on the Moon -------------------------------------------------
+//
+// The one place in this project that does *not* work in Earth radii. A scene unit is
+// 6371 km, and an astronaut's eye is 1.7 m off the ground — 2.7e-7 of a unit. Rather
+// than try to render that, `planets/earth/moon-surface/` builds its own scene in
+// metres; these are the numbers that cross between the two.
+
+export const MOON_RADIUS_M = MOON_RADIUS_KM * 1000;
+/** Surface gravity, m/s². A sixth of Earth's, and the whole reason a hop hangs. */
+export const MOON_SURFACE_GRAVITY = 1.62;
+/** Eye height of a standing astronaut in an EVA suit, metres. */
+export const MOON_EYE_HEIGHT_M = 1.7;
+/**
+ * Distance to the horizon from that eye height: √(2Rh), 2,430 m.
+ *
+ * Not a view-distance setting — it is a consequence of the radius above, and it is
+ * why the ground patch is built with the sphere's real curvature baked into it rather
+ * than as a flat plane with fog. Earth's horizon from the same height is 4,654 m, so
+ * the Moon's is 1.9x closer; every Apollo crew remarked on it.
+ */
+export const MOON_HORIZON_M = Math.sqrt(2 * MOON_RADIUS_M * MOON_EYE_HEIGHT_M);
+/**
+ * Bond-style diffuse reflectance of lunar regolith.
+ *
+ * Same conversion the Martian moons need, for the same reason: the quoted geometric
+ * albedo (0.12) is a full-phase disc comparison, and a Lambert material wants the
+ * hemispherical reflectance, which for a sphere is 3/2 of it. Using 0.12 directly
+ * makes the ground a third too dark.
+ */
+export const MOON_REGOLITH_ALBEDO = 0.12 * 1.5;
+
 // Mercury constants
 export const MERCURY_RADIUS_KM = 2439.4; // volumetric mean radius
 /** Barely a third of Earth's, and smaller than two of the moons in the solar system. */
