@@ -11,9 +11,23 @@ interface Planet {
   id: string;
   label: string;
   satellites: Satellite[];
+  /**
+   * A row in the dropdown that toggles something rather than flying to it. Venus has
+   * no moons, so its dropdown would otherwise be empty — what belongs in there is the
+   * cloud deck, which is the only thing on any of these planets you can take off.
+   * `toggleId` is looked up by script.ts, which owns the button's label and state
+   * outright, the same way it owns the analemma's and the orbits'.
+   */
+  toggle?: { label: string; toggleId: string };
 }
 
 const PLANETS: Planet[] = [
+  {
+    id: 'venus',
+    label: 'Venus',
+    satellites: [],
+    toggle: { label: 'Clouds', toggleId: 'toggle-venus-clouds' },
+  },
   {
     id: 'earth',
     label: 'Earth',
@@ -133,6 +147,28 @@ export function NavPanel() {
                           )}
                         </div>
                       ))}
+                      {planet.toggle && (
+                        <div className="nav-satellite-row">
+                          {/* Not a `data-target` button: there is nothing to fly to.
+                              The row labels the toggle beside it, so it carries no
+                              click handler and no active state — same as the Orbits
+                              row under Solar system. */}
+                          <span className="nav-btn nav-btn--satellite nav-btn--static">
+                            {planet.toggle.label}
+                          </span>
+                          {/* Starts on, matching script.ts's own default, so there is
+                              no flash of the wrong label before initScene runs. This
+                              is the one toggle here that begins visible: the clouds
+                              are what Venus looks like. */}
+                          <button
+                            type="button"
+                            className="nav-btn nav-btn--compact nav-visibility-btn"
+                            id={planet.toggle.toggleId}
+                          >
+                            Hide
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -14,6 +14,8 @@ copyrighted). Credit is courtesy, not a licence requirement.
 | `moon_height.png` | NASA SVS — CGI Moon Kit, LOLA elevation | `ldem_4_uint.tif`, 1440×720 |
 | `mars_color.jpg` | USGS Astrogeology — Viking MDIM 2.1 colour mosaic, via NASA Mars Trek | `Mars_Viking_MDIM21_ClrMosaic_global_232m`, tiled at 8192×4096 |
 | `mars_height.png` | NASA PDS — MGS MOLA MEGDR global topography | `megt90n000eb.img`, 5760×2880 |
+| `venus_surface.jpg` | USGS Astrogeology — Magellan C3-MDIR global radar mosaic | `Venus_Magellan_C3-MDIR_Global_Mosaic_2025m.tif`, 18775×9388, downscaled to 5400×2700 |
+| `venus_height.png` | USGS Astrogeology — Magellan global topography v02 | `Venus_Magellan_Topography_Global_4641m_v02.tif`, 8192×4096, downscaled to 2700×1350 |
 
 Relief and mask maps were downscaled because they carry only low-frequency detail;
 the colour maps are kept at full resolution since the camera can zoom close.
@@ -22,6 +24,39 @@ the colour maps are kept at full resolution since the camera can zoom close.
 rescaled linearly onto 0–255 across its true range (−8177 m in Hellas to +21171 m at
 the summit of Olympus Mons) and rolled 180°, since the PDS grid starts at 0°E while
 an equirectangular texture starts at 180°W.
+
+## The two Venus maps
+
+`venus_surface.jpg` is **not a photograph**, and is the only map here that isn't.
+Venus's cloud deck is opaque at visible wavelengths, so brightness in this map is
+radar backscatter — surface roughness and slope — rather than colour. That is why it
+ships greyscale and is tinted in `src/planets/venus/venus.ts` instead of carrying its
+own colour: the structure is measured, the hue is not in the data at all.
+
+`venus_height.png` is Magellan's altimetry, stored in the source as **signed** 16-bit
+metres about the 6051.0 km datum (`SampleFormat = 2`; decoders that assume unsigned
+clamp every lowland on the planet to zero). Rescaled linearly onto 0–255 across its
+true range, −2951 m to +11687 m at the summit of Maxwell Montes.
+
+Both grids begin at the 180° meridian, which is already where an equirectangular
+texture starts, so unlike `mars_height.png` neither needed rolling. Confirmed from
+the data rather than assumed: the global elevation maximum lands at 65°N, ~0–3°E
+(Maxwell Montes), Ishtar Terra spans ~310°E–30°E, and Maxwell reads far brighter in
+radar than the Guinevere plains — all three only true at this alignment.
+
+Both also carry Magellan's coverage gaps — swaths the radar missed, plus a band at
+each pole the mapping orbit never reached, 7.8% of the radar mosaic and 8.0% of the
+topography. These are interpolated across with a push-pull pyramid, so the filled
+regions are smooth inventions between real measurements rather than black scars.
+
+## Venus's clouds have no file here either
+
+The deck is generated in `src/planets/venus/clouds.ts`. Not for the moons' reason —
+there are plenty of Venus cloud images — but because in *visible* light there is
+almost nothing on it to map. The famous dark Y-shaped markings are ultraviolet
+features; pasting a UV mosaic onto a visible-light scene would draw contrast no eye
+has ever seen. What is generated is the zonal banding, which is real, at the few
+percent contrast that is also real.
 
 ## Phobos and Deimos have no files here
 

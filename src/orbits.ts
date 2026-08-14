@@ -10,6 +10,11 @@ import {
     MARS_ROTATION_DEG_PER_DAY,
     MOON_DISTANCE,
     PHOBOS_ORBIT_RADIUS,
+    VENUS_CLOUD_DEG_PER_DAY,
+    VENUS_POLE_DEC_DEG,
+    VENUS_POLE_RA_DEG,
+    VENUS_PRIME_MERIDIAN_DEG,
+    VENUS_ROTATION_DEG_PER_DAY,
 } from './constants/planets.const';
 
 const DEG = Math.PI / 180;
@@ -147,28 +152,53 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 }
 
 // ---------------------------------------------------------------------------
-// Mars
+// The other planets
 //
 // Earth's position comes from an almanac series for the *apparent Sun*, which is
-// only useful for the one body we happen to be standing on. Mars needs the general
-// case, so it is done properly: Keplerian elements, solved for the true position in
-// its own inclined, eccentric orbit. Mars's eccentricity is 0.093 — seven times
-// Earth's — so a circle would be visibly wrong, swinging the planet up to 0.14 AU
-// off course and getting its apparent size at opposition badly out.
+// only useful for the one body we happen to be standing on. Everything else needs
+// the general case, so it is done properly: Keplerian elements, solved for the true
+// position in each planet's own inclined, eccentric orbit, and an IAU pole for the
+// spin. Mars's eccentricity is 0.093 — seven times Earth's — so a circle would be
+// visibly wrong, swinging the planet up to 0.14 AU off course and getting its
+// apparent size at opposition badly out.
 //
-// Checked against JPL Horizons for 2026-08-12. Nothing below imposes an obliquity,
-// a period or a distance; all of it falls out of the elements and the pole:
+// Both planets below run through exactly the same code. Nothing in it imposes an
+// obliquity, a period or a distance; all of that falls out of the elements and the
+// pole. Checked against JPL Horizons over 2000-2030 (997 samples each):
 //
-//   heliocentric position      16,000 km off, 0.006° in Earth-Mars elongation
-//   perihelion / aphelion      1.3814 / 1.6661 AU   (1.3814 / 1.6660)
-//   sidereal period            686.98 days          (686.98)
-//   obliquity to its orbit     25.188°              (25.19°)
-//   orbital inclination        1.848°               (1.850°)
-//   sub-Earth point            lat 0.001° off, longitude 0.30°
+//                            Mars                      Venus
+//   heliocentric position    16,000 km, 0.006°         14,000 km, 0.0074°
+//   perihelion / aphelion    1.3814 / 1.6661 AU        0.71844 / 0.72823 AU
+//     Horizons               1.3814 / 1.6660           0.71840 / 0.72825
+//   sidereal period          686.98 d   (686.98)       224.70080 d  (224.70080)
+//   orbital inclination      1.848°     (1.850°)       3.3946°      (3.3946°)
+//   obliquity to its orbit   25.188°    (25.19°)       177.36°      (177.3°)
+//   sidereal rotation        1.026 d    (1.026)        243.01848 d  (243.018484)
 //
-// That last residual is almost entirely the clock: the simulation runs on UTC while
-// the rotational elements are defined on TDB, and the ~69 s between them is 0.28° of
-// Mars. The rest of this file makes the same approximation.
+// Fed Horizons' own positions, the rotation model alone puts Venus's sub-Earth point
+// within 0.005° of longitude and 0.001° of latitude. Composed through the whole scene
+// graph, though — the way script.ts actually uses it — that becomes 1.15° and 0.12°,
+// and the gap is worth knowing about because neither term is Venus's fault and both
+// apply to Mars in exactly the same way:
+//
+//   * `earthOrbitPosition` puts Earth on a perfect circle of exactly 1 AU. The real
+//     Earth ranges over 0.983-1.017, so the direction *from* another planet *to*
+//     Earth can be off by up to a degree at Venus's range. It is the dominant term
+//     here, and it shrinks the further out the body is.
+//   * Positions get precessed onto the equinox of date (see `precessionSinceJ2000`)
+//     but the axis quaternions below do not — they stay on J2000, since they are
+//     built once and never touched. That leaves a *constant* longitude offset equal
+//     to the precession angle, 0.373° today. It is why the residual above barely
+//     varies from epoch to epoch.
+//
+// Both are well under a pixel on anything you can see, so neither is worth the cost
+// of fixing: the first would mean a second almanac series, the second would mean
+// re-deriving the axis nodes every frame to chase an angle that moves 1.4° a century.
+//
+// One approximation that genuinely does not matter here: the simulation runs on UTC
+// while the rotational elements are defined on TDB. Those ~69 s are 0.28° of Mars,
+// but Venus turns 240 times slower, so the same offset costs it under a thousandth
+// of a degree.
 // ---------------------------------------------------------------------------
 
 /**
@@ -194,18 +224,50 @@ function equatorialToScene(v: Vector3): Vector3 {
 }
 
 /**
- * Mars's orbital elements: value at J2000 and drift per Julian century, from JPL's
+ * Orbital elements: value at J2000 and drift per Julian century, from JPL's
  * approximate-positions tables (Standish). Good to a few arcseconds across the
  * 1800–2050 range, which is far tighter than anything visible here.
  */
-const MARS_ELEMENTS = {
-    semiMajorAxis: [1.52371034, 0.00001847], // AU
+interface OrbitalElements {
+    semiMajorAxis: readonly [number, number]; // AU
+    eccentricity: readonly [number, number];
+    inclination: readonly [number, number]; // degrees, to the ecliptic
+    meanLongitude: readonly [number, number];
+    perihelionLongitude: readonly [number, number];
+    ascendingNode: readonly [number, number];
+}
+
+const MARS_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [1.52371034, 0.00001847],
     eccentricity: [0.09339410, 0.00007882],
-    inclination: [1.84969142, -0.00813131], // degrees, to the ecliptic
+    inclination: [1.84969142, -0.00813131],
     meanLongitude: [-4.55343205, 19140.30268499],
     perihelionLongitude: [-23.94362959, 0.44441088],
     ascendingNode: [49.55953891, -0.29257343],
-} as const;
+};
+
+/**
+ * Venus's, from the same table.
+ *
+ * The eccentricity is 0.0068 — the roundest orbit of any planet, and a twentieth of
+ * Mars's. It would be tempting to drop it, and unlike Phobos's it really is nearly
+ * negligible: carrying it moves Venus by about 0.4° at most. It costs one call to a
+ * solver that is already here, and the solver converges on the first pass at this
+ * eccentricity, so there is no reason to find out how it looks without.
+ *
+ * The inclination is the interesting one: 3.39° is the steepest of any planet here,
+ * and it is why Venus mostly passes above or below the Sun at inferior conjunction
+ * instead of transiting it. Transits come only when the alignment happens near a
+ * node — hence the famous 8/121.5/8/105.5-year pattern.
+ */
+const VENUS_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [0.72333566, 0.00000390],
+    eccentricity: [0.00677672, -0.00004107],
+    inclination: [3.39467605, -0.00078890],
+    meanLongitude: [181.97909950, 58517.81538729],
+    perihelionLongitude: [131.60246718, 0.00268329],
+    ascendingNode: [76.67984255, -0.27769418],
+};
 
 /**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
@@ -247,17 +309,21 @@ function precessionSinceJ2000(centuries: number): number {
     return (5029.0966 * centuries + 1.11113 * centuries * centuries) * ARCSEC;
 }
 
-/** Mars's heliocentric position, in scene units. */
-export function marsOrbitPosition(date: Date, target = new Vector3()): Vector3 {
+/** A planet's heliocentric position from its elements, in scene units. */
+function keplerianPosition(
+    elements: OrbitalElements,
+    date: Date,
+    target = new Vector3()
+): Vector3 {
     const centuries = daysSinceJ2000(date) / 36525;
     const at = ([value, rate]: readonly [number, number]) => value + rate * centuries;
 
-    const a = at(MARS_ELEMENTS.semiMajorAxis);
-    const e = at(MARS_ELEMENTS.eccentricity);
-    const inclination = at(MARS_ELEMENTS.inclination) * DEG;
-    const node = at(MARS_ELEMENTS.ascendingNode) * DEG;
-    const perihelion = at(MARS_ELEMENTS.perihelionLongitude) * DEG;
-    const meanAnomaly = wrapAngle(at(MARS_ELEMENTS.meanLongitude) * DEG - perihelion);
+    const a = at(elements.semiMajorAxis);
+    const e = at(elements.eccentricity);
+    const inclination = at(elements.inclination) * DEG;
+    const node = at(elements.ascendingNode) * DEG;
+    const perihelion = at(elements.perihelionLongitude) * DEG;
+    const meanAnomaly = wrapAngle(at(elements.meanLongitude) * DEG - perihelion);
 
     const E = eccentricAnomaly(meanAnomaly, e);
 
@@ -292,19 +358,25 @@ export function marsOrbitPosition(date: Date, target = new Vector3()): Vector3 {
         .multiplyScalar(EARTH_ORBIT_RADIUS);
 }
 
+export const marsOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(MARS_ELEMENTS, date, target);
+
+export const venusOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(VENUS_ELEMENTS, date, target);
+
 /**
- * The fixed orientation of Mars's spin axis, as a rotation to hang the planet under
- * — the counterpart of Earth's `earthTilt` node, and used the same way: set once and
- * never touched, so the axis holds its direction in space through the whole orbit.
+ * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
+ * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
+ * touched, so the axis holds its direction in space through the whole orbit.
  *
  * The IAU defines a body's orientation by its north pole (α₀, δ₀) plus an angle W
  * measured east from the node of its equator. So the mesh's local +Y is carried to
  * the pole, and its local +X — longitude 0 by `geo.ts`'s convention — to that node,
- * which leaves `marsSpinAngle()` free to be W itself.
+ * which leaves the spin angle free to be W itself.
  */
-export const MARS_AXIS_ORIENTATION = (() => {
-    const rightAscension = MARS_POLE_RA_DEG * DEG;
-    const declination = MARS_POLE_DEC_DEG * DEG;
+function axisOrientationFromPole(poleRaDeg: number, poleDecDeg: number): Quaternion {
+    const rightAscension = poleRaDeg * DEG;
+    const declination = poleDecDeg * DEG;
 
     const pole = equatorialToScene(
         new Vector3(
@@ -325,13 +397,51 @@ export const MARS_AXIS_ORIENTATION = (() => {
     return new Quaternion().setFromRotationMatrix(
         new Matrix4().makeBasis(equatorNode, pole, third)
     );
-})();
-
-/** Mars's rotation inside its axis pivot: the IAU prime-meridian angle W. */
-export function marsSpinAngle(date: Date): number {
-    const W = MARS_PRIME_MERIDIAN_DEG + MARS_ROTATION_DEG_PER_DAY * daysSinceJ2000(date);
-    return wrapAngle(W * DEG);
 }
+
+export const MARS_AXIS_ORIENTATION = axisOrientationFromPole(
+    MARS_POLE_RA_DEG,
+    MARS_POLE_DEC_DEG
+);
+
+/**
+ * Venus's pole lands within 1.3° of ecliptic north, so this node is almost the
+ * identity — nothing like Mars's pronounced lean, and the reason Venus has no
+ * seasons worth the name. Its axis is nonetheless tipped 177.36° to its orbit, and
+ * both facts are the same fact: the planet is very nearly upside down, which is
+ * indistinguishable from being upright and turning backwards.
+ */
+export const VENUS_AXIS_ORIENTATION = axisOrientationFromPole(
+    VENUS_POLE_RA_DEG,
+    VENUS_POLE_DEC_DEG
+);
+
+/**
+ * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
+ *
+ * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
+ * it out as the one planet here that turns backwards — no branch, no special case.
+ */
+function primeMeridianAngle(w0Deg: number, degreesPerDay: number, date: Date): number {
+    return wrapAngle((w0Deg + degreesPerDay * daysSinceJ2000(date)) * DEG);
+}
+
+export const marsSpinAngle = (date: Date): number =>
+    primeMeridianAngle(MARS_PRIME_MERIDIAN_DEG, MARS_ROTATION_DEG_PER_DAY, date);
+
+export const venusSpinAngle = (date: Date): number =>
+    primeMeridianAngle(VENUS_PRIME_MERIDIAN_DEG, VENUS_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Venus's cloud deck, which does not turn with the planet.
+ *
+ * Started from the same W₀ as the surface so the two shells begin aligned at J2000
+ * and then visibly diverge — the deck laps the ground beneath it every four days.
+ * There is no "correct" phase to give it: the clouds are a fluid, not a body with a
+ * prime meridian, so the only thing being claimed here is the rate.
+ */
+export const venusCloudAngle = (date: Date): number =>
+    primeMeridianAngle(VENUS_PRIME_MERIDIAN_DEG, VENUS_CLOUD_DEG_PER_DAY, date);
 
 // ---------------------------------------------------------------------------
 // Phobos and Deimos

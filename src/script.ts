@@ -12,6 +12,9 @@ import { ANALEMMA_RADIUS, analemmaAnchor, analemmaLine } from './planets/earth/a
 import { mars } from './planets/mars/mars';
 import { deimos, phobos } from './planets/mars/moons';
 import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmosphere';
+import { venus } from './planets/venus/venus';
+import { venusClouds } from './planets/venus/clouds';
+import { venusAtmosphere, venusAtmosphereSunDirection } from './planets/venus/atmosphere';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { orbitPaths } from './orbit-paths';
@@ -28,6 +31,10 @@ import {
     moonOrbitPosition,
     PHOBOS,
     satelliteState,
+    venusCloudAngle,
+    venusOrbitPosition,
+    venusSpinAngle,
+    VENUS_AXIS_ORIENTATION,
 } from './orbits';
 import {
     ISS_UPDATE_INTERVAL,
@@ -42,6 +49,7 @@ import {
     PHOBOS_ORBIT_RADIUS,
     PHOBOS_RADIUS,
     SUN_RADIUS,
+    VENUS_RADIUS,
 } from './constants/planets.const';
 
 export function initScene() {
@@ -102,6 +110,11 @@ export function initScene() {
     //
     //   scene
     //   ├── sun
+    //   ├── venusSystem            <- one orbit further in
+    //   │   ├── venusAxis          <- fixed IAU pole direction, never touched
+    //   │   │   ├── venus          <- spins *backwards* inside it
+    //   │   │   └── venusClouds    <- and sixty times faster than the planet does
+    //   │   └── venusAtmosphere
     //   ├── earthSystem            <- moves along the orbit
     //   │   ├── earthTilt          <- fixed 23.44° lean, never follows the orbit
     //   │   │   ├── earth          <- spins inside the tilt
@@ -162,6 +175,24 @@ export function initScene() {
     marsSystem.add(marsAxis);
     marsSystem.add(marsAtmosphere);
 
+    // Venus is built the same way again, which is the point of the shape: the axis
+    // node takes a fixed IAU pole and is never touched, and everything peculiar about
+    // Venus falls out of the two numbers fed to it. The pole is almost upright, so
+    // there is barely any lean and barely any season; the spin applied *inside* it is
+    // negative, so the planet turns backwards. Neither needed a special case.
+    const venusSystem = new Object3D();
+    const venusAxis = new Object3D();
+    venusAxis.quaternion.copy(VENUS_AXIS_ORIENTATION);
+
+    venusAxis.add(venus);
+    // The deck is a child of the axis rather than of the planet, because it does not
+    // travel with it: it laps the surface every four days, so it needs its own
+    // rotation applied against the same fixed pole.
+    venusAxis.add(venusClouds);
+    venusSystem.add(venusAxis);
+    venusSystem.add(venusAtmosphere);
+
+    scene.add(venusSystem);
     scene.add(earthSystem);
     scene.add(marsSystem);
     scene.add(sun);
@@ -221,6 +252,7 @@ export function initScene() {
         { ...createLabel('Earth', earthSystem, 1.25), body: earthSystem, radius: 1, hideBeyond: Infinity },
         { ...createLabel('Moon', moon, 0.18), body: moon, radius: MOON_RADIUS, hideBeyond: 400 },
         { ...createLabel('Sun', sun, SUN_RADIUS * 1.15), body: sun, radius: SUN_RADIUS, hideBeyond: Infinity },
+        { ...createLabel('Venus', venusSystem, VENUS_RADIUS * 1.25), body: venusSystem, radius: VENUS_RADIUS, hideBeyond: Infinity },
         { ...createLabel('Mars', marsSystem, MARS_RADIUS * 1.25), body: marsSystem, radius: MARS_RADIUS, hideBeyond: Infinity },
         // Scaled from the Moon's cutoff by orbit radius, so each label survives to
         // roughly the same *apparent* separation from its planet before the two
@@ -247,6 +279,11 @@ export function initScene() {
         // piling additively onto Mars's marker once the orbits shrink to nothing.
         createBodyMarker(0xd9cfc2, PHOBOS_RADIUS, 5, PHOBOS_ORBIT_RADIUS),
         createBodyMarker(0xd9cfc2, DEIMOS_RADIUS, 5, DEIMOS_ORBIT_RADIUS),
+        // A touch larger than the others, which is the one honest exception here:
+        // Venus really is the brightest point of light in the sky after the Sun and
+        // Moon, and a dot the same size as Mars's would have it read as the dimmer of
+        // the two when it is some fifty times the brighter.
+        createBodyMarker(0xfff0c4, VENUS_RADIUS, 9),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -254,6 +291,7 @@ export function initScene() {
     marsSystem.add(markers[3].sprite);
     phobos.add(markers[4].sprite);
     deimos.add(markers[5].sprite);
+    venusSystem.add(markers[6].sprite);
 
     // Far enough back from the Sun to take in the whole system, viewed obliquely from
     // above the ecliptic so the orbits read as circles rather than edge-on. Mars
@@ -298,6 +336,10 @@ export function initScene() {
     // that framing means measuring the distance in *its* radii rather than reusing
     // the number.
     const MARS_VIEW_DISTANCE = MARS_RADIUS * 3.5;
+    // Venus is within 5% of Earth's size, so it gets Earth's framing measured in its
+    // own radii — the two should look the same size from the same relative distance,
+    // because they very nearly are.
+    const VENUS_VIEW_DISTANCE = VENUS_RADIUS * 3;
     // The moons need a wider berth in their own radii, because they are not round:
     // framing on the mean radius would crop the long axis, which on Phobos is 18%
     // longer again.
@@ -323,6 +365,7 @@ export function initScene() {
         { name: 'Sun', object: sun, radius: SUN_RADIUS },
         { name: 'Earth', object: earthSystem, radius: 1 },
         { name: 'Moon', object: moon, radius: MOON_RADIUS },
+        { name: 'Venus', object: venusSystem, radius: VENUS_RADIUS },
         { name: 'Mars', object: marsSystem, radius: MARS_RADIUS },
         // Without these, flying near Phobos would take its speed from Mars — nearly
         // a whole Mars radius of clearance away — and carry you past an 11 km rock
@@ -424,6 +467,39 @@ export function initScene() {
     }
 
     toggleOrbitsBtn?.addEventListener('click', () => setOrbitsVisible(!orbitsVisible));
+
+    // Same shape again, for the one body here that is hiding something.
+    //
+    // The other two toggles switch a diagram on and off. This one is not a diagram —
+    // it is the difference between the two things "Venus" can mean. With the deck on
+    // you get the planet as it appears, an almost blank white-gold disc; with it off
+    // you get the ground Magellan mapped through it by radar, which no eye has ever
+    // seen and no camera has ever photographed from orbit. Both are Venus. Being able
+    // to peel one off the other seemed a better answer than picking one.
+    let venusCloudsVisible = true;
+    const toggleVenusCloudsBtn = document.getElementById('toggle-venus-clouds');
+
+    function setVenusCloudsVisible(visible: boolean) {
+        venusCloudsVisible = visible;
+        venusClouds.visible = visible;
+        // The haze belongs to the deck, not to the rock: it is the top of the same
+        // atmosphere, so stripping the clouds away and leaving a glow around a bare
+        // radar globe would be the one incoherent combination of the two.
+        venusAtmosphere.visible = visible;
+        toggleVenusCloudsBtn?.classList.toggle('nav-visibility-btn--off', !visible);
+        if (toggleVenusCloudsBtn) {
+            toggleVenusCloudsBtn.textContent = visible ? 'Hide' : 'Show';
+        }
+    }
+
+    toggleVenusCloudsBtn?.addEventListener('click', () =>
+        setVenusCloudsVisible(!venusCloudsVisible)
+    );
+    // On by default, unlike the other two — this is what Venus looks like, so it is
+    // scenery rather than an overlay, and the surface underneath is the thing you opt
+    // into. Still routed through the setter so the flags and the button label cannot
+    // start out disagreeing.
+    setVenusCloudsVisible(true);
     // Off by default. An orbit line is drawn at true scale like everything else, so
     // from anywhere near a planet it is not a ring at all — it is a straight line
     // through the whole view, since you are standing on a curve 23,481 units across.
@@ -576,6 +652,9 @@ export function initScene() {
                 setAnalemmaVisible(true);
                 focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
                 break;
+            case '8':
+                focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
+                break;
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
@@ -592,6 +671,11 @@ export function initScene() {
         { hit: earth, focus: earth, distance: 3 },
         { hit: moon, focus: moon, distance: 3 },
         { hit: sun, focus: sun, distance: SUN_RADIUS * 4 },
+        // Two entries, because which one the ray actually lands on depends on whether
+        // the deck is switched on — and they are siblings, so neither walks up to the
+        // other. Both aim the camera at the same place.
+        { hit: venusClouds, focus: venus, distance: VENUS_VIEW_DISTANCE },
+        { hit: venus, focus: venus, distance: VENUS_VIEW_DISTANCE },
         { hit: mars, focus: mars, distance: MARS_VIEW_DISTANCE },
         { hit: phobos, focus: phobos, distance: PHOBOS_VIEW_DISTANCE },
         { hit: deimos, focus: deimos, distance: DEIMOS_VIEW_DISTANCE },
@@ -677,6 +761,9 @@ export function initScene() {
                 case 'analemma':
                     setAnalemmaVisible(true);
                     focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
+                    break;
+                case 'venus':
+                    focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
                     break;
                 case 'mars':
                     focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
@@ -803,6 +890,14 @@ export function initScene() {
         // The IAU prime-meridian angle, applied inside the fixed axis node.
         mars.rotation.y = marsSpinAngle(now);
 
+        venusOrbitPosition(now, venusSystem.position);
+        // Same call as Mars's above, and it runs backwards purely because the rate
+        // constant behind it is negative. At "1 day/s" you can watch the deck stream
+        // round the planet while the ground under it barely stirs — four days against
+        // 243, and both turning the wrong way.
+        venus.rotation.y = venusSpinAngle(now);
+        venusClouds.rotation.y = venusCloudAngle(now);
+
         // Position and facing together — both moons are tidally locked, so the
         // direction back to Mars that places them is also the direction that aims
         // them. Phobos gets round three times a sol, which is fast enough to watch
@@ -821,8 +916,9 @@ export function initScene() {
         earthSunDirectionView.copy(sunDirection).transformDirection(camera.matrixWorldInverse);
 
         // Mars needs its own: it is a whole orbit away, so the direction back to the
-        // Sun is nothing like Earth's.
+        // Sun is nothing like Earth's. Venus likewise, one orbit the other way.
         marsAtmosphereSunDirection.copy(marsSystem.position).negate().normalize();
+        venusAtmosphereSunDirection.copy(venusSystem.position).negate().normalize();
 
         // Smooth interpolation between current and target position
         const elapsedTime = Date.now() - issLastUpdateTime;

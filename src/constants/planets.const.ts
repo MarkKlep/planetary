@@ -43,6 +43,70 @@ export const MOON_ORBITAL_PERIOD_DAYS = 27.321661; // sidereal
  *  eclipse every single month. */
 export const MOON_ORBIT_INCLINATION_DEG = 5.145;
 
+// Venus constants
+export const VENUS_RADIUS_KM = 6051.84; // volumetric mean radius
+/** Within 5% of Earth's, so ~0.95 units. Venus is very nearly our twin in size. */
+export const VENUS_RADIUS = VENUS_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * Orientation of Venus in space, from the IAU working group's rotational elements,
+ * given the same way Mars's are: a fixed pole direction in the J2000 *equatorial*
+ * frame, plus a prime-meridian angle W measured east from the node of its equator.
+ *
+ * The pole points within 1.3° of ecliptic *north*, so the axis node below is very
+ * nearly upright — Venus has essentially no seasons. What it has instead is in the
+ * sign of the rotation rate.
+ */
+export const VENUS_POLE_RA_DEG = 272.76;
+export const VENUS_POLE_DEC_DEG = 67.16;
+export const VENUS_PRIME_MERIDIAN_DEG = 160.20;
+/**
+ * **Negative, and that is the whole point.** Venus turns backwards: the only planet
+ * here whose W decreases with time, so the mesh spins the other way inside its pivot
+ * and the Sun rises in the west. Nothing special-cases this — a negative rate runs
+ * through exactly the same machinery as Mars's positive one.
+ *
+ * Quoted as an obliquity of 177.3° rather than as retrograde rotation, which says the
+ * same thing: an axis tipped almost completely over. This scene never states that
+ * figure anywhere; it falls out of the pole direction above, and measures 177.36°.
+ */
+export const VENUS_ROTATION_DEG_PER_DAY = -1.4813688;
+/** 243.02 days — longer than Venus's own year, and the slowest spin in the solar system. */
+export const VENUS_SIDEREAL_DAY = (360 / Math.abs(VENUS_ROTATION_DEG_PER_DAY)) * 86400;
+export const VENUS_ORBITAL_PERIOD_DAYS = 224.700800;
+/**
+ * The cloud tops, ~65 km up, which is the surface as far as anything you can see is
+ * concerned — the deck is completely opaque, and no one saw the ground beneath it
+ * until Magellan's radar.
+ */
+export const VENUS_CLOUD_RADIUS = VENUS_RADIUS * (1 + 65 / VENUS_RADIUS_KM);
+/**
+ * Superrotation: the deck circles the planet in about four days, some sixty times
+ * faster than the body under it turns.
+ *
+ * Earth's `CLOUD_ANGULAR_VELOCITY_SCALE` is a 15% nudge invented to give a parallax
+ * cue. This is not that — it is the measured circulation of the upper cloud deck, and
+ * it is the largest such disequilibrium in the solar system. Signed to match the
+ * planet's own retrograde direction, because the winds blow the way Venus turns, only
+ * very much faster.
+ */
+export const VENUS_CLOUD_ROTATION_PERIOD_DAYS = 4.2;
+export const VENUS_CLOUD_DEG_PER_DAY = -360 / VENUS_CLOUD_ROTATION_PERIOD_DAYS;
+/**
+ * The haze above the cloud tops, out to ~100 km. Thin compared to the 65 km of opaque
+ * deck below it, but it is what gives the limb its soft edge.
+ */
+export const VENUS_ATMOSPHERE_RADIUS = VENUS_RADIUS * (1 + 100 / VENUS_RADIUS_KM);
+/**
+ * The most reflective surface of any planet — those clouds are sulphuric acid, and
+ * they throw back two thirds of everything that lands on them. Together with being
+ * the closest planet to us it is why Venus outshines everything in our sky but the
+ * Sun and Moon.
+ *
+ * As with the Martian moons this is the *geometric* albedo, which is not what a
+ * diffuse material's colour means; see `venus/clouds.ts`, which converts.
+ */
+export const VENUS_GEOMETRIC_ALBEDO = 0.65;
+
 // Mars constants
 export const MARS_RADIUS_KM = 3389.5; // volumetric mean radius
 /** Just over half Earth's radius, so ~0.53 units. */
