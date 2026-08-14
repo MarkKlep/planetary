@@ -1,50 +1,105 @@
-import { Mesh, BoxGeometry, MeshStandardMaterial, Group, CylinderGeometry, Vector3 } from 'three';
+import { Mesh, BoxGeometry, MeshStandardMaterial, Group, CylinderGeometry, SphereGeometry, Vector3 } from 'three';
 import { earth } from './planets/earth/earth';
 import { latLonToDirection, toWorldFrame } from './geo';
 import { ISS_ORBITAL_RADIUS } from './constants/planets.const';
 
-// Create ISS as a more realistic model
+// The station is deliberately enlarged a few times beyond literal scale: at one
+// Earth-radius scene unit its real 109 m span is only 0.017 units wide, which would
+// disappear at the closest useful camera distance. The proportions and silhouette,
+// rather than the screen-space exaggeration, follow the actual ISS layout.
 const iss = new Group();
+iss.name = 'International Space Station';
 
-// Main truss structure (central backbone)
-const trussGeometry = new CylinderGeometry(0.002, 0.002, 0.025, 6);
-const trussMaterial = new MeshStandardMaterial({ color: 0x9a9a9a, roughness: 0.6, metalness: 0.8 });
-const truss = new Mesh(trussGeometry, trussMaterial);
-iss.add(truss);
+const trussMaterial = new MeshStandardMaterial({ color: 0x707986, roughness: 0.42, metalness: 0.86 });
+const moduleMaterial = new MeshStandardMaterial({ color: 0xd2d4d7, roughness: 0.43, metalness: 0.52 });
+const nodeMaterial = new MeshStandardMaterial({ color: 0xb7bec7, roughness: 0.34, metalness: 0.68 });
+const solarMaterial = new MeshStandardMaterial({
+    color: 0x123d88,
+    emissive: 0x06162f,
+    emissiveIntensity: 0.55,
+    roughness: 0.3,
+    metalness: 0.72,
+});
+const solarGridMaterial = new MeshStandardMaterial({ color: 0x91a6c7, roughness: 0.38, metalness: 0.88 });
+const radiatorMaterial = new MeshStandardMaterial({ color: 0xdce5eb, roughness: 0.5, metalness: 0.7 });
+const goldMaterial = new MeshStandardMaterial({ color: 0xb89755, roughness: 0.42, metalness: 0.75 });
 
-// Pressurized modules along the truss
-const moduleGeometry = new BoxGeometry(0.003, 0.003, 0.008);
-const moduleMaterial = new MeshStandardMaterial({ color: 0xd8d4c8, roughness: 0.5, metalness: 0.3 });
-for (let i = -1; i <= 1; i++) {
-    const module = new Mesh(moduleGeometry, moduleMaterial);
-    module.position.z = i * 0.006;
-    iss.add(module);
+function addBox(width: number, height: number, depth: number, material: MeshStandardMaterial, x = 0, y = 0, z = 0): Mesh {
+    const mesh = new Mesh(new BoxGeometry(width, height, depth), material);
+    mesh.position.set(x, y, z);
+    iss.add(mesh);
+    return mesh;
 }
 
-// Solar panel array - Port (left) side
-const portPanelGeometry = new BoxGeometry(0.035, 0.00015, 0.008);
-const panelMaterial = new MeshStandardMaterial({ color: 0x1a3f77, roughness: 0.25, metalness: 0.7 });
+function addXAlignedCylinder(radius: number, length: number, material: MeshStandardMaterial, x: number, y: number, z: number): Mesh {
+    const mesh = new Mesh(new CylinderGeometry(radius, radius, length, 12), material);
+    mesh.rotation.z = Math.PI / 2;
+    mesh.position.set(x, y, z);
+    iss.add(mesh);
+    return mesh;
+}
 
-const portPanel = new Mesh(portPanelGeometry, panelMaterial);
-portPanel.position.set(-0.023, 0.005, 0);
-iss.add(portPanel);
+// Integrated truss: the long, silver backbone running across the station.
+addXAlignedCylinder(0.0021, 0.085, trussMaterial, 0, 0.004, 0);
+for (const x of [-0.032, -0.011, 0.011, 0.032]) {
+    const mast = new Mesh(new CylinderGeometry(0.00115, 0.00115, 0.013, 8), trussMaterial);
+    mast.position.set(x, 0.004, 0);
+    iss.add(mast);
+}
 
-// Solar panel array - Starboard (right) side
-const starboardPanel = new Mesh(portPanelGeometry, panelMaterial);
-starboardPanel.position.set(0.023, 0.005, 0);
-iss.add(starboardPanel);
+// Pressurized module chain, cupola-side node, and end docking adapters.
+addXAlignedCylinder(0.0062, 0.026, moduleMaterial, -0.007, -0.004, 0);
+addXAlignedCylinder(0.0054, 0.022, moduleMaterial, 0.020, -0.004, 0);
+addXAlignedCylinder(0.0048, 0.019, moduleMaterial, -0.029, -0.004, 0);
 
-// Radiators (golden-bronze color)
-const radiatorGeometry = new BoxGeometry(0.015, 0.00015, 0.008);
-const radiatorMaterial = new MeshStandardMaterial({ color: 0xc9922a, roughness: 0.35, metalness: 0.85 });
+for (const x of [-0.020, 0.006]) {
+    const node = new Mesh(new SphereGeometry(0.0072, 12, 8), nodeMaterial);
+    node.position.set(x, -0.004, 0);
+    iss.add(node);
+}
 
-const portRadiator = new Mesh(radiatorGeometry, radiatorMaterial);
-portRadiator.position.set(-0.015, -0.005, 0);
-iss.add(portRadiator);
+for (const x of [-0.043, 0.036]) {
+    addXAlignedCylinder(0.0042, 0.010, goldMaterial, x, -0.004, 0);
+    const dockingRing = new Mesh(new CylinderGeometry(0.0051, 0.0051, 0.0014, 12), nodeMaterial);
+    dockingRing.rotation.z = Math.PI / 2;
+    dockingRing.position.set(x + (x < 0 ? -0.005 : 0.005), -0.004, 0);
+    iss.add(dockingRing);
+}
 
-const starboardRadiator = new Mesh(radiatorGeometry, radiatorMaterial);
-starboardRadiator.position.set(0.015, -0.005, 0);
-iss.add(starboardRadiator);
+// Four paired solar-array wings. Cell seams and aluminium edge rails keep the panels
+// readable as arrays rather than solid blue rectangles when viewed up close.
+function addSolarWing(x: number, side: -1 | 1): void {
+    const z = side * 0.026;
+    addBox(0.014, 0.00038, 0.038, solarMaterial, x, 0.005, z);
+
+    // Root boom from the truss and a narrow aluminium frame around the wing.
+    const boom = new Mesh(new CylinderGeometry(0.00085, 0.00085, 0.026, 8), trussMaterial);
+    boom.rotation.x = Math.PI / 2;
+    boom.position.set(x, 0.005, side * 0.012);
+    iss.add(boom);
+    addBox(0.0145, 0.00062, 0.0007, solarGridMaterial, x, 0.0051, z - side * 0.019);
+    addBox(0.0145, 0.00062, 0.0007, solarGridMaterial, x, 0.0051, z + side * 0.019);
+
+    for (const offset of [-0.0095, 0, 0.0095]) {
+        addBox(0.0134, 0.00062, 0.00038, solarGridMaterial, x, 0.0051, z + offset);
+    }
+}
+
+for (const x of [-0.030, -0.010, 0.010, 0.030]) {
+    addSolarWing(x, -1);
+    addSolarWing(x, 1);
+}
+
+// White radiator blankets hang below the truss, visually separate from the blue
+// photovoltaic wings. The small gold box reads as exposed thermal insulation.
+for (const x of [-0.022, 0.022]) {
+    addBox(0.018, 0.00045, 0.012, radiatorMaterial, x, -0.012, -0.013);
+    addBox(0.018, 0.00045, 0.012, radiatorMaterial, x, -0.012, 0.013);
+    const support = new Mesh(new CylinderGeometry(0.0007, 0.0007, 0.010, 8), trussMaterial);
+    support.position.set(x, -0.004, -0.013);
+    iss.add(support);
+}
+addBox(0.011, 0.007, 0.006, goldMaterial, 0.012, -0.012, 0);
 
 // Position ISS in orbit
 iss.position.set(ISS_ORBITAL_RADIUS, 0, 0);
