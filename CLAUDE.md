@@ -35,7 +35,7 @@ When changing anything heatmap-related, check whether the edit belongs in the ro
 
 ### Main 3D scene (`src/script.ts`)
 
-`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`–`8` to focus Earth-reset/Earth/Moon/ISS/Mars/Phobos/Deimos/Analemma/Venus, `F`/`Esc` for free flight) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
+`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`–`9` to focus Earth-reset/Earth/Moon/ISS/Mars/Phobos/Deimos/Analemma/Venus/Mercury, `F`/`Esc` for free flight) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
 
 Scene objects are each defined in their own module and imported into `script.ts` as pre-built Three.js objects (not factories):
 - `src/planets/earth/earth.ts` — Earth mesh. `MeshStandardMaterial` with day/height/land-mask maps, plus an `onBeforeCompile` patch that adds night-side city lights (the night texture is added to `totalEmissiveRadiance` masked by the surface's angle to the sun, since a plain `emissiveMap` would also glow through the daylit face). Exports `earthSunDirectionView`, which the render loop must keep updated in **view** space.
@@ -43,6 +43,7 @@ Scene objects are each defined in their own module and imported into `script.ts`
 - `src/planets/earth/moon.ts` — Moon mesh. Orbital motion is computed per-frame in `script.ts`, not inside this module. Lit by the same sun, so it runs through real phases. `moonTidalRotation(orbitalAngle)` returns the spin that keeps the near side facing Earth — the mesh must be rotated every frame or it holds a fixed world orientation and slowly turns its far side toward us.
 - `src/planets/earth/analemma.ts` — the figure-8 the Sun traces over a year at a fixed observer and clock time, built once at module load from the same ephemeris as everything else here (no separate equation-of-time formula — it falls out of the real Sun position the same way the seasons do). The one trick worth knowing before touching it: the curve and its ground marker are parented directly to the `earth` **mesh**, not to `earthTilt`, specifically so the scene graph's existing per-frame spin carries a shape built in `earth`'s own *unrotated* local frame into world space for free. That only works because altitude/azimuth are horizon-relative, frame-agnostic quantities — reconstructing them via a *local* north/east/up basis and letting the graph rotate the result lands in exactly the same place as computing a fresh basis in world space every frame, without the per-frame cost. Verified against real equation-of-time figures: altitude range 21.56°–68.44° at 45°N (real: 21.6°/68.4°), azimuth swing peaking near Feb 17/Oct 27 (real extrema: Feb 11/Nov 3, ~3.5–4°).
 - `src/planets/mars/mars.ts`, `src/planets/mars/atmosphere.ts` — Mars mesh (Viking colour + MOLA relief) and its much thinner limb haze. Deliberately carries *no* albedo correction, unlike the Moon: see the comment there, the arithmetic is not the obvious one.
+- `src/planets/mercury/mercury.ts` — Mercury mesh (MESSENGER colour + DEM). The only planet here with **no atmosphere shell**, which is deliberate: at under 5×10⁻¹⁵ bar there is nothing to scatter light, so its limb ends hard like the Moon's — don't "fix" it by adding a glow. Its albedo is derived by comparison against the Moon rather than in the abstract, since both wear brightness-normalised mosaics; the comment there explains why the answer is to tint it *up*.
 - `src/planets/venus/venus.ts`, `clouds.ts`, `atmosphere.ts` — the one body here made of **two** visible shells rather than a surface with a veil over it. `venus.ts` is the ground Magellan mapped through the clouds by radar, so its map is *backscatter, not colour* — it ships greyscale and the hue comes from a material tint taken from the Venera landers. `clouds.ts` is what Venus actually looks like: an opaque, generated deck that hides the surface completely (no `transparent`, no `depthWrite: false` — it is a solid surface to the renderer). It is generated because in visible light there is nothing to map; the famous dark markings are ultraviolet. The deck is toggleable from the nav panel, which is the only way to see the surface at all. Its albedo runs through the same geometric→hemispherical conversion as the Martian moons, at the opposite extreme — 0.975, which looks wrong and isn't.
 - `src/noise.ts` — seeded value noise / fBm sampled from a **3D direction** rather than uv, which is what keeps it seam-free at the 180° meridian and unpinched at the poles. Shared by the Martian moons' relief and Venus's cloud deck.
 - `src/planets/mars/moons.ts` — Phobos and Deimos, the only bodies here that are **generated rather than textured**. They are not spheres, so there is nothing to wrap an equirectangular map onto; the measured triaxial radii are scaled into the mesh and the relief on top is fractal noise plus a synthetic crater population (with Stickney placed at its real coordinates). Deimos runs the same generator shallower, because its craters really are buried in regolith. Both are lit through their real geometric albedo of 0.068, converted to a diffuse reflectance — the two are not the same quantity, and using the quoted figure directly makes them a third too dark.
@@ -61,6 +62,9 @@ Scene graph, built in `initScene()`:
 ```
 scene
 ├── sun                     (origin)
+├── mercurySystem           innermost; no shells at all
+│   └── mercuryAxis         fixed IAU pole, all but upright
+│       └── mercury         3 turns per 2 orbits, and nothing enforces it
 ├── venusSystem             same shape, one orbit in
 │   ├── venusAxis           fixed IAU pole orientation; never touched
 │   │   ├── venus           spins *backwards* inside it
@@ -88,6 +92,14 @@ special-cased. The pole goes into `venusAxis` like Mars's, the spin rate that go
 inside it happens to be negative, and everything else follows. `venusClouds` hangs off
 the **axis** rather than off `venus` because it does not travel with the planet; it
 gets its own rotation against the same fixed pole.
+
+Mercury is the same argument from the other end — the simplest body here, and the one
+that shows the model is producing physics rather than reproducing it. Its 3:2
+spin-orbit resonance is nowhere in the source: the IAU rotation rate and the Standish
+mean longitude come from unrelated tables, and three rotations land on 175.938 days
+against two orbits' 175.939. The 176-day solar day, the 0.03° obliquity and the
+574″/century perihelion precession (including the 43″ that needed general relativity
+to explain) all fall out the same way.
 
 Note where the two Martian moons hang, and that it is not where the Moon hangs. The Moon is far enough out that the Sun rules it, so its orbit stays near the ecliptic and `moonOrbitPlane` tilts to *that*. Phobos and Deimos are deep in Mars's gravity well, where the equatorial bulge rules instead and forces them into the plane of the equator — so they go under `marsAxis` and inherit its fixed lean. Their planes also precess (2.3 years for Phobos), fast enough that it cannot be baked into a pivot, so `satelliteState()` applies the node rotation per frame instead.
 

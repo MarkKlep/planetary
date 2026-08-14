@@ -5,10 +5,16 @@ import {
     LineBasicMaterial,
     Vector3,
 } from 'three';
-import { earthOrbitPosition, marsOrbitPosition, venusOrbitPosition } from './orbits';
+import {
+    earthOrbitPosition,
+    marsOrbitPosition,
+    mercuryOrbitPosition,
+    venusOrbitPosition,
+} from './orbits';
 import {
     EARTH_ORBITAL_PERIOD_DAYS,
     MARS_ORBITAL_PERIOD_DAYS,
+    MERCURY_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
 } from './constants/planets.const';
 
@@ -100,9 +106,8 @@ export const marsOrbitPath = traceOrbit(
     0xff9c6b
 );
 
-// The one orbit here whose 3.39° tilt to the ecliptic is worth being able to see:
-// it is the steepest of any planet, and the reason Venus usually misses the Sun's
-// disc at inferior conjunction instead of transiting it.
+// Tilted 3.39° to the ecliptic, second only to Mercury's — and the reason Venus
+// usually misses the Sun's disc at inferior conjunction instead of transiting it.
 export const venusOrbitPath = traceOrbit(
     venusOrbitPosition,
     VENUS_ORBITAL_PERIOD_DAYS,
@@ -110,4 +115,16 @@ export const venusOrbitPath = traceOrbit(
     0xffd9a0
 );
 
-export const orbitPaths = [venusOrbitPath, earthOrbitPath, marsOrbitPath];
+// The one that makes tracing the real position function rather than drawing an
+// ellipse obviously worth it. Mercury's eccentricity of 0.2056 and 7.00° inclination
+// are both the largest of any planet, so this path is visibly off-centre from the Sun
+// and visibly tilted out of the plane of the others — neither of which a circle in
+// the ecliptic would show.
+export const mercuryOrbitPath = traceOrbit(
+    mercuryOrbitPosition,
+    MERCURY_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0xc9c2b8
+);
+
+export const orbitPaths = [mercuryOrbitPath, venusOrbitPath, earthOrbitPath, marsOrbitPath];

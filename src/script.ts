@@ -15,6 +15,7 @@ import { marsAtmosphere, marsAtmosphereSunDirection } from './planets/mars/atmos
 import { venus } from './planets/venus/venus';
 import { venusClouds } from './planets/venus/clouds';
 import { venusAtmosphere, venusAtmosphereSunDirection } from './planets/venus/atmosphere';
+import { mercury } from './planets/mercury/mercury';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { orbitPaths } from './orbit-paths';
@@ -31,6 +32,9 @@ import {
     moonOrbitPosition,
     PHOBOS,
     satelliteState,
+    mercuryOrbitPosition,
+    mercurySpinAngle,
+    MERCURY_AXIS_ORIENTATION,
     venusCloudAngle,
     venusOrbitPosition,
     venusSpinAngle,
@@ -43,6 +47,7 @@ import {
     DEIMOS_RADIUS,
     EARTH_RADIUS_KM,
     MARS_RADIUS,
+    MERCURY_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
     MOON_RADIUS,
     EARTH_ORBIT_RADIUS,
@@ -110,6 +115,9 @@ export function initScene() {
     //
     //   scene
     //   ├── sun
+    //   ├── mercurySystem          <- innermost, and the only planet with no shells
+    //   │   └── mercuryAxis        <- fixed IAU pole, all but upright
+    //   │       └── mercury        <- 3 turns per 2 orbits, and nothing enforces it
     //   ├── venusSystem            <- one orbit further in
     //   │   ├── venusAxis          <- fixed IAU pole direction, never touched
     //   │   │   ├── venus          <- spins *backwards* inside it
@@ -192,6 +200,18 @@ export function initScene() {
     venusSystem.add(venusAxis);
     venusSystem.add(venusAtmosphere);
 
+    // And once more, minus the shells. Mercury is the simplest body in the scene —
+    // no clouds, no haze, no moons — which makes it the clearest demonstration that
+    // the pattern is carrying the physics: a pole, a spin rate, and a set of
+    // elements are the whole of it.
+    const mercurySystem = new Object3D();
+    const mercuryAxis = new Object3D();
+    mercuryAxis.quaternion.copy(MERCURY_AXIS_ORIENTATION);
+
+    mercuryAxis.add(mercury);
+    mercurySystem.add(mercuryAxis);
+
+    scene.add(mercurySystem);
     scene.add(venusSystem);
     scene.add(earthSystem);
     scene.add(marsSystem);
@@ -252,6 +272,7 @@ export function initScene() {
         { ...createLabel('Earth', earthSystem, 1.25), body: earthSystem, radius: 1, hideBeyond: Infinity },
         { ...createLabel('Moon', moon, 0.18), body: moon, radius: MOON_RADIUS, hideBeyond: 400 },
         { ...createLabel('Sun', sun, SUN_RADIUS * 1.15), body: sun, radius: SUN_RADIUS, hideBeyond: Infinity },
+        { ...createLabel('Mercury', mercurySystem, MERCURY_RADIUS * 1.25), body: mercurySystem, radius: MERCURY_RADIUS, hideBeyond: Infinity },
         { ...createLabel('Venus', venusSystem, VENUS_RADIUS * 1.25), body: venusSystem, radius: VENUS_RADIUS, hideBeyond: Infinity },
         { ...createLabel('Mars', marsSystem, MARS_RADIUS * 1.25), body: marsSystem, radius: MARS_RADIUS, hideBeyond: Infinity },
         // Scaled from the Moon's cutoff by orbit radius, so each label survives to
@@ -284,6 +305,10 @@ export function initScene() {
         // Moon, and a dot the same size as Mars's would have it read as the dimmer of
         // the two when it is some fifty times the brighter.
         createBodyMarker(0xfff0c4, VENUS_RADIUS, 9),
+        // Back to the default size, and a dim grey to match: Mercury is the faintest
+        // of the naked-eye planets and the hardest to catch, which the dot may as
+        // well say.
+        createBodyMarker(0xbfb6a8, MERCURY_RADIUS),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -292,6 +317,7 @@ export function initScene() {
     phobos.add(markers[4].sprite);
     deimos.add(markers[5].sprite);
     venusSystem.add(markers[6].sprite);
+    mercurySystem.add(markers[7].sprite);
 
     // Far enough back from the Sun to take in the whole system, viewed obliquely from
     // above the ecliptic so the orbits read as circles rather than edge-on. Mars
@@ -340,6 +366,7 @@ export function initScene() {
     // own radii — the two should look the same size from the same relative distance,
     // because they very nearly are.
     const VENUS_VIEW_DISTANCE = VENUS_RADIUS * 3;
+    const MERCURY_VIEW_DISTANCE = MERCURY_RADIUS * 3.5;
     // The moons need a wider berth in their own radii, because they are not round:
     // framing on the mean radius would crop the long axis, which on Phobos is 18%
     // longer again.
@@ -365,6 +392,7 @@ export function initScene() {
         { name: 'Sun', object: sun, radius: SUN_RADIUS },
         { name: 'Earth', object: earthSystem, radius: 1 },
         { name: 'Moon', object: moon, radius: MOON_RADIUS },
+        { name: 'Mercury', object: mercurySystem, radius: MERCURY_RADIUS },
         { name: 'Venus', object: venusSystem, radius: VENUS_RADIUS },
         { name: 'Mars', object: marsSystem, radius: MARS_RADIUS },
         // Without these, flying near Phobos would take its speed from Mars — nearly
@@ -655,6 +683,9 @@ export function initScene() {
             case '8':
                 focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
                 break;
+            case '9':
+                focusOnObject(mercury, MERCURY_VIEW_DISTANCE, 2500);
+                break;
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
@@ -676,6 +707,7 @@ export function initScene() {
         // other. Both aim the camera at the same place.
         { hit: venusClouds, focus: venus, distance: VENUS_VIEW_DISTANCE },
         { hit: venus, focus: venus, distance: VENUS_VIEW_DISTANCE },
+        { hit: mercury, focus: mercury, distance: MERCURY_VIEW_DISTANCE },
         { hit: mars, focus: mars, distance: MARS_VIEW_DISTANCE },
         { hit: phobos, focus: phobos, distance: PHOBOS_VIEW_DISTANCE },
         { hit: deimos, focus: deimos, distance: DEIMOS_VIEW_DISTANCE },
@@ -761,6 +793,9 @@ export function initScene() {
                 case 'analemma':
                     setAnalemmaVisible(true);
                     focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
+                    break;
+                case 'mercury':
+                    focusOnObject(mercury, MERCURY_VIEW_DISTANCE, 2500);
                     break;
                 case 'venus':
                     focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
@@ -897,6 +932,9 @@ export function initScene() {
         // 243, and both turning the wrong way.
         venus.rotation.y = venusSpinAngle(now);
         venusClouds.rotation.y = venusCloudAngle(now);
+
+        mercuryOrbitPosition(now, mercurySystem.position);
+        mercury.rotation.y = mercurySpinAngle(now);
 
         // Position and facing together — both moons are tidally locked, so the
         // direction back to Mars that places them is also the direction that aims
