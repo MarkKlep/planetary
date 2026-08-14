@@ -8,6 +8,10 @@ import {
     MARS_POLE_RA_DEG,
     MARS_PRIME_MERIDIAN_DEG,
     MARS_ROTATION_DEG_PER_DAY,
+    MERCURY_POLE_DEC_DEG,
+    MERCURY_POLE_RA_DEG,
+    MERCURY_PRIME_MERIDIAN_DEG,
+    MERCURY_ROTATION_DEG_PER_DAY,
     MOON_DISTANCE,
     PHOBOS_ORBIT_RADIUS,
     VENUS_CLOUD_DEG_PER_DAY,
@@ -162,18 +166,24 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 // visibly wrong, swinging the planet up to 0.14 AU off course and getting its
 // apparent size at opposition badly out.
 //
-// Both planets below run through exactly the same code. Nothing in it imposes an
-// obliquity, a period or a distance; all of that falls out of the elements and the
-// pole. Checked against JPL Horizons over 2000-2030 (997 samples each):
+// All three planets below run through exactly the same code. Nothing in it imposes an
+// obliquity, a period, a distance or a resonance; all of that falls out of the
+// elements and the pole. Checked against JPL Horizons over 2000-2030 (997 samples
+// each):
 //
-//                            Mars                      Venus
-//   heliocentric position    16,000 km, 0.006°         14,000 km, 0.0074°
-//   perihelion / aphelion    1.3814 / 1.6661 AU        0.71844 / 0.72823 AU
-//     Horizons               1.3814 / 1.6660           0.71840 / 0.72825
-//   sidereal period          686.98 d   (686.98)       224.70080 d  (224.70080)
-//   orbital inclination      1.848°     (1.850°)       3.3946°      (3.3946°)
-//   obliquity to its orbit   25.188°    (25.19°)       177.36°      (177.3°)
-//   sidereal rotation        1.026 d    (1.026)        243.01848 d  (243.018484)
+//                            Mars                Venus                Mercury
+//   heliocentric position    16,000 km, 0.006°   14,000 km, 0.0074°   6,400 km, 0.0079°
+//   perihelion / aphelion    1.3814 / 1.6661     0.71844 / 0.72823    0.30750 / 0.46670 AU
+//     Horizons               1.3814 / 1.6660     0.71840 / 0.72825    0.30749 / 0.46670
+//   sidereal period          686.98 d            224.70080 d          87.96926 d
+//     Horizons               686.98              224.70080            87.969257
+//   orbital inclination      1.848° (1.850°)     3.3946° (3.3946°)    7.0041° (7.0050°)
+//   obliquity to its orbit   25.188° (25.19°)    177.36° (177.3°)     0.0344° (0.0352°)
+//   sidereal rotation        1.026 d (1.026)     243.01848 (243.0185) 58.64615 (58.6463)
+//
+// Mercury additionally lands its 3:2 spin-orbit resonance without being told about
+// it: three rotations come to 175.938 days against two orbits' 175.939, from a
+// rotation rate and an orbital period that were taken from two unrelated sources.
 //
 // Fed Horizons' own positions, the rotation model alone puts Venus's sub-Earth point
 // within 0.005° of longitude and 0.001° of latitude. Composed through the whole scene
@@ -255,10 +265,11 @@ const MARS_ELEMENTS: OrbitalElements = {
  * solver that is already here, and the solver converges on the first pass at this
  * eccentricity, so there is no reason to find out how it looks without.
  *
- * The inclination is the interesting one: 3.39° is the steepest of any planet here,
- * and it is why Venus mostly passes above or below the Sun at inferior conjunction
- * instead of transiting it. Transits come only when the alignment happens near a
- * node — hence the famous 8/121.5/8/105.5-year pattern.
+ * The inclination is the interesting one: at 3.39° it is the second steepest of the
+ * planets, behind only Mercury below, and it is why Venus mostly passes above or
+ * below the Sun at inferior conjunction instead of transiting it. Transits come only
+ * when the alignment happens near a node — hence the famous 8/121.5/8/105.5-year
+ * pattern.
  */
 const VENUS_ELEMENTS: OrbitalElements = {
     semiMajorAxis: [0.72333566, 0.00000390],
@@ -267,6 +278,34 @@ const VENUS_ELEMENTS: OrbitalElements = {
     meanLongitude: [181.97909950, 58517.81538729],
     perihelionLongitude: [131.60246718, 0.00268329],
     ascendingNode: [76.67984255, -0.27769418],
+};
+
+/**
+ * Mercury's, again from the same table — and the orbit that makes the strongest case
+ * for solving Kepler's equation rather than drawing a circle.
+ *
+ * The eccentricity of 0.2056 is easily the largest of any planet: Mercury runs from
+ * 0.307 AU at perihelion out to 0.467, so its distance from the Sun varies by half
+ * again over a single 88-day year. A circle would be wrong by 0.08 AU — nearly 2,000
+ * scene units — twice per orbit. The inclination of 7.00° is likewise the steepest of
+ * the planets, which is why Mercury's path visibly rides above and below the others'
+ * when the orbit paths are switched on.
+ *
+ * One thing worth knowing about what this does *not* contain. Mercury's perihelion
+ * advances by 574 arcseconds a century, and 43 of those are famously unexplainable by
+ * Newtonian gravity — the anomaly that general relativity resolved. There is no
+ * relativity anywhere in this file, and there does not need to be: `perihelionLongitude`
+ * below is an *observed* rate, fitted to where Mercury actually goes, so the full 574
+ * is already in the 0.16047689°/century figure. The scene reproduces the precession
+ * that broke Newton without knowing why it happens.
+ */
+const MERCURY_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [0.38709927, 0.00000037],
+    eccentricity: [0.20563593, 0.00001906],
+    inclination: [7.00497902, -0.00594749],
+    meanLongitude: [252.25032350, 149472.67411175],
+    perihelionLongitude: [77.45779628, 0.16047689],
+    ascendingNode: [48.33076593, -0.12534081],
 };
 
 /**
@@ -364,6 +403,9 @@ export const marsOrbitPosition = (date: Date, target = new Vector3()): Vector3 =
 export const venusOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
     keplerianPosition(VENUS_ELEMENTS, date, target);
 
+export const mercuryOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(MERCURY_ELEMENTS, date, target);
+
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
  * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
@@ -417,6 +459,17 @@ export const VENUS_AXIS_ORIENTATION = axisOrientationFromPole(
 );
 
 /**
+ * Mercury's pole is within 0.03° of its own orbit normal — the most upright planet
+ * there is, so this node leans by almost nothing. It still has to exist and still has
+ * to be built the same way: the axis is upright relative to *Mercury's* orbit, which
+ * is itself tipped 7° to the ecliptic this scene is laid out in.
+ */
+export const MERCURY_AXIS_ORIENTATION = axisOrientationFromPole(
+    MERCURY_POLE_RA_DEG,
+    MERCURY_POLE_DEC_DEG
+);
+
+/**
  * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
  *
  * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
@@ -431,6 +484,25 @@ export const marsSpinAngle = (date: Date): number =>
 
 export const venusSpinAngle = (date: Date): number =>
     primeMeridianAngle(VENUS_PRIME_MERIDIAN_DEG, VENUS_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Mercury's, with one term of the IAU model deliberately left out.
+ *
+ * The published elements carry five sine terms for the physical libration — Mercury's
+ * slightly out-of-round figure gets torqued back and forth by the Sun as its distance
+ * swings over that very eccentric orbit, so it rocks a little about its mean
+ * rotation. It is a real effect and a direct consequence of the 3:2 resonance, so it
+ * was tempting. It peaks at 0.0107°.
+ *
+ * That is thirty-five times smaller than the constant 0.373° frame offset this scene
+ * already carries (see the header above), which makes carrying it false precision:
+ * five sine calls a frame to refine a number buried under an error many times its
+ * size. Checked rather than assumed — including it moves the sub-Earth longitude
+ * residual from 0.0488° to 0.0446°, and both figures are themselves mostly light
+ * time, which nothing in this scene corrects for either.
+ */
+export const mercurySpinAngle = (date: Date): number =>
+    primeMeridianAngle(MERCURY_PRIME_MERIDIAN_DEG, MERCURY_ROTATION_DEG_PER_DAY, date);
 
 /**
  * Venus's cloud deck, which does not turn with the planet.

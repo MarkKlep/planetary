@@ -16,6 +16,8 @@ copyrighted). Credit is courtesy, not a licence requirement.
 | `mars_height.png` | NASA PDS — MGS MOLA MEGDR global topography | `megt90n000eb.img`, 5760×2880 |
 | `venus_surface.jpg` | USGS Astrogeology — Magellan C3-MDIR global radar mosaic | `Venus_Magellan_C3-MDIR_Global_Mosaic_2025m.tif`, 18775×9388, downscaled to 5400×2700 |
 | `venus_height.png` | USGS Astrogeology — Magellan global topography v02 | `Venus_Magellan_Topography_Global_4641m_v02.tif`, 8192×4096, downscaled to 2700×1350 |
+| `mercury_color.jpg` | USGS Astrogeology — MESSENGER MDIS global colour mosaic v3 | `Mercury_MESSENGER_ClrMosaic_global_665m_v3.tif`, 23054×11527, downscaled to 5400×2700 |
+| `mercury_height.png` | USGS Astrogeology — MESSENGER global DEM v2 | `Mercury_Messenger_USGS_DEM_Global_665m_v2.tif`, 23040×11520, downscaled to 2700×1350 |
 
 Relief and mask maps were downscaled because they carry only low-frequency detail;
 the colour maps are kept at full resolution since the camera can zoom close.
@@ -48,6 +50,40 @@ Both also carry Magellan's coverage gaps — swaths the radar missed, plus a ban
 each pole the mapping orbit never reached, 7.8% of the radar mosaic and 8.0% of the
 topography. These are interpolated across with a push-pull pyramid, so the filled
 regions are smooth inventions between real measurements rather than black scars.
+
+## The two Mercury maps
+
+Both source products are in **west** longitude, which an equirectangular texture is
+not — so both were **mirrored**, not merely rolled. And they do not agree with each
+other: the GeoTIFF `ProjCenterLong` puts the colour mosaic's centre meridian at 0° and
+the DEM's at 180°, so the DEM needs a further half-turn. Used together uncorrected the
+relief would have sat half a planet away from the surface it belongs to.
+
+None of that was assumed. It was pinned by finding Rachmaninoff — the deepest point on
+Mercury — in both products: the DEM's global minimum lands at 27.6°N, 57.6° from its
+left edge, matching the basin's catalogued 27.6°N, 302.4°E read westward, and cropping
+the colour mosaic at the predicted spot shows the same peak-ring basin centred in
+frame (and at the *un*-shifted spot shows unremarkable terrain). Caloris independently
+confirms it, appearing at 170° from the DEM's left edge against its catalogued 189.8°E.
+
+`mercury_height.png` is stored in the source as **signed** 16-bit in units of **half a
+metre** — the file's own `GDAL_METADATA` declares `SCALE = 0.5`, and decoding it as
+plain metres doubles Mercury's topography. Rescaled linearly onto 0–255 across its
+true range, −5382 m in Rachmaninoff to +4497 m, which matches the published −5.38 /
++4.48 km and is what confirmed the scale factor.
+
+`mercury_color.jpg` has had most of its colour removed, deliberately. The published
+mosaic is a stretched multiband composite with a mean saturation of 13%; the real
+planet is a slightly browner Moon, with a couple of percent of genuine colour
+variation. Chroma is scaled to 28% and **luminance left untouched**, so the albedo
+structure — craters, ray systems, the smooth plains — is exactly as measured while the
+stretch made for geologists is mostly undone. Coverage gaps (3.9%) are push-pull
+filled as on Venus, and everything poleward of 82° is progressively blended into its
+zonal mean, because MESSENGER's eccentric, north-pinned orbit only ever saw the poles
+at grazing incidence and the mosaic degenerates into ripples and colour fringing there.
+
+Mercury has no atmosphere texture and no atmosphere shell in the scene: at under
+5×10⁻¹⁵ bar there is nothing to scatter light, so its limb ends hard, like the Moon's.
 
 ## Venus's clouds have no file here either
 

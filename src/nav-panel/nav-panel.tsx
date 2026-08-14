@@ -22,6 +22,13 @@ interface Planet {
 }
 
 const PLANETS: Planet[] = [
+  // The one entry with nothing to expand: Mercury has no moons, no cloud deck and no
+  // atmosphere, so it gets a plain full-width button and no chevron.
+  {
+    id: 'mercury',
+    label: 'Mercury',
+    satellites: [],
+  },
   {
     id: 'venus',
     label: 'Venus',
@@ -81,6 +88,10 @@ export function NavPanel() {
             </button>
             {PLANETS.map((planet) => {
               const isExpanded = expanded.has(planet.id);
+              // Nothing to reveal means no chevron — an expander that opens an empty
+              // drawer is worse than no expander. `.nav-planet-btn` is `flex: 1`, so
+              // the button simply takes the whole row and still lines up.
+              const isExpandable = planet.satellites.length > 0 || planet.toggle !== undefined;
               return (
                 <div className="nav-planet" key={planet.id}>
                   <div className="nav-planet-row">
@@ -91,24 +102,26 @@ export function NavPanel() {
                     >
                       {planet.label}
                     </button>
-                    <button
-                      type="button"
-                      className={`nav-expand-btn ${isExpanded ? 'nav-expand-btn--open' : ''}`}
-                      aria-expanded={isExpanded}
-                      aria-label={`${isExpanded ? 'Hide' : 'Show'} ${planet.label}'s moons`}
-                      onClick={() => toggleExpanded(planet.id)}
-                    >
-                      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                        <path
-                          d="M2 4l4 4 4-4"
-                          stroke="currentColor"
-                          strokeWidth="1.6"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                      </svg>
-                    </button>
+                    {isExpandable && (
+                      <button
+                        type="button"
+                        className={`nav-expand-btn ${isExpanded ? 'nav-expand-btn--open' : ''}`}
+                        aria-expanded={isExpanded}
+                        aria-label={`${isExpanded ? 'Hide' : 'Show'} more of ${planet.label}`}
+                        onClick={() => toggleExpanded(planet.id)}
+                      >
+                        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                          <path
+                            d="M2 4l4 4 4-4"
+                            stroke="currentColor"
+                            strokeWidth="1.6"
+                            fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </button>
+                    )}
                   </div>
                   {/* Always mounted — never conditionally rendered on `isExpanded`.
                       script.ts collects every `.nav-btn[data-target]` once when the

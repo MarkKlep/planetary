@@ -43,6 +43,47 @@ export const MOON_ORBITAL_PERIOD_DAYS = 27.321661; // sidereal
  *  eclipse every single month. */
 export const MOON_ORBIT_INCLINATION_DEG = 5.145;
 
+// Mercury constants
+export const MERCURY_RADIUS_KM = 2439.4; // volumetric mean radius
+/** Barely a third of Earth's, and smaller than two of the moons in the solar system. */
+export const MERCURY_RADIUS = MERCURY_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * IAU rotational elements, in the same form as Mars's and Venus's.
+ *
+ * The pole sits within 0.03° of *its own orbit's* normal — the smallest obliquity of
+ * any planet, and effectively bolt upright. Mercury therefore has no seasons at all
+ * from its tilt. What it has instead comes entirely from the eccentricity below.
+ */
+export const MERCURY_POLE_RA_DEG = 281.0103;
+export const MERCURY_POLE_DEC_DEG = 61.4155;
+export const MERCURY_PRIME_MERIDIAN_DEG = 329.5988;
+/**
+ * 6.1385108°/day is one turn every 58.646 days — and the orbit takes 87.969, which is
+ * exactly 3:2. Mercury is locked into spinning three times for every two years.
+ *
+ * Nothing in this file imposes that ratio. The rate here is the IAU's, measured from
+ * the planet's own orientation, and the orbital period falls out of the Standish mean
+ * longitude in `orbits.ts`; the two were sourced independently and land on
+ * 175.938 vs 175.939 days. The resonance is a result, not an input.
+ *
+ * The consequence is the strangest clock in the scene: sunrise to sunrise takes 176
+ * days, so a **solar day on Mercury is two of its years long**. Watch it at "10 d/s"
+ * and the planet visibly turns while the terminator barely moves.
+ */
+export const MERCURY_ROTATION_DEG_PER_DAY = 6.1385108;
+export const MERCURY_SIDEREAL_DAY = (360 / MERCURY_ROTATION_DEG_PER_DAY) * 86400;
+export const MERCURY_ORBITAL_PERIOD_DAYS = 87.969257;
+/**
+ * As dark as the Moon and then some — 0.106 against 0.12. Both are old, airless,
+ * space-weathered rock, and neither reflects much of anything; Mercury only looks
+ * bright from Earth because of where it sits, not what it is made of.
+ *
+ * Geometric albedo again, so it needs the same conversion as everything else here.
+ * See `mercury.ts`, which does it by comparison with the Moon rather than in the
+ * abstract, because both bodies are textured with brightness-normalised mosaics.
+ */
+export const MERCURY_GEOMETRIC_ALBEDO = 0.106;
+
 // Venus constants
 export const VENUS_RADIUS_KM = 6051.84; // volumetric mean radius
 /** Within 5% of Earth's, so ~0.95 units. Venus is very nearly our twin in size. */
