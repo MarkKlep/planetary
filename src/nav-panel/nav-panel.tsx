@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
+import { PlanetIcon } from './planet-icons';
 import './nav-panel.scss';
 
 /**
@@ -26,7 +27,6 @@ interface Satellite {
 interface Planet {
   id: string;
   label: string;
-  symbol: string;
   satellites: Satellite[];
   /**
    * A row in the dropdown that toggles something rather than flying to it. Venus has
@@ -44,20 +44,17 @@ const PLANETS: Planet[] = [
   {
     id: 'mercury',
     label: 'Mercury',
-    symbol: '☿',
     satellites: [],
   },
   {
     id: 'venus',
     label: 'Venus',
-    symbol: '♀',
     satellites: [],
     toggle: { label: 'Clouds', toggleId: 'toggle-venus-clouds' },
   },
   {
     id: 'earth',
     label: 'Earth',
-    symbol: '●',
     satellites: [
       // The only row here that switches the app into a different mode rather than
       // pointing the camera somewhere. Its label reads Land / Leave, not Show / Hide,
@@ -72,7 +69,6 @@ const PLANETS: Planet[] = [
   {
     id: 'mars',
     label: 'Mars',
-    symbol: '♂',
     satellites: [
       { id: 'phobos', label: 'Phobos' },
       { id: 'deimos', label: 'Deimos' },
@@ -129,7 +125,7 @@ export function NavPanel() {
               data-target="sun"
               onClick={() => setActiveTarget('sun')}
             >
-              <span className="nav-object-symbol nav-object-symbol--sun" aria-hidden="true">☀</span>
+              <span className="nav-object-symbol"><PlanetIcon id="sun" /></span>
               <span>Sun</span>
             </button>
             {PLANETS.map((planet) => {
@@ -146,7 +142,7 @@ export function NavPanel() {
                       data-target={planet.id}
                       onClick={() => setActiveTarget(planet.id)}
                     >
-                      <span className={`nav-object-symbol nav-object-symbol--${planet.id}`} aria-hidden="true">{planet.symbol}</span>
+                      <span className="nav-object-symbol"><PlanetIcon id={planet.id} /></span>
                       <span>{planet.label}</span>
                     </button>
                     {isExpandable && (
@@ -237,7 +233,7 @@ export function NavPanel() {
                   data-target="system"
                   onClick={() => setActiveTarget('system')}
                 >
-                  <span className="nav-object-symbol nav-object-symbol--system" aria-hidden="true">◎</span>
+                  <span className="nav-object-symbol"><PlanetIcon id="system" /></span>
                   <span>Solar system</span>
                 </button>
                 <button

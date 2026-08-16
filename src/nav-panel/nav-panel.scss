@@ -236,20 +236,19 @@
         }
     }
 
+    // The icon itself carries its own colour (see planet-icons.tsx), so this is just
+    // the layout box — same 20px slot the old glyph occupied, so the row spacing
+    // didn't need to change.
     .nav-object-symbol {
         display: grid;
         width: 20px;
         place-items: center;
-        color: rgba(204, 213, 255, 0.82);
-        font-size: 19px;
         line-height: 1;
-    }
 
-    .nav-object-symbol--sun { color: #ffc768; }
-    .nav-object-symbol--earth { color: #77bfff; }
-    .nav-object-symbol--mars { color: #ed987c; }
-    .nav-object-symbol--venus { color: #f1c891; }
-    .nav-object-symbol--mercury { color: #b6bccd; }
+        svg {
+            display: block;
+        }
+    }
 
     .nav-expand-btn {
         width: 34px;
