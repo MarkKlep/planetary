@@ -16,6 +16,8 @@ import { venus } from './planets/venus/venus';
 import { venusClouds } from './planets/venus/clouds';
 import { venusAtmosphere, venusAtmosphereSunDirection } from './planets/venus/atmosphere';
 import { mercury } from './planets/mercury/mercury';
+import { jupiter } from './planets/jupiter/jupiter';
+import { callisto, europa, ganymede, io } from './planets/jupiter/moons';
 import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
@@ -23,8 +25,15 @@ import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
 import {
+    CALLISTO,
     DEIMOS,
     EARTH_OBLIQUITY,
+    EUROPA,
+    GANYMEDE,
+    IO,
+    jupiterOrbitPosition,
+    jupiterSpinAngle,
+    JUPITER_AXIS_ORIENTATION,
     earthOrbitPosition,
     earthSpinAngle,
     marsOrbitPosition,
@@ -44,10 +53,20 @@ import {
 } from './orbits';
 import {
     ISS_UPDATE_INTERVAL,
+    CALLISTO_ORBIT_RADIUS,
+    CALLISTO_RADIUS,
     CLOUD_ANGULAR_VELOCITY_SCALE,
     DEIMOS_ORBIT_RADIUS,
     DEIMOS_RADIUS,
     EARTH_RADIUS_KM,
+    EUROPA_ORBIT_RADIUS,
+    EUROPA_RADIUS,
+    GANYMEDE_ORBIT_RADIUS,
+    GANYMEDE_RADIUS,
+    IO_ORBIT_RADIUS,
+    IO_RADIUS,
+    JUPITER_RADIUS,
+    JUPITER_EQUATORIAL_RADIUS,
     MARS_RADIUS,
     MERCURY_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
@@ -133,12 +152,19 @@ export function initScene() {
     //   │   ├── atmosphere
     //   │   └── moonOrbitPlane     <- inclined to the ecliptic, not to the equator
     //   │       └── moon
-    //   └── marsSystem             <- same shape, one orbit further out
-    //       ├── marsAxis           <- fixed IAU pole direction, likewise never touched
-    //       │   ├── mars           <- spins inside the tilt
-    //       │   ├── phobos         <- in Mars's *equatorial* plane, not the ecliptic
-    //       │   └── deimos
-    //       └── marsAtmosphere
+    //   ├── marsSystem             <- same shape, one orbit further out
+    //   │   ├── marsAxis           <- fixed IAU pole direction, likewise never touched
+    //   │   │   ├── mars           <- spins inside the tilt
+    //   │   │   ├── phobos         <- in Mars's *equatorial* plane, not the ecliptic
+    //   │   │   └── deimos
+    //   │   └── marsAtmosphere
+    //   └── jupiterSystem          <- 5.2 AU out, further than everything else combined
+    //       └── jupiterAxis        <- fixed IAU pole, leaning only 3.1°
+    //           ├── jupiter        <- 870.5°/day, the fastest spin in the scene
+    //           ├── io             <- all four in Jupiter's *equatorial* plane, and
+    //           ├── europa            locked 4:2:1 without anything here saying so
+    //           ├── ganymede
+    //           └── callisto
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
     // The tilt is applied here, above the spin, and is never touched again. That is
@@ -213,10 +239,28 @@ export function initScene() {
     mercuryAxis.add(mercury);
     mercurySystem.add(mercuryAxis);
 
+    // And the same shape a fifth time, at the other end of the scale from Mercury.
+    // Jupiter is 450 times its volume and carries four moons, but the graph does not
+    // grow to accommodate any of that: a system node, an axis node holding a fixed
+    // IAU pole, and children hanging inside it. The moons go under the *axis*, for
+    // exactly the reason Phobos and Deimos do — Jupiter's equatorial bulge rules them,
+    // not the Sun, so they lie in the plane of the equator and inherit its lean.
+    const jupiterSystem = new Object3D();
+    const jupiterAxis = new Object3D();
+    jupiterAxis.quaternion.copy(JUPITER_AXIS_ORIENTATION);
+
+    jupiterAxis.add(jupiter);
+    jupiterAxis.add(io);
+    jupiterAxis.add(europa);
+    jupiterAxis.add(ganymede);
+    jupiterAxis.add(callisto);
+    jupiterSystem.add(jupiterAxis);
+
     scene.add(mercurySystem);
     scene.add(venusSystem);
     scene.add(earthSystem);
     scene.add(marsSystem);
+    scene.add(jupiterSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
@@ -282,6 +326,15 @@ export function initScene() {
         // chips would start sitting on top of each other.
         { ...createLabel('Phobos', phobos, PHOBOS_RADIUS * 2), body: phobos, radius: PHOBOS_RADIUS, hideBeyond: 10 },
         { ...createLabel('Deimos', deimos, DEIMOS_RADIUS * 2), body: deimos, radius: DEIMOS_RADIUS, hideBeyond: 24 },
+        { ...createLabel('Jupiter', jupiterSystem, JUPITER_EQUATORIAL_RADIUS * 1.2), body: jupiterSystem, radius: JUPITER_RADIUS, hideBeyond: Infinity },
+        // Scaled from their orbit radii the same way the Martian pair's are, so each
+        // chip survives to roughly the same apparent separation from Jupiter. These
+        // are far more generous because the orbits genuinely are — Callisto's is 295
+        // units across against Deimos's 3.7.
+        { ...createLabel('Io', io, IO_RADIUS * 2), body: io, radius: IO_RADIUS, hideBeyond: 420 },
+        { ...createLabel('Europa', europa, EUROPA_RADIUS * 2), body: europa, radius: EUROPA_RADIUS, hideBeyond: 670 },
+        { ...createLabel('Ganymede', ganymede, GANYMEDE_RADIUS * 2), body: ganymede, radius: GANYMEDE_RADIUS, hideBeyond: 1070 },
+        { ...createLabel('Callisto', callisto, CALLISTO_RADIUS * 2), body: callisto, radius: CALLISTO_RADIUS, hideBeyond: 1880 },
         // A local Earth-surface feature, not a findable body — meaningful only once
         // you're already close, so this gets a short `hideBeyond` like the ISS's
         // framing rather than the "visible across the whole system" bodies above.
@@ -311,6 +364,18 @@ export function initScene() {
         // of the naked-eye planets and the hardest to catch, which the dot may as
         // well say.
         createBodyMarker(0xbfb6a8, MERCURY_RADIUS),
+        // Jupiter gets a larger dot for the same honest reason Venus does: it is the
+        // brightest planet in our sky after Venus, and outshines Mars at every
+        // opposition despite being four times further away.
+        createBodyMarker(0xf3ddb4, JUPITER_RADIUS, 9),
+        // The Galileans get their orbit radii so they fade out rather than piling
+        // additively onto Jupiter's marker. They earn slightly bigger dots than the
+        // Martian moons because they are bodies you can genuinely resolve — all four
+        // are visible in binoculars, and Galileo found them with far less.
+        createBodyMarker(0xffe7a8, IO_RADIUS, 5, IO_ORBIT_RADIUS),
+        createBodyMarker(0xfff2e2, EUROPA_RADIUS, 5, EUROPA_ORBIT_RADIUS),
+        createBodyMarker(0xd8cfc0, GANYMEDE_RADIUS, 6, GANYMEDE_ORBIT_RADIUS),
+        createBodyMarker(0xb0a08c, CALLISTO_RADIUS, 5, CALLISTO_ORBIT_RADIUS),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -320,12 +385,23 @@ export function initScene() {
     deimos.add(markers[5].sprite);
     venusSystem.add(markers[6].sprite);
     mercurySystem.add(markers[7].sprite);
+    jupiterSystem.add(markers[8].sprite);
+    io.add(markers[9].sprite);
+    europa.add(markers[10].sprite);
+    ganymede.add(markers[11].sprite);
+    callisto.add(markers[12].sprite);
 
     // Far enough back from the Sun to take in the whole system, viewed obliquely from
-    // above the ecliptic so the orbits read as circles rather than edge-on. Mars
-    // reaches 1.67 AU at aphelion and a 75° vertical field sees 0.77 AU per AU of
-    // distance, so anything under ~2.2 AU back would crop its orbit.
-    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 2.6;
+    // above the ecliptic so the orbits read as circles rather than edge-on. A 75°
+    // vertical field sees 0.77 AU per AU of distance, and Jupiter reaches 5.45 AU at
+    // aphelion, so this has to sit at least 7.1 AU back — nearly three times what
+    // framing Mars's 1.67 AU needed.
+    //
+    // Which is the honest picture, and a startling one: at this distance the four
+    // inner planets are a knot around the Sun occupying the middle fifth of the frame,
+    // with Jupiter's orbit drawn around all of them. Everything the scene contained
+    // before fits inside a third of the radius of the one orbit added here.
+    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 7.6;
     const SYSTEM_VIEW_DIRECTION = new Vector3(0.3, 0.78, 0.55).normalize();
     // Longer than any nav fly-to: this one crosses 2.6 AU to end up 3 Earth-radii out,
     // and the nav buttons' 1.5–2.5s over that range reads as a jump rather than a move.
@@ -355,9 +431,10 @@ export function initScene() {
     // hundred Deimos-radii away and leave it a speck. The floor now comes from the
     // smallest body in the scene, which is also what the dynamic near plane assumes.
     controls.minDistance = DEIMOS_RADIUS;
-    // Framing Mars's orbit needs roughly 1.67 AU/tan(fov/2) ~ 2.2 AU, so this leaves
-    // comfortable headroom past that.
-    controls.maxDistance = EARTH_ORBIT_RADIUS * 4;
+    // Framing Jupiter's orbit needs roughly 5.45 AU/tan(fov/2) ~ 7.1 AU, so this
+    // leaves comfortable headroom past that. It was 4 AU when Mars was the outermost
+    // body, which would now stop the user short of ever seeing Jupiter's orbit whole.
+    controls.maxDistance = EARTH_ORBIT_RADIUS * 12;
     controls.enablePan = true;
 
     // Earth is framed from 3 of its radii; Mars is barely half the size, so matching
@@ -374,6 +451,15 @@ export function initScene() {
     // longer again.
     const PHOBOS_VIEW_DISTANCE = PHOBOS_RADIUS * 4.5;
     const DEIMOS_VIEW_DISTANCE = DEIMOS_RADIUS * 4.5;
+    // Measured off the *equatorial* radius, which is the one that sets the silhouette:
+    // framing Jupiter on its mean radius would crop the limb it bulges past.
+    const JUPITER_VIEW_DISTANCE = JUPITER_EQUATORIAL_RADIUS * 3.2;
+    // These four are round, so unlike the Martian moons they need no extra allowance
+    // over the planets' own framing.
+    const IO_VIEW_DISTANCE = IO_RADIUS * 3.5;
+    const EUROPA_VIEW_DISTANCE = EUROPA_RADIUS * 3.5;
+    const GANYMEDE_VIEW_DISTANCE = GANYMEDE_RADIUS * 3.5;
+    const CALLISTO_VIEW_DISTANCE = CALLISTO_RADIUS * 3.5;
     // The loop itself already reaches ANALEMMA_RADIUS (1.4) out from Earth's centre,
     // so framing it "3 radii out" the way Earth is would put the camera practically
     // inside the curve. Measuring from its own radius instead keeps the whole
@@ -402,6 +488,11 @@ export function initScene() {
         // at several thousand km/s before you saw it.
         { name: 'Phobos', object: phobos, radius: PHOBOS_RADIUS },
         { name: 'Deimos', object: deimos, radius: DEIMOS_RADIUS },
+        { name: 'Jupiter', object: jupiterSystem, radius: JUPITER_RADIUS },
+        { name: 'Io', object: io, radius: IO_RADIUS },
+        { name: 'Europa', object: europa, radius: EUROPA_RADIUS },
+        { name: 'Ganymede', object: ganymede, radius: GANYMEDE_RADIUS },
+        { name: 'Callisto', object: callisto, radius: CALLISTO_RADIUS },
     ];
     let nearestBody = flightBodies[1];
     let nearestClearance = 1;
@@ -423,6 +514,55 @@ export function initScene() {
 
         nearestBody = closest;
         nearestClearance = clearance;
+    }
+
+    /**
+     * Exposure, which adapts to how much sunlight is actually falling where you are.
+     *
+     * This is the counterpart to `sunLight` being a real inverse-square point light,
+     * not a retreat from it. The falloff stays exactly as it is — Jupiter at 5.2 AU
+     * really does receive a twenty-seventh of Earth's sunlight, and nothing here
+     * touches that. What changes is the *exposure* the scene is developed at, which is
+     * a property of the observer rather than of the light.
+     *
+     * And exposing for it is what an observer would actually do. Sunlight at Jupiter
+     * is about 4,700 lux, which is an overcast afternoon on Earth — a level any
+     * dark-adapted eye reads as perfectly bright, and one every camera ever sent out
+     * there was stopped for. Rendering Jupiter as a near-black disc was the artefact;
+     * it came of developing the whole solar system at the one exposure that suits
+     * Earth. Same argument the lunar surface makes in `moon-surface/`, where the
+     * sunlight constant is openly an f-stop and only the albedo under it is measured.
+     *
+     * Irradiance goes as 1/d², so compensating for it goes as d². Clamped below at 1
+     * so the inner system keeps the exposure everything there was tuned against —
+     * Venus at 0.72 AU is genuinely over-lit and does not want darkening.
+     *
+     * Note what this deliberately does *not* rescue: the body markers, the orbit
+     * lines, the Sun's own corona and the starfield are all `toneMapped: false`, so
+     * they hold a fixed brightness through all of it. Only lit geometry moves, which
+     * is the only thing that should.
+     */
+    const MAX_EXPOSURE = 32;
+    /** Seconds to cover most of an exposure change. Slow enough to read as an eye
+     *  adjusting rather than a light switch, quick enough to settle inside a fly-to. */
+    const EXPOSURE_ADAPT_SECONDS = 0.7;
+    const exposureScratch = new Vector3();
+    let exposure = 1;
+
+    function updateExposure(delta: number) {
+        // Measured at the body you are with rather than at the camera: in the system
+        // view the camera is 7.6 AU out while what fills the frame is the inner system,
+        // and exposing for the camera's own distance would wash it out.
+        const solarDistance = nearestBody.object.getWorldPosition(exposureScratch).length();
+        const target = MathUtils.clamp(
+            (solarDistance / EARTH_ORBIT_RADIUS) ** 2,
+            1,
+            MAX_EXPOSURE
+        );
+        // Frame-rate independent easing, so the adaptation takes the same real time
+        // whatever the display is doing.
+        exposure += (target - exposure) * (1 - Math.exp(-delta / EXPOSURE_ADAPT_SECONDS));
+        renderer.toneMappingExposure = exposure;
     }
 
     /**
@@ -802,6 +942,14 @@ export function initScene() {
             case '0':
                 focusOnObject(earth, 70, 2000);
                 break;
+            // The digit row ran out at Mercury, and the letters free flight uses
+            // (W/A/S/D/Q/E) rule out the obvious mnemonics for three of the four
+            // Galileans. So Jupiter gets a key and its moons are reached from the nav
+            // panel or by clicking them, which is how you would find them anyway once
+            // you are close enough for them to be more than dots.
+            case 'j':
+                focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
+                break;
         }
     });
 
@@ -825,6 +973,11 @@ export function initScene() {
         { hit: phobos, focus: phobos, distance: PHOBOS_VIEW_DISTANCE },
         { hit: deimos, focus: deimos, distance: DEIMOS_VIEW_DISTANCE },
         { hit: analemmaAnchor, focus: analemmaAnchor, distance: ANALEMMA_VIEW_DISTANCE },
+        { hit: jupiter, focus: jupiter, distance: JUPITER_VIEW_DISTANCE },
+        { hit: io, focus: io, distance: IO_VIEW_DISTANCE },
+        { hit: europa, focus: europa, distance: EUROPA_VIEW_DISTANCE },
+        { hit: ganymede, focus: ganymede, distance: GANYMEDE_VIEW_DISTANCE },
+        { hit: callisto, focus: callisto, distance: CALLISTO_VIEW_DISTANCE },
     ];
 
     function pickTarget(event: MouseEvent) {
@@ -942,6 +1095,21 @@ export function initScene() {
                     break;
                 case 'deimos':
                     focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
+                    break;
+                case 'jupiter':
+                    focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
+                    break;
+                case 'io':
+                    focusOnObject(io, IO_VIEW_DISTANCE, 3000);
+                    break;
+                case 'europa':
+                    focusOnObject(europa, EUROPA_VIEW_DISTANCE, 3000);
+                    break;
+                case 'ganymede':
+                    focusOnObject(ganymede, GANYMEDE_VIEW_DISTANCE, 3000);
+                    break;
+                case 'callisto':
+                    focusOnObject(callisto, CALLISTO_VIEW_DISTANCE, 3000);
                     break;
                 case 'sun':
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
@@ -1135,6 +1303,19 @@ export function initScene() {
         mercuryOrbitPosition(now, mercurySystem.position);
         mercury.rotation.y = mercurySpinAngle(now);
 
+        jupiterOrbitPosition(now, jupiterSystem.position);
+        // 870.5°/day. At "1 hr/s" Jupiter visibly turns — two and a half rotations per
+        // Earth day, on the largest disc in the scene.
+        jupiter.rotation.y = jupiterSpinAngle(now);
+
+        // The same call the Martian moons use, four more times. Io comes round every
+        // 42 hours and Callisto takes 16.7 days, so at "1 day/s" the inner three
+        // visibly beat against each other in the 4:2:1 rhythm nothing here imposes.
+        satelliteState(IO, now, io.position, io.quaternion);
+        satelliteState(EUROPA, now, europa.position, europa.quaternion);
+        satelliteState(GANYMEDE, now, ganymede.position, ganymede.quaternion);
+        satelliteState(CALLISTO, now, callisto.position, callisto.quaternion);
+
         // Position and facing together — both moons are tidally locked, so the
         // direction back to Mars that places them is also the direction that aims
         // them. Phobos gets round three times a sol, which is fast enough to watch
@@ -1148,6 +1329,11 @@ export function initScene() {
         // and Earth's phase all come out of it — but the markers, the labels, the
         // orbit camera and the main render are all skipped from here.
         if (moonSurface.active) {
+            // The surface scene sets its own light levels and is always at 1 AU, so it
+            // must not inherit an exposure raised for somewhere out at Jupiter — which
+            // it otherwise would, since this branch returns before `updateExposure`.
+            exposure = 1;
+            renderer.toneMappingExposure = 1;
             scene.updateMatrixWorld(true);
             moonSurface.update(realDelta, {
                 moonPosition: moon.getWorldPosition(surfaceMoonPosition),
@@ -1213,6 +1399,7 @@ export function initScene() {
 
         updateNearestBody();
         updateNearPlane();
+        updateExposure(realDelta);
 
         if (freeFlight.enabled) {
             // Fly in the frame of whatever you are nearest. Parked beside Earth in

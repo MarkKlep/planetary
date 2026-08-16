@@ -25,7 +25,10 @@ const RADIUS = 8.4;
 // Only bodies actually rendered as a sphere in the scene get the lit-sphere shading
 // overlay — applying it to the ISS, the analemma curve, or Phobos/Deimos's lumpy
 // outlines would paint a circular highlight that doesn't track their actual shape.
-const SPHERE_IDS = new Set(['sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system']);
+const SPHERE_IDS = new Set([
+    'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
+    'jupiter', 'io', 'europa', 'ganymede', 'callisto',
+]);
 
 export function BodyIcon({ id }: BodyIconProps) {
   const gradientId = `body-icon-shade-${id}`;
@@ -203,6 +206,79 @@ function BodyShape({ id }: BodyIconProps) {
           d="M 6.4 7.8 Q 8 5.2 11.2 5.6 Q 14.2 6.4 14.4 9.6 Q 14.2 12.8 11 14.2 Q 7.8 14.8 6.2 12 Q 5.2 9.8 6.4 7.8 Z"
           fill="#a49d8c"
         />
+      );
+    case 'jupiter':
+      // Banded rather than blotched, which is the one thing that has to read at this
+      // size: alternating light zones and dark belts, plus the Great Red Spot.
+      return (
+        <>
+          {/* The bands are drawn as full-width strips and clipped back to the disc —
+              far steadier at 20px than trying to fit each one to the curve by hand. */}
+          <defs>
+            <clipPath id="planet-icon-jupiter-disc">
+              <circle cx={CENTER} cy={CENTER} r={RADIUS} />
+            </clipPath>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#e0c9a6" />
+          <g clipPath="url(#planet-icon-jupiter-disc)">
+            <rect x="1.6" y="5.6" width="16.8" height="1.7" fill="#c49a68" opacity="0.85" />
+            <rect x="1.6" y="8.6" width="16.8" height="2.1" fill="#b98a58" opacity="0.85" />
+            <rect x="1.6" y="12.2" width="16.8" height="1.6" fill="#c49a68" opacity="0.8" />
+            <rect x="1.6" y="15.0" width="16.8" height="1.2" fill="#bd9064" opacity="0.7" />
+            <ellipse cx={12.6} cy={11.9} rx={2.0} ry={1.15} fill="#c0532f" opacity="0.9" />
+          </g>
+        </>
+      );
+    case 'io':
+      // Sulphur yellow with dark volcanic paterae — the only body here with no craters.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#e8d271" />
+          <circle cx={7.4} cy={8.2} r={1.5} fill="#8d6a2a" opacity="0.8" />
+          <circle cx={12.6} cy={12.4} r={1.2} fill="#7d5c22" opacity="0.75" />
+          <circle cx={12.0} cy={6.6} r="0.9" fill="#c94f2a" opacity="0.65" />
+          <circle cx={6.6} cy={13.0} r="0.8" fill="#8d6a2a" opacity="0.6" />
+        </>
+      );
+    case 'europa':
+      // Near-white ice, crossed by the linea. The cracks are the whole identity.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#f0e6d8" />
+          <path d="M 2.6 7.4 Q 9 9.2 17.4 7.0" stroke="#b98a72" strokeWidth="0.85" fill="none" opacity="0.75" />
+          <path d="M 2.4 11.6 Q 10 9.6 17.6 12.4" stroke="#b98a72" strokeWidth="0.75" fill="none" opacity="0.7" />
+          <path d="M 6.0 3.2 Q 8.2 10 5.6 16.6" stroke="#c49a80" strokeWidth="0.7" fill="none" opacity="0.6" />
+        </>
+      );
+    case 'ganymede':
+      // Two terrains, which is the thing to show: dark ancient plates and bright
+      // grooved bands. Largest moon in the solar system, and wider than Mercury.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#b3a898" />
+          <path
+            d="M 3.0 6.0 Q 6.6 4.0 9.6 6.2 Q 10.4 8.4 8.0 9.8 Q 4.6 10.0 3.0 8.0 Z"
+            fill="#7d7263" opacity="0.85"
+          />
+          <path
+            d="M 11.4 11.0 Q 15.2 10.4 16.8 13.0 Q 15.6 15.6 12.4 15.2 Q 10.6 13.2 11.4 11.0 Z"
+            fill="#7d7263" opacity="0.8"
+          />
+          <path d="M 4.4 12.6 Q 8.0 11.6 10.2 13.8" stroke="#ddd5c6" strokeWidth="0.9" fill="none" opacity="0.8" />
+        </>
+      );
+    case 'callisto':
+      // The darkest of the four, saturated with craters, and Valhalla's bullseye.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#6e6153" />
+          <circle cx={8.2} cy={9.0} r={3.1} fill="none" stroke="#a89a86" strokeWidth="0.5" opacity="0.7" />
+          <circle cx={8.2} cy={9.0} r={1.7} fill="none" stroke="#a89a86" strokeWidth="0.5" opacity="0.8" />
+          <circle cx={8.2} cy={9.0} r="0.8" fill="#c4b8a4" opacity="0.85" />
+          <circle cx={13.4} cy={13.2} r="0.9" fill="#a89a86" opacity="0.7" />
+          <circle cx={5.4} cy={14.0} r="0.7" fill="#a89a86" opacity="0.6" />
+          <circle cx={14.0} cy={6.4} r="0.6" fill="#a89a86" opacity="0.6" />
+        </>
       );
     case 'system':
       return (

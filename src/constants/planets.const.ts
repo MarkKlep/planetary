@@ -300,6 +300,119 @@ export const DEIMOS_ORBIT_RADIUS = 23458.95 / EARTH_RADIUS_KM;
  */
 export const MARTIAN_MOON_GEOMETRIC_ALBEDO = 0.068;
 
+// Jupiter constants
+//
+// The first body here big enough that its own shape matters. Everything else in this
+// scene is round enough to draw as a sphere; Jupiter is not, and the difference is
+// visible rather than academic — see JUPITER_FLATTENING below.
+export const JUPITER_EQUATORIAL_RADIUS_KM = 71492;
+/** 6.5% shorter than the equatorial one, and that gap is the whole point. */
+export const JUPITER_POLAR_RADIUS_KM = 66854;
+/** Volumetric mean, 69911 km — the figure the mass and density are quoted against. */
+export const JUPITER_RADIUS_KM = 69911;
+/** ~10.97 units. Eleven Earths across, and 318 Earths in mass. */
+export const JUPITER_RADIUS = JUPITER_RADIUS_KM / EARTH_RADIUS_KM;
+export const JUPITER_EQUATORIAL_RADIUS = JUPITER_EQUATORIAL_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * Oblateness, (a−b)/a = 0.0649 — by far the largest of any planet, and the one
+ * physical property here that a plain `SphereGeometry` simply cannot express.
+ *
+ * It is a straight consequence of the two numbers above it: a ten-hour day on a body
+ * eleven Earths wide puts the equator at 12.6 km/s, and having no solid surface to
+ * resist it, the whole planet bulges. Saturn is more oblate still by this measure
+ * (0.098); Earth manages 0.0034 and is drawn round here without anyone noticing.
+ *
+ * At 0.065 it is emphatically not invisible: Jupiter's disc is a twentieth wider than
+ * it is tall, which is obvious in any photograph and in a backyard telescope. See
+ * `jupiter.ts`, which scales the mesh rather than pretending otherwise.
+ */
+export const JUPITER_FLATTENING =
+    (JUPITER_EQUATORIAL_RADIUS_KM - JUPITER_POLAR_RADIUS_KM) / JUPITER_EQUATORIAL_RADIUS_KM;
+/**
+ * IAU rotational elements, same form as the inner planets'.
+ *
+ * The pole sits 3.12° from Jupiter's own orbit normal, so like Mercury and Venus it
+ * has essentially no seasons — but for a third reason again: not an upright axis
+ * (Mercury) nor an upside-down one (Venus), just a mild lean on a body whose weather
+ * is driven by internal heat rather than by sunlight anyway. Jupiter radiates roughly
+ * 1.7 times the energy it receives.
+ */
+export const JUPITER_POLE_RA_DEG = 268.056595;
+export const JUPITER_POLE_DEC_DEG = 64.495303;
+export const JUPITER_PRIME_MERIDIAN_DEG = 284.95;
+/**
+ * System III, the magnetic rotation — and the only honest choice, because Jupiter has
+ * no surface to time.
+ *
+ * A gas giant does not rotate as one body. The equatorial cloud deck (System I) laps
+ * the mid-latitudes (System II) by a full turn every ~50 days, so neither can define a
+ * prime meridian. System III tracks the tilted magnetic field, which is anchored deep
+ * in the metallic-hydrogen interior and is the closest thing to the *planet's* own
+ * rotation there is. 870.536°/day is 9h 55m 29.7s — the shortest day in the solar
+ * system, on much the largest planet.
+ *
+ * Nothing in the scene models the differential rotation on top of this. The bands
+ * would shear apart a texture that is a single snapshot, and the map is exactly that.
+ */
+export const JUPITER_ROTATION_DEG_PER_DAY = 870.536;
+export const JUPITER_SIDEREAL_DAY = (360 / JUPITER_ROTATION_DEG_PER_DAY) * 86400;
+export const JUPITER_ORBITAL_PERIOD_DAYS = 4332.589;
+
+// The Galilean moons
+//
+// Discovered in January 1610, and the first objects ever seen orbiting something that
+// was not Earth — which is most of why the Copernican argument stopped being abstract.
+// Any of the four would be a planet in its own right if it orbited the Sun instead;
+// Ganymede is larger than Mercury, which is in this scene to be compared against.
+export const IO_RADIUS_KM = 1821.6;
+export const EUROPA_RADIUS_KM = 1560.8;
+/** 2634.1 km — the largest moon in the solar system, and 8% wider than Mercury. */
+export const GANYMEDE_RADIUS_KM = 2634.1;
+export const CALLISTO_RADIUS_KM = 2410.3;
+
+export const IO_RADIUS = IO_RADIUS_KM / EARTH_RADIUS_KM;
+export const EUROPA_RADIUS = EUROPA_RADIUS_KM / EARTH_RADIUS_KM;
+export const GANYMEDE_RADIUS = GANYMEDE_RADIUS_KM / EARTH_RADIUS_KM;
+export const CALLISTO_RADIUS = CALLISTO_RADIUS_KM / EARTH_RADIUS_KM;
+
+/**
+ * Orbit semi-major axes, fitted to JPL's JUP365 ephemeris (see `orbits.ts`).
+ *
+ * The three inner ones are locked in the **Laplace resonance**: Io goes round exactly
+ * four times for Europa's two and Ganymede's one. It is the only three-body mean-motion
+ * resonance known in the solar system, and it is not decorative — being held eccentric
+ * by the other two is what keeps Io's interior kneaded and makes it the most
+ * volcanically active body there is, and what most likely keeps Europa's ocean liquid.
+ *
+ * As with Mercury's 3:2, nothing here imposes it. The three mean motions in `orbits.ts`
+ * were fitted from three separate ephemeris files and land on
+ * n_Io − 3·n_Europa + 2·n_Ganymede = −5.6×10⁻⁶ °/day, which is 3×10⁻⁸ of Io's own
+ * mean motion. The resonance is a result, not an input.
+ */
+export const IO_ORBIT_RADIUS = 421765.7 / EARTH_RADIUS_KM;
+export const EUROPA_ORBIT_RADIUS = 671061.0 / EARTH_RADIUS_KM;
+export const GANYMEDE_ORBIT_RADIUS = 1070429.8 / EARTH_RADIUS_KM;
+export const CALLISTO_ORBIT_RADIUS = 1882744.4 / EARTH_RADIUS_KM;
+
+/**
+ * Geometric albedos, and the widest spread of any family of bodies here.
+ *
+ * Io is repaved with sulphur dioxide frost faster than space weathering can darken it;
+ * Europa is young water ice, the most reflective solid surface in the solar system
+ * after Enceladus. Callisto at 0.22 is the other extreme — the oldest, most cratered
+ * surface known, with four billion years of accumulated dark residue on it. Ganymede
+ * sits between the two because it is literally both: bright young grooved terrain
+ * cutting across ancient dark plates.
+ *
+ * These are geometric albedos, so they need the same conversion to diffuse reflectance
+ * that the Martian moons and Venus need. `moons.ts` does it — see the comment there,
+ * which also explains why only two of the four get to use the figure directly.
+ */
+export const IO_GEOMETRIC_ALBEDO = 0.63;
+export const EUROPA_GEOMETRIC_ALBEDO = 0.67;
+export const GANYMEDE_GEOMETRIC_ALBEDO = 0.43;
+export const CALLISTO_GEOMETRIC_ALBEDO = 0.22;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

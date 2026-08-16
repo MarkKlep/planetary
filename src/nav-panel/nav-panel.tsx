@@ -74,6 +74,20 @@ const PLANETS: Planet[] = [
       { id: 'deimos', label: 'Deimos' },
     ],
   },
+  // The only entry whose satellites are worth flying to in their own right: all four
+  // are larger than Pluto and Ganymede is larger than Mercury, which is four rows up.
+  // Listed inward-out, the order Galileo numbered them in and the order they are
+  // locked in — Io twice round for Europa's one, Europa twice for Ganymede's.
+  {
+    id: 'jupiter',
+    label: 'Jupiter',
+    satellites: [
+      { id: 'io', label: 'Io' },
+      { id: 'europa', label: 'Europa' },
+      { id: 'ganymede', label: 'Ganymede' },
+      { id: 'callisto', label: 'Callisto' },
+    ],
+  },
 ];
 
 export function NavPanel() {

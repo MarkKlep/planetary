@@ -35,7 +35,7 @@ When changing anything heatmap-related, check whether the edit belongs in the ro
 
 ### Main 3D scene (`src/script.ts`)
 
-`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`–`9` to focus Earth-reset/Earth/Moon/ISS/Mars/Phobos/Deimos/Analemma/Venus/Mercury, `F`/`Esc` for free flight, `L` to land on the Moon) live outside React state. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
+`initScene()` is the imperative core of the app — plain Three.js (not react-three-fiber). React (`App.tsx`) only mounts a container div and calls `initScene()` once on mount; all rendering, animation loop, camera control, and interaction (click/hover raycasting, keyboard shortcuts `0`–`9` to focus Earth-reset/Earth/Moon/ISS/Mars/Phobos/Deimos/Analemma/Venus/Mercury, `J` for Jupiter, `F`/`Esc` for free flight, `L` to land on the Moon) live outside React state. The digit row is full, and free flight owns `W`/`A`/`S`/`D`/`Q`/`E`, which rules out the obvious mnemonics for three of the four Galilean moons — so those are reachable from the nav panel and by clicking them, not from the keyboard. Don't add a Shift+digit scheme for them: `event.key` for a shifted digit is keyboard-layout dependent. `NavPanel` (`src/nav-panel/nav-panel.tsx`) is a separate React component whose buttons work via DOM `data-target` attributes and `getElementById` lookups that `script.ts` queries directly — it is *not* wired through React props/state or callbacks into `script.ts`. When adding new focusable objects or nav actions, follow this existing DOM-bridge pattern rather than introducing new state plumbing between the two.
 
 Scene objects are each defined in their own module and imported into `script.ts` as pre-built Three.js objects (not factories):
 - `src/planets/earth/earth.ts` — Earth mesh. `MeshStandardMaterial` with day/height/land-mask maps, plus an `onBeforeCompile` patch that adds night-side city lights (the night texture is added to `totalEmissiveRadiance` masked by the surface's angle to the sun, since a plain `emissiveMap` would also glow through the daylit face). Exports `earthSunDirectionView`, which the render loop must keep updated in **view** space.
@@ -45,6 +45,8 @@ Scene objects are each defined in their own module and imported into `script.ts`
 - `src/planets/earth/analemma.ts` — the figure-8 the Sun traces over a year at a fixed observer and clock time, built once at module load from the same ephemeris as everything else here (no separate equation-of-time formula — it falls out of the real Sun position the same way the seasons do). The one trick worth knowing before touching it: the curve and its ground marker are parented directly to the `earth` **mesh**, not to `earthTilt`, specifically so the scene graph's existing per-frame spin carries a shape built in `earth`'s own *unrotated* local frame into world space for free. That only works because altitude/azimuth are horizon-relative, frame-agnostic quantities — reconstructing them via a *local* north/east/up basis and letting the graph rotate the result lands in exactly the same place as computing a fresh basis in world space every frame, without the per-frame cost. Verified against real equation-of-time figures: altitude range 21.56°–68.44° at 45°N (real: 21.6°/68.4°), azimuth swing peaking near Feb 17/Oct 27 (real extrema: Feb 11/Nov 3, ~3.5–4°).
 - `src/planets/mars/mars.ts`, `src/planets/mars/atmosphere.ts` — Mars mesh (Viking colour + MOLA relief) and its much thinner limb haze. Deliberately carries *no* albedo correction, unlike the Moon: see the comment there, the arithmetic is not the obvious one.
 - `src/planets/mercury/mercury.ts` — Mercury mesh (MESSENGER colour + DEM). The only planet here with **no atmosphere shell**, which is deliberate: at under 5×10⁻¹⁵ bar there is nothing to scatter light, so its limb ends hard like the Moon's — don't "fix" it by adding a glow. Its albedo is derived by comparison against the Moon rather than in the abstract, since both wear brightness-normalised mosaics; the comment there explains why the answer is to tint it *up*.
+- `src/planets/jupiter/jupiter.ts` — the only body here that is **not drawn as a sphere**, and the only colour map that is a *snapshot rather than a survey*. Jupiter's oblateness is 0.0649 — a ten-hour day on a body with no solid surface to resist it — so the mesh is scaled on its polar axis; 6.5% is visible in a backyard telescope and skipping it makes Jupiter read as a beach ball. It carries no height map (what looks like relief is cloud tops, five parts in ten thousand of the radius) and no atmosphere shell (its limb *darkens*, it does not glow). Don't tint it for albedo: unlike the Moon's and Mercury's brightness-normalised mosaics, this is ordinary visible-light imagery that already carries its 0.538.
+- `src/planets/jupiter/moons.ts` — Io, Europa, Ganymede and Callisto: the exact inverse of the Martian moons. Those are generated because there is nothing to wrap a map onto; these are worlds (Ganymede is wider than Mercury) with real Voyager/Galileo mosaics, so they go back to sphere-plus-texture. They share `satelliteState` with Phobos and Deimos unchanged, which is not a coincidence worth glossing over — all six are tidally locked, and the IAU puts a synchronous satellite's prime meridian at its sub-planetary point, so "longitude 0 faces the planet" is at once the texture convention `geo.ts` uses and the physical state. Their albedos span 0.22 to 0.67, the widest range of any family here, and Europa's ×1.5 conversion runs *past* 1.0 — the Lambert model genuinely runs out of room for the most reflective large surface in the solar system. The tints hold the true ratios instead; see the table there.
 - `src/planets/venus/venus.ts`, `clouds.ts`, `atmosphere.ts` — the one body here made of **two** visible shells rather than a surface with a veil over it. `venus.ts` is the ground Magellan mapped through the clouds by radar, so its map is *backscatter, not colour* — it ships greyscale and the hue comes from a material tint taken from the Venera landers. `clouds.ts` is what Venus actually looks like: an opaque, generated deck that hides the surface completely (no `transparent`, no `depthWrite: false` — it is a solid surface to the renderer). It is generated because in visible light there is nothing to map; the famous dark markings are ultraviolet. The deck is toggleable from the nav panel, which is the only way to see the surface at all. Its albedo runs through the same geometric→hemispherical conversion as the Martian moons, at the opposite extreme — 0.975, which looks wrong and isn't.
 - `src/noise.ts` — seeded value noise / fBm sampled from a **3D direction** rather than uv, which is what keeps it seam-free at the 180° meridian and unpinched at the poles. Shared by the Martian moons' relief and Venus's cloud deck.
 - `src/planets/mars/moons.ts` — Phobos and Deimos, the only bodies here that are **generated rather than textured**. They are not spheres, so there is nothing to wrap an equirectangular map onto; the measured triaxial radii are scaled into the mesh and the relief on top is fractal noise plus a synthetic crater population (with Stickney placed at its real coordinates). Deimos runs the same generator shallower, because its craters really are buried in regolith. Both are lit through their real geometric albedo of 0.068, converted to a diffuse reflectance — the two are not the same quantity, and using the quoted figure directly makes them a third too dark.
@@ -79,12 +81,19 @@ scene
 │   ├── atmosphere
 │   └── moonOrbitPlane      5.14° to the ecliptic, not to the equator
 │       └── moon
-└── marsSystem              same shape, one orbit out
-    ├── marsAxis            fixed IAU pole orientation; likewise never touched
-    │   ├── mars            spins inside it
-    │   ├── phobos          Mars's *equatorial* plane, not the ecliptic
-    │   └── deimos
-    └── marsAtmosphere
+├── marsSystem              same shape, one orbit out
+│   ├── marsAxis            fixed IAU pole orientation; likewise never touched
+│   │   ├── mars            spins inside it
+│   │   ├── phobos          Mars's *equatorial* plane, not the ecliptic
+│   │   └── deimos
+│   └── marsAtmosphere
+└── jupiterSystem           5.2 AU out — further than everything above combined
+    └── jupiterAxis         fixed IAU pole, leaning only 3.1°
+        ├── jupiter         870.5°/day, the fastest spin here, on the largest disc
+        ├── io              all four in Jupiter's *equatorial* plane, and locked
+        ├── europa            4:2:1 without anything in the source saying so
+        ├── ganymede
+        └── callisto
 ```
 
 Venus is the proof that the shape generalises: it is the strangest rotator in the
@@ -102,7 +111,19 @@ against two orbits' 175.939. The 176-day solar day, the 0.03° obliquity and the
 574″/century perihelion precession (including the 43″ that needed general relativity
 to explain) all fall out the same way.
 
-Note where the two Martian moons hang, and that it is not where the Moon hangs. The Moon is far enough out that the Sun rules it, so its orbit stays near the ecliptic and `moonOrbitPlane` tilts to *that*. Phobos and Deimos are deep in Mars's gravity well, where the equatorial bulge rules instead and forces them into the plane of the equator — so they go under `marsAxis` and inherit its fixed lean. Their planes also precess (2.3 years for Phobos), fast enough that it cannot be baked into a pivot, so `satelliteState()` applies the node rotation per frame instead.
+Jupiter makes the same argument a third time and adds the payoff. It is 450 times
+Mercury's volume and carries four moons, and the graph does not grow to accommodate any
+of it — a system node, an axis node, children inside. The **Laplace resonance** is
+nowhere in the source: Io, Europa and Ganymede are locked 4:2:1, and the three mean
+motions were fitted from three separate ephemeris files with no knowledge of each other,
+coming to `n_Io − 3·n_Europa + 2·n_Ganymede = −1.0×10⁻⁶ °/day`, five parts in a billion
+of Io's own mean motion. Io's and Europa's apsidal rates land on −0.7395070 and
+−0.7395126 °/day from independent fits. The 0.0649 oblateness, the 3.12° obliquity and
+the 9h 55m day all fall out the same way.
+
+Note where the two Martian moons hang, and that it is not where the Moon hangs. The Moon is far enough out that the Sun rules it, so its orbit stays near the ecliptic and `moonOrbitPlane` tilts to *that*. Phobos and Deimos are deep in Mars's gravity well, where the equatorial bulge rules instead and forces them into the plane of the equator — so they go under `marsAxis` and inherit its fixed lean. Their planes also precess (2.3 years for Phobos), fast enough that it cannot be baked into a pivot, so `satelliteState()` applies the node rotation per frame instead. The four Galileans go under `jupiterAxis` for exactly the same reason, and they show the transition: Io's and Europa's Laplace planes sit within 0.04° of Jupiter's equator, while Callisto — four times further out — has its plane dragged 0.29° toward Jupiter's orbit by the Sun, which accounts for most of the inclination usually quoted for it.
+
+`defineSatellite()` takes the host planet's inverted axis quaternion, so it serves both systems; there is no Mars-specific satellite path any more.
 
 The tilt living *above* the spin, and never being updated, is the whole mechanism: the axis stays pointing at a fixed direction in space while the planet goes round, so the seasons fall out of the geometry. Verified — Earth's solstice declination of ±23.44° is not imposed anywhere, it emerges and matches the almanac formula to 0.004°; likewise Mars's 25.19° obliquity emerges from its pole direction alone. **Add new planets by copying this shape**, not by rotating a system node per frame.
 
@@ -118,17 +139,29 @@ Every body's elements were fitted to JPL's own ephemeris and then run back again
 
 Two known systematic residuals apply to every body built this way, and are documented at the head of the Mars/Venus section in `orbits.ts`. Neither is worth fixing (both are far under a pixel), but **don't chase them as bugs**: `earthOrbitPosition` puts Earth on a perfect 1 AU circle, which tilts the direction *to* Earth by up to a degree at Venus's range; and positions are precessed onto the equinox of date while the axis quaternions stay on J2000, which leaves a constant 0.373° longitude offset on every body's prime meridian.
 
+That second one is also the thing most likely to make a verification script lie to you. `keplerianPosition` returns positions on the **equinox of date**; Horizons' `REF_PLANE='ECLIPTIC'` output is **J2000**. Comparing the two directly charges the model a 0.373° rotation it applies deliberately — which is larger than every real residual in the file, and will read as a catastrophic regression on a body that is in fact fine. Drop the precession term when checking against Horizons.
+
+Jupiter is the one body whose heliocentric residual is genuinely worse than its neighbours': 0.044° RMS against the inner planets' 0.006°. That is the **Jupiter–Saturn great inequality** — a ~0.33°, 883-year term that Standish's single 1800–2050 Keplerian fit necessarily averages out. Carrying JPL's own correction terms for it was tried and improves RMS while making the worst case worse, so it is not carried. Don't treat the gap as a transcription error.
+
 `src/geo.ts` is still the single source of truth for latitude/longitude: **`(cos·cos, sin(lat), −cos·sin(lon))`**, derived from three.js's `SphereGeometry` UV layout. Note the negative z.
 
 Sunlight is geometric rather than constructed: each planet's direction is simply `normalize(-planetWorldPosition)`. It feeds consumers in **different spaces** — `atmosphereSunDirection` and `marsAtmosphereSunDirection` (world) and `earthSunDirectionView` (view space, via `.transformDirection(camera.matrixWorldInverse)`, because the Earth shader compares it against a view-space normal).
 
 `sunLight` is a **`PointLight` at the origin, not a directional light**. A directional light has one direction for the entire scene, which was fine while Earth and the Moon shared a spot in the sky but lights a second planet from a direction up to 180° wrong. Its intensity is scaled by the square of an AU so the 1/d² falloff reproduces the old Earth lighting exactly — meaning **the intensity constant is not in ordinary units**, and outer planets get correctly dimmer for free. Do not "fix" a dim distant planet by raising it.
 
+The fix for a dim distant planet is `updateExposure()` in `script.ts`, which is a different thing in the right place: the light keeps falling off as 1/d², and what adapts is the **exposure the scene is developed at**, as d² of the nearest body's distance from the Sun, clamped below at 1 and eased over ~0.7 s. That is what an observer would do — sunlight at Jupiter is about 4,700 lux, an overcast afternoon on Earth, which any adapted eye reads as perfectly bright — and it is the same argument the lunar surface module already makes, where the sunlight constant is openly an f-stop and only the albedo under it is measured. Rendering Jupiter as a near-black disc was the artefact, from developing the whole solar system at Earth's one exposure.
+
+Two things this depends on, both easy to undo by accident:
+- **It is measured at `nearestBody`, not at the camera.** In the system view the camera is 7.6 AU out while the frame is full of the inner system; exposing for the camera's own distance would wash that out.
+- **The backdrop must stay out of tone mapping.** The star layers and the galaxy dome in `background.ts` carry `toneMapped: false` for the same reason they carry `sizeAttenuation: false` — they are at effectively infinite distance and neither their size nor their brightness should track where you are. Without it, Jupiter's 27× lift turns the Milky Way into a white sheet. The markers, orbit lines and the Sun's corona were already exempt for their own reasons, so in practice **only lit geometry moves**, which is the only thing that should.
+
+Surface mode sets the exposure back to 1 itself, because it returns early before `updateExposure` and would otherwise inherit whatever the solar system left behind.
+
 `src/simulation.ts` is the clock: starts at the real current date, advances by real elapsed time × a multiplier, and pause stops it (which halts spin *and* orbits).
 
 ### Scale, and why bodies have markers
 
-**Everything is at true scale** — body sizes, the Earth–Moon distance, and the orbits (`EARTH_ORBIT_RADIUS` = a real AU, 23,481 units; Mars ranges over 1.38–1.67 of those). Nothing is fudged, which is what makes apparent sizes come out right for free: from Earth the Sun subtends 0.5329° and the Moon 0.5179° (real: 0.533° / 0.518°), a ratio of 1.03 — the near-coincidence that makes total solar eclipses just barely possible.
+**Everything is at true scale** — body sizes, the Earth–Moon distance, and the orbits (`EARTH_ORBIT_RADIUS` = a real AU, 23,481 units; Mars ranges over 1.38–1.67 of those, Jupiter over 4.95–5.45). Nothing is fudged, which is what makes apparent sizes come out right for free: from Earth the Sun subtends 0.5329° and the Moon 0.5179° (real: 0.533° / 0.518°), a ratio of 1.03 — the near-coincidence that makes total solar eclipses just barely possible.
 
 The cost is that Earth is 1 unit against a 23,481-unit orbit, so it falls far below a pixel whenever the orbit is in frame — and even the Sun is only ~3px there, ~5px from Earth. `src/body-marker.ts` handles this the way Celestia and NASA's Eyes do: a small additive dot that fades in only once the body itself drops below a few pixels, so the geometry stays honest. **Do not "fix" invisible bodies by scaling the meshes up.**
 
@@ -138,6 +171,8 @@ Three traps at this scale, all already hit once:
 - **Label offsets must be in screen pixels, not world units.** A world-space offset shrinks with distance, so labels collapsed onto their bodies and their opaque backgrounds hid the very thing they labelled. `createLabel()` anchors a zero-size div and offsets the visible chip with CSS.
 - **Marker/glow textures need flat-topped gradients.** Drawn at ~10px, a gradient that starts falling off at the centre leaves a solid core barely 2px wide and reads as a smudge.
 - **A moon's marker has to fade out as well as in.** Markers hold a fixed pixel size at any distance, so once a moon's whole orbit is narrower than that, its dot and its planet's land on the same pixels — and they blend additively, so the pair reads as one body that is brighter and fatter than it should be. Phobos and Deimos make it obvious: their orbits are 1.5 and 3.7 units wide against the 23,481 it takes to frame Mars's own. Pass `orbitRadius` to `createBodyMarker()` for anything that orbits something else.
+
+Adding Jupiter moved two camera constants, and they are load-bearing rather than taste. `SYSTEM_VIEW_DISTANCE` went from 2.6 AU to 7.6 (a 75° vertical field sees 0.77 AU per AU, and Jupiter's aphelion is 5.45), and `controls.maxDistance` from 4 AU to 12, which previously stopped the user short of ever seeing Jupiter's orbit whole. The result is the honest picture and a startling one: everything the scene contained before fits inside a third of the radius of the one orbit added.
 
 Because bodies move, the camera **follows**: `focusOnObject()` stores the target object plus an offset and re-derives its endpoint every frame (a snapshot would miss, since the body moves during the fly-to), and `followTarget` then translates the camera by the body's per-frame delta so the user's orbit angle survives. Anything comparing positions must use `getWorldPosition()` — `.position` is now a local coordinate for everything under `earthSystem`. The star dome is pinned to the camera each frame, otherwise travelling 1500 units along the orbit flies you out of your own starfield.
 

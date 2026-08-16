@@ -18,6 +18,11 @@ copyrighted). Credit is courtesy, not a licence requirement.
 | `venus_height.png` | USGS Astrogeology — Magellan global topography v02 | `Venus_Magellan_Topography_Global_4641m_v02.tif`, 8192×4096, downscaled to 2700×1350 |
 | `mercury_color.jpg` | USGS Astrogeology — MESSENGER MDIS global colour mosaic v3 | `Mercury_MESSENGER_ClrMosaic_global_665m_v3.tif`, 23054×11527, downscaled to 5400×2700 |
 | `mercury_height.png` | USGS Astrogeology — MESSENGER global DEM v2 | `Mercury_Messenger_USGS_DEM_Global_665m_v2.tif`, 23040×11520, downscaled to 2700×1350 |
+| `jupiter_color.jpg` | NASA/JPL/Space Science Institute — Cassini ISS cylindrical map (PIA07782) | 3601×1801, resampled to 3600×1800 |
+| `io_color.jpg` | USGS Astrogeology — Galileo SSI / Voyager colour-merge global mosaic | `Io_Galileo_SSI_Global_Mosaic_ClrMerge_1km.tif`, 11445×5723, downscaled to 4096×2048 |
+| `europa_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global mosaic | `Europa_Voyager_GalileoSSI_global_mosaic_500m.tif`, 19631×9816, downscaled to 4096×2048 |
+| `ganymede_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global colour mosaic | `Ganymede_Voyager_GalileoSSI_Global_ClrMosaic_1435m.tif`, 11520×5760, downscaled to 4096×2048 |
+| `callisto_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global mosaic | `Callisto_Voyager_GalileoSSI_global_mosaic_1km.tif`, 15138×7569, downscaled to 4096×2048 |
 
 Relief and mask maps were downscaled because they carry only low-frequency detail;
 the colour maps are kept at full resolution since the camera can zoom close.
@@ -93,6 +98,75 @@ almost nothing on it to map. The famous dark Y-shaped markings are ultraviolet
 features; pasting a UV mosaic onto a visible-light scene would draw contrast no eye
 has ever seen. What is generated is the zonal banding, which is real, at the few
 percent contrast that is also real.
+
+## Jupiter is a snapshot, not a survey
+
+`jupiter_color.jpg` is the one colour map here that will be *wrong* in ten years, and
+it was already slightly wrong when it was taken. Every other map describes ground that
+has not moved in a geological age. Jupiter has no ground: the belts and zones are
+weather, they shear past one another continuously, and the Great Red Spot has both
+shrunk and drifted in longitude since Cassini shot these frames in December 2000. What
+survives is the character of the banding, which is why it is still the right map to
+use — but nothing in the scene claims a feature is at a particular longitude today.
+
+That is also why no attempt is made to register it precisely. A gas giant's prime
+meridian is the **System III** magnetic convention (see `JUPITER_ROTATION_DEG_PER_DAY`),
+and the visible cloud features drift relative to it by degrees per year — so pinning
+the map to arcseconds would be claiming a precision the subject does not have.
+
+The poles are Cassini's weakest ground. The flyby was near-equatorial, so real banding
+runs out around ±58° and the mosaic is smoothed filler beyond it, ending in a flat fill
+at the last few rows. Latitudes poleward of 58° are progressively blended into their
+own zonal means, reaching a pure zonal mean by 78°, so the caps close as smooth
+latitude-coloured discs rather than showing the fill's edge — the same treatment
+Mercury's poles get above, for the same reason.
+
+## The Galilean moons, and which way round they go
+
+All four USGS products are ISIS mosaics, and the trap they carry is the **opposite** of
+Mercury's. Three of the four label their longitudes `PositiveWest` (Io, Europa,
+Callisto; Ganymede is `PositiveEast`), which looks like it should mean the same
+mirroring the two Mercury maps needed. It does not: ISIS lays the image out with X
+increasing **east** regardless, so `LongitudeDirection` changes how longitudes are
+*numbered* and not which way the picture runs. None of the four is mirrored. Only the
+left edge differs:
+
+| File | Source layout | Transform |
+|---|---|---|
+| `io_color.jpg` | centre 0°, domain 180 | none — left edge is already 180°E |
+| `europa_color.jpg` | centre 180°, domain 360 | rolled 180° |
+| `ganymede_color.jpg` | centre 180°, domain 360 | rolled 180° |
+| `callisto_color.jpg` | centre 180°, domain 360 | rolled 180° |
+
+None of that was taken on trust — mirroring was in fact applied first, on the reading
+above, and then removed when the landmarks disagreed. Each map is pinned by a feature
+whose coordinates are catalogued, checked against the position the scene's own
+convention predicts (left edge 180°E, increasing east, from three.js's sphere UVs
+composed with `geo.ts`):
+
+| Body | Landmark | Catalogued | Lands at |
+|---|---|---|---|
+| Io | Pele, and its red sulphur ring | 18.7°S, 255.3°W | 18.7°S, 255°W |
+| Europa | Pwyll, bright ray crater | 25°S, 271°W | 25°S, 271°W |
+| Ganymede | Galileo Regio, the big dark plate | 35°N, 145°W | 37°N, 145°W |
+| Callisto | Valhalla, the multi-ring bullseye | 16.1°N, 55.3°W | 16°N, 56°W |
+
+## Europa's and Callisto's colour is a tint, not data
+
+Both ship **greyscale**, for the same reason `venus_surface.jpg` does: the global
+product that exists is a brightness mosaic, not a colour one. So the structure is
+measured and the hue is not in the data at all — it comes from a material tint in
+`src/planets/jupiter/moons.ts`, taken from Galileo's colour work (Europa's
+sulphur-stained trailing hemisphere, Callisto's dark ice-poor residue).
+
+Io and Ganymede do carry real colour and are not tinted for hue. All four are tinted
+for *brightness*, because none of the mosaics is radiometrically absolute and the
+albedos genuinely span 0.22 to 0.67 — the widest range of any family of bodies in this
+scene. The derivation is in `moons.ts`.
+
+There are no height maps for any of the four, and that is a gap rather than a choice:
+Voyager and Galileo flew past rather than orbited, so outside a few stereo patches
+there is no global altimetry to wrap.
 
 ## Phobos and Deimos have no files here
 

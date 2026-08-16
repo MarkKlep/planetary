@@ -7,12 +7,14 @@ import {
 } from 'three';
 import {
     earthOrbitPosition,
+    jupiterOrbitPosition,
     marsOrbitPosition,
     mercuryOrbitPosition,
     venusOrbitPosition,
 } from './orbits';
 import {
     EARTH_ORBITAL_PERIOD_DAYS,
+    JUPITER_ORBITAL_PERIOD_DAYS,
     MARS_ORBITAL_PERIOD_DAYS,
     MERCURY_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
@@ -127,4 +129,21 @@ export const mercuryOrbitPath = traceOrbit(
     0xc9c2b8
 );
 
-export const orbitPaths = [mercuryOrbitPath, venusOrbitPath, earthOrbitPath, marsOrbitPath];
+// The one that changes what the diagram is *of*. Jupiter's orbit is 3.4 times Mars's
+// radius, so switching the paths on now frames the inner four as a knot near the
+// centre with this drawn around them — which is the actual shape of the solar system,
+// and not at all what the first four lines alone suggest.
+export const jupiterOrbitPath = traceOrbit(
+    jupiterOrbitPosition,
+    JUPITER_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0xe8c9a0
+);
+
+export const orbitPaths = [
+    mercuryOrbitPath,
+    venusOrbitPath,
+    earthOrbitPath,
+    marsOrbitPath,
+    jupiterOrbitPath,
+];

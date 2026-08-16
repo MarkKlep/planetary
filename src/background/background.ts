@@ -228,6 +228,13 @@ function createStarLayer({
         transparent: true,
         depthWrite: false,
         blending: AdditiveBlending,
+        // Held out of tone mapping, for the same reason `sizeAttenuation` is off: this
+        // is a backdrop at effectively infinite distance, and neither its size nor its
+        // brightness has any business changing as you move about the solar system.
+        // It matters now that the exposure adapts with distance from the Sun — at
+        // Jupiter that is a 27x lift, which would otherwise turn the Milky Way into a
+        // white sheet behind the planet it exists to set off.
+        toneMapped: false,
     });
 
     const points = new Points(geometry, material);
@@ -368,6 +375,9 @@ function createGalaxyDome(): Mesh {
         },
         vertexShader: galaxyVertexShader,
         fragmentShader: galaxyFragmentShader,
+        // Same reasoning as the star layers above — the dome is the backdrop the
+        // adaptive exposure is exposing *against*, so it has to hold still.
+        toneMapped: false,
     });
 
     const dome = new Mesh(new SphereGeometry(SKY_RADIUS * 1.05, 48, 32), material);

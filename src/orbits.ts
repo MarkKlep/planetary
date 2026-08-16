@@ -1,9 +1,17 @@
 import { Matrix4, Quaternion, Vector3 } from 'three';
 import { latLonToDirection } from './geo';
 import {
+    CALLISTO_ORBIT_RADIUS,
     DEIMOS_ORBIT_RADIUS,
     EARTH_OBLIQUITY_DEG,
     EARTH_ORBIT_RADIUS,
+    EUROPA_ORBIT_RADIUS,
+    GANYMEDE_ORBIT_RADIUS,
+    IO_ORBIT_RADIUS,
+    JUPITER_POLE_DEC_DEG,
+    JUPITER_POLE_RA_DEG,
+    JUPITER_PRIME_MERIDIAN_DEG,
+    JUPITER_ROTATION_DEG_PER_DAY,
     MARS_POLE_DEC_DEG,
     MARS_POLE_RA_DEG,
     MARS_PRIME_MERIDIAN_DEG,
@@ -166,7 +174,7 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 // visibly wrong, swinging the planet up to 0.14 AU off course and getting its
 // apparent size at opposition badly out.
 //
-// All three planets below run through exactly the same code. Nothing in it imposes an
+// All four planets below run through exactly the same code. Nothing in it imposes an
 // obliquity, a period, a distance or a resonance; all of that falls out of the
 // elements and the pole. Checked against JPL Horizons over 2000-2030 (997 samples
 // each):
@@ -180,6 +188,27 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 //   orbital inclination      1.848° (1.850°)     3.3946° (3.3946°)    7.0041° (7.0050°)
 //   obliquity to its orbit   25.188° (25.19°)    177.36° (177.3°)     0.0344° (0.0352°)
 //   sidereal rotation        1.026 d (1.026)     243.01848 (243.0185) 58.64615 (58.6463)
+//
+// Jupiter is the one exception, and it is worth knowing which way:
+//
+//                            Jupiter
+//   heliocentric position    661,000 km, 0.044° RMS (max 0.086°)
+//   perihelion / aphelion    4.95121 / 5.45459 AU   (Horizons 4.95156 / 5.45492)
+//   sidereal period          4332.82 d              (Horizons 4332.589)
+//   obliquity to its orbit   3.120°                 (published 3.13°)
+//
+// 0.044° is seven times the inner planets' residual, and it is not a transcription
+// error — it is the **Jupiter-Saturn great inequality**. The two are close to a 5:2
+// commensurability, which pumps a term of ~0.33° amplitude into Jupiter's longitude
+// with an 883-year period. Standish's table is a single Keplerian fit across
+// 1800-2050, so it averages that term out and leaves a slowly varying remainder at any
+// one epoch. Carrying JPL's own correction terms for it (Table 2b's b, c, s, f) was
+// tried and moves the RMS to 0.037° while making the worst case worse, which is not a
+// trade worth a special case in `keplerianPosition`.
+//
+// It is also still four times smaller than the constant 0.373° frame offset the whole
+// scene already carries (see below), so chasing it further would be false precision of
+// exactly the kind the Mercury libration note rejects.
 //
 // Mercury additionally lands its 3:2 spin-orbit resonance without being told about
 // it: three rotations come to 175.938 days against two orbits' 175.939, from a
@@ -309,6 +338,27 @@ const MERCURY_ELEMENTS: OrbitalElements = {
 };
 
 /**
+ * Jupiter's, from the same table, and the one orbit here whose *scale* is the point.
+ *
+ * At 5.2 AU Jupiter is more than three times as far out as Mars, so the whole inner
+ * system — every other body in this scene — fits inside a third of this orbit. That is
+ * what makes it the first body here you cannot frame together with Earth at any useful
+ * size, and why `SYSTEM_VIEW_DISTANCE` in script.ts had to move out to accommodate it.
+ *
+ * The eccentricity of 0.0485 is modest but the orbit is so large that it still swings
+ * Jupiter 0.5 AU — some 11,800 scene units — between perihelion and aphelion, which is
+ * half the radius of Earth's entire orbit.
+ */
+const JUPITER_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [5.20288700, -0.00011607],
+    eccentricity: [0.04838624, -0.00013253],
+    inclination: [1.30439695, -0.00183714],
+    meanLongitude: [34.39644051, 3034.74612775],
+    perihelionLongitude: [14.72847983, 0.21252668],
+    ascendingNode: [100.47390909, 0.20469106],
+};
+
+/**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
  *
  * There is no closed form, so this is Newton–Raphson. It converges in three or four
@@ -406,6 +456,9 @@ export const venusOrbitPosition = (date: Date, target = new Vector3()): Vector3 
 export const mercuryOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
     keplerianPosition(MERCURY_ELEMENTS, date, target);
 
+export const jupiterOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(JUPITER_ELEMENTS, date, target);
+
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
  * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
@@ -470,6 +523,21 @@ export const MERCURY_AXIS_ORIENTATION = axisOrientationFromPole(
 );
 
 /**
+ * Jupiter's pole leans 3.12° from its own orbit normal — a third of Earth's tilt, and
+ * the reason its weather owes nothing to seasons.
+ *
+ * This node does more work than the other planets', because four moons hang off it.
+ * Their orbits are ruled by Jupiter's equatorial bulge rather than by the Sun (see the
+ * Galilean section below), so they inherit this lean the way Phobos and Deimos inherit
+ * Mars's — and unlike Mars's pair, they are big enough and far enough apart to watch
+ * doing it.
+ */
+export const JUPITER_AXIS_ORIENTATION = axisOrientationFromPole(
+    JUPITER_POLE_RA_DEG,
+    JUPITER_POLE_DEC_DEG
+);
+
+/**
  * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
  *
  * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
@@ -503,6 +571,17 @@ export const venusSpinAngle = (date: Date): number =>
  */
 export const mercurySpinAngle = (date: Date): number =>
     primeMeridianAngle(MERCURY_PRIME_MERIDIAN_DEG, MERCURY_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Jupiter's, in System III — the magnetic rotation, and the only one that is the
+ * planet's rather than its weather's. See the constant for why the visible cloud decks
+ * cannot be used to define a meridian.
+ *
+ * At 870.5°/day this is by far the fastest thing in the scene: two and a half turns per
+ * Earth day, fast enough to watch at the "1 hr/s" setting.
+ */
+export const jupiterSpinAngle = (date: Date): number =>
+    primeMeridianAngle(JUPITER_PRIME_MERIDIAN_DEG, JUPITER_ROTATION_DEG_PER_DAY, date);
 
 /**
  * Venus's cloud deck, which does not turn with the planet.
@@ -565,8 +644,10 @@ export const venusCloudAngle = (date: Date): number =>
 // and 371 km out, three times everything else combined.
 // ---------------------------------------------------------------------------
 
-const MARS_NORTH = new Vector3(0, 1, 0);
+/** A planet's own north in its own equatorial frame — the same for every planet. */
+const PLANET_NORTH = new Vector3(0, 1, 0);
 const MARS_AXIS_INVERSE = MARS_AXIS_ORIENTATION.clone().invert();
+const JUPITER_AXIS_INVERSE = JUPITER_AXIS_ORIENTATION.clone().invert();
 
 export interface SatelliteElements {
     /** Pole of the satellite's local Laplace plane, J2000 equatorial. */
@@ -587,30 +668,36 @@ export interface SatelliteElements {
 }
 
 interface Satellite extends SatelliteElements {
-    /** All three in Mars's own equatorial frame, i.e. `marsAxis`'s local space. */
+    /** All three in the host planet's own equatorial frame, i.e. its axis node's
+     *  local space. */
     laplacePole: Vector3;
     laplaceX: Vector3;
     laplaceZ: Vector3;
     inclination: number;
 }
 
-/** A fixed J2000 equatorial direction, re-expressed in Mars's equatorial frame. */
-function marsFrameDirection(raDeg: number, decDeg: number): Vector3 {
+/** A fixed J2000 equatorial direction, re-expressed in a planet's equatorial frame. */
+function planetFrameDirection(raDeg: number, decDeg: number, axisInverse: Quaternion): Vector3 {
     const ra = raDeg * DEG;
     const dec = decDeg * DEG;
     return equatorialToScene(
         new Vector3(Math.cos(dec) * Math.cos(ra), Math.cos(dec) * Math.sin(ra), Math.sin(dec))
-    ).applyQuaternion(MARS_AXIS_INVERSE);
+    ).applyQuaternion(axisInverse);
 }
 
-function defineSatellite(elements: SatelliteElements): Satellite {
-    const laplacePole = marsFrameDirection(elements.laplacePoleRaDeg, elements.laplacePoleDecDeg);
+function defineSatellite(elements: SatelliteElements, axisInverse: Quaternion): Satellite {
+    const laplacePole = planetFrameDirection(
+        elements.laplacePoleRaDeg,
+        elements.laplacePoleDecDeg,
+        axisInverse
+    );
 
     // A fixed reference direction inside the Laplace plane to measure the node from:
-    // its own ascending node on Mars's equator. Phobos's Laplace plane is only 0.01°
-    // off the equator, so these two are very nearly parallel and the cross product is
-    // small — but it is never zero, and normalising it is exact at double precision.
-    const laplaceX = new Vector3().crossVectors(MARS_NORTH, laplacePole).normalize();
+    // its own ascending node on the planet's equator. Phobos's Laplace plane is only
+    // 0.01° off the equator, and Io's is closer still, so these two are very nearly
+    // parallel and the cross product is small — but it is never zero, and normalising
+    // it is exact at double precision.
+    const laplaceX = new Vector3().crossVectors(PLANET_NORTH, laplacePole).normalize();
     const laplaceZ = new Vector3().crossVectors(laplaceX, laplacePole);
 
     return {
@@ -639,7 +726,7 @@ export const PHOBOS = defineSatellite({
     // 1128.8°/day against Mars's own 350.9°: Phobos laps the surface below it three
     // times a sol, so from the ground it rises in the *west* and sets in the east.
     meanMotionDegPerDay: 1128.8448458,
-});
+}, MARS_AXIS_INVERSE);
 
 export const DEIMOS = defineSatellite({
     laplacePoleRaDeg: 316.6257,
@@ -658,21 +745,155 @@ export const DEIMOS = defineSatellite({
     // sky and takes 2.7 days to get from one horizon to the other.
     meanLongitudeJ2000Deg: 33.8856,
     meanMotionDegPerDay: 285.1619039,
-});
+}, MARS_AXIS_INVERSE);
+
+// ---------------------------------------------------------------------------
+// The Galilean moons
+//
+// Structurally identical to Phobos and Deimos — deep inside their planet's gravity
+// well, ruled by its equatorial bulge rather than by the Sun, so each settles on its
+// own local Laplace plane and precesses around it. They run through the same
+// `satelliteState` unchanged. What is different is that these are worlds: Ganymede is
+// wider than Mercury, and all four are comfortably larger than Pluto.
+//
+// Elements fitted to JPL's JUP365 ephemeris over 2000-2030, in the frame this scene
+// actually uses (Jupiter's equator, `eclipticDirection` handedness), so they drop
+// straight in with no convention shim. Compared against published values, none of
+// which the fit was given:
+//
+//                          fitted           published
+//   Io       a             421,766 km       421,800
+//            e             0.004105         0.0041
+//            i (Laplace)   0.0367°          0.036° (to Jupiter's equator)
+//            period        1.76913776 d     1.769137786
+//   Europa   a             671,061 km       671,100
+//            e             0.008996         0.0094
+//            i             0.4718°          0.466°
+//            period        3.55118104 d     3.551181041
+//   Ganymede a             1,070,430 km     1,070,400
+//            e             0.001856         0.0013
+//            period        7.15455322 d     7.15455296
+//   Callisto a             1,882,744 km     1,882,700
+//            e             0.007299         0.0074
+//            period        16.68901698 d    16.6890184
+//
+// Run back against Horizons over the whole 2000-2030 span, the model stays within:
+//
+//              RMS      max angle    max distance   (of its own orbit radius)
+//   Io         0.013°   0.030°         218 km        0.05%
+//   Europa     0.059°   0.148°       1,730 km        0.26%
+//   Ganymede   0.055°   0.136°       2,551 km        0.24%
+//   Callisto   0.023°   0.049°       1,610 km        0.09%
+//
+// — around a quarter of the angular error the Martian pair carry, which is what a
+// precessing ellipse can manage before the unmodelled part (chiefly the libration of
+// the resonance below) sets the floor.
+//
+// **The Laplace resonance is not in this file.** Io, Europa and Ganymede are locked
+// 4:2:1, the only three-body mean-motion resonance in the solar system, and it is why
+// Io is the most volcanically active body there is: being held eccentric by the other
+// two is what kneads its interior. The three mean motions below were fitted from three
+// separate ephemeris files with no knowledge of each other, and come to
+//
+//     n_Io − 3·n_Europa + 2·n_Ganymede = −1.0×10⁻⁶ °/day
+//
+// which is five parts in a billion of Io's own mean motion. Like Mercury's 3:2, the
+// resonance is a result here rather than an input. The apsidal rates say the same
+// thing twice over: Io's and Europa's come out at −0.7395070 and −0.7395126 °/day,
+// locked to each other to six figures, from independent fits.
+//
+// The Laplace *planes* also show the physics changing with distance. Io's and Europa's
+// poles land within 0.04° of Jupiter's own — that deep in the bulge, the equator is
+// the only plane that matters. Callisto, four times further out, has its plane dragged
+// 0.29° toward Jupiter's orbit by the Sun, which is most of its inclination.
+// ---------------------------------------------------------------------------
+
+export const IO = defineSatellite({
+    laplacePoleRaDeg: 268.0604,
+    laplacePoleDecDeg: 64.4961,
+    semiMajorAxis: IO_ORBIT_RADIUS,
+    // Tiny, and *maintained* rather than left over: tides would have circularised this
+    // long ago if Europa and Ganymede were not pumping it. That forced eccentricity is
+    // the entire energy source for 400 active volcanoes.
+    eccentricity: 0.004105,
+    inclinationDeg: 0.0367,
+    nodeJ2000Deg: 145.6437,
+    nodeRateDegPerDay: -0.1331632,
+    periapsisJ2000Deg: 292.4557,
+    periapsisRateDegPerDay: -0.7395070,
+    meanLongitudeJ2000Deg: 263.3557,
+    // 203.5°/day — Io gets round Jupiter in 42 hours, fast enough to watch at "1 hr/s".
+    meanMotionDegPerDay: 203.4889584,
+}, JUPITER_AXIS_INVERSE);
+
+export const EUROPA = defineSatellite({
+    laplacePoleRaDeg: 268.0924,
+    laplacePoleDecDeg: 64.4886,
+    semiMajorAxis: EUROPA_ORBIT_RADIUS,
+    eccentricity: 0.008996,
+    inclinationDeg: 0.4718,
+    nodeJ2000Deg: 116.2129,
+    nodeRateDegPerDay: -0.0323622,
+    periapsisJ2000Deg: 162.5295,
+    // Matching Io's to six figures — see the resonance note above.
+    periapsisRateDegPerDay: -0.7395126,
+    meanLongitudeJ2000Deg: 147.9470,
+    meanMotionDegPerDay: 101.3747247,
+}, JUPITER_AXIS_INVERSE);
+
+export const GANYMEDE = defineSatellite({
+    laplacePoleRaDeg: 268.0437,
+    laplacePoleDecDeg: 64.6528,
+    semiMajorAxis: GANYMEDE_ORBIT_RADIUS,
+    eccentricity: 0.001856,
+    inclinationDeg: 0.2879,
+    nodeJ2000Deg: 219.3316,
+    nodeRateDegPerDay: -0.0039058,
+    periapsisJ2000Deg: 103.8002,
+    periapsisRateDegPerDay: 0.0056659,
+    meanLongitudeJ2000Deg: 39.7720,
+    meanMotionDegPerDay: 50.3176074,
+}, JUPITER_AXIS_INVERSE);
+
+export const CALLISTO = defineSatellite({
+    laplacePoleRaDeg: 268.2807,
+    laplacePoleDecDeg: 64.7251,
+    semiMajorAxis: CALLISTO_ORBIT_RADIUS,
+    eccentricity: 0.007299,
+    // The smallest figure of the four against its *own* Laplace plane, which is the
+    // opposite of how it is usually quoted: Callisto's 0.28° to Jupiter's equator is
+    // almost entirely the plane's own tilt, not the orbit's tilt within it.
+    inclinationDeg: 0.0413,
+    nodeJ2000Deg: 173.3664,
+    nodeRateDegPerDay: -0.0110241,
+    periapsisJ2000Deg: 197.4029,
+    periapsisRateDegPerDay: 0.0017987,
+    meanLongitudeJ2000Deg: 283.5599,
+    // The one Galilean *outside* the resonance, and the only one not tidally heated
+    // into activity because of it — which is why it still wears a four-billion-year-old
+    // surface while Io repaves itself.
+    meanMotionDegPerDay: 21.5710728,
+}, JUPITER_AXIS_INVERSE);
 
 const satelliteNode = new Vector3();
 const satellitePole = new Vector3();
 const satelliteAcross = new Vector3();
 const satelliteApse = new Vector3();
-const satelliteToMars = new Vector3();
+const satelliteToPlanet = new Vector3();
 const satelliteBasis = new Matrix4();
 
 /**
- * Where a satellite is and which way it is facing, in Mars's equatorial frame.
+ * Where a satellite is and which way it is facing, in its planet's equatorial frame.
  *
  * Position and orientation come out together because they are the same geometry: the
- * orbit pole and the direction back to Mars are what place the body, and being
+ * orbit pole and the direction back to the planet are what place the body, and being
  * tidally locked, they are also what aim it.
+ *
+ * Shared unchanged by the Martian and the Galilean moons, which is not a coincidence
+ * worth glossing over: all six are tidally locked, and the IAU puts the prime meridian
+ * of a synchronous satellite at its sub-planetary point. So "longitude 0 faces the
+ * planet" is simultaneously the convention `geo.ts` maps a texture by and the physical
+ * state tides drive these bodies into — the same rotation satisfies both.
  */
 export function satelliteState(
     satellite: Satellite,
@@ -714,18 +935,19 @@ export function satelliteState(
             satellite.semiMajorAxis * Math.sqrt(1 - e * e) * Math.sin(E)
         );
 
-    // Tidal lock. Both bodies turn once per orbit, so the same face is always toward
-    // Mars — and because they are lumpy rather than round, that shows: the long axis
-    // is held pointing at the planet, which is the state tides drive them into. Local
-    // +X is carried to Mars and +Y to the spin axis, matching the axis order the
-    // semi-axis constants are written in.
+    // Tidal lock. Every body run through here turns once per orbit, so the same face
+    // is always toward its planet. Local +X is carried to the planet and +Y to the
+    // spin axis — which for the lumpy Martian moons matches the axis order their
+    // semi-axis constants are written in, and for the textured Galileans puts
+    // longitude 0 under the planet, exactly where the IAU defines it.
     //
     // Strictly the spin is *uniform* rather than aimed, so an eccentric orbit swings
-    // the long axis back and forth about the sub-Mars direction — ±1.7° for Phobos.
-    // Aiming it is simpler and the difference is a fraction of a pixel.
-    satelliteToMars.copy(position).normalize().negate();
-    satelliteAcross.crossVectors(satelliteToMars, satellitePole);
+    // the body back and forth about the sub-planet direction — ±1.7° for Phobos, and
+    // ±1° for Callisto. Aiming it is simpler and the difference is a fraction of a
+    // pixel.
+    satelliteToPlanet.copy(position).normalize().negate();
+    satelliteAcross.crossVectors(satelliteToPlanet, satellitePole);
     orientation.setFromRotationMatrix(
-        satelliteBasis.makeBasis(satelliteToMars, satellitePole, satelliteAcross)
+        satelliteBasis.makeBasis(satelliteToPlanet, satellitePole, satelliteAcross)
     );
 }
