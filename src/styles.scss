@@ -1,3 +1,22 @@
+// Sass requires every `@use` ahead of all other rules, including plain-CSS
+// `@import`s, so the token import has to lead even though the fonts are logically
+// "first" here.
+@use 'variables' as *;
+
+// Self-hosted rather than a Google Fonts <link>, for the same reason the planet
+// textures live in public/ rather than being fetched remotely: one origin, nothing
+// that can 404 or get blocked, and it works offline. See variables.scss for why
+// IBM Plex specifically.
+@import '@fontsource/ibm-plex-sans/latin-400.css';
+@import '@fontsource/ibm-plex-sans/latin-500.css';
+@import '@fontsource/ibm-plex-sans/latin-600.css';
+@import '@fontsource/ibm-plex-sans/latin-700.css';
+@import '@fontsource/ibm-plex-sans-condensed/latin-600.css';
+@import '@fontsource/ibm-plex-sans-condensed/latin-700.css';
+@import '@fontsource/ibm-plex-mono/latin-400.css';
+@import '@fontsource/ibm-plex-mono/latin-500.css';
+@import '@fontsource/ibm-plex-mono/latin-600.css';
+
 * {
     margin: 0;
     padding: 0;
@@ -11,13 +30,13 @@ body {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    font-family: var(--font-body);
     overflow: hidden;
     // Without this the page falls through to the browser's default white in every
     // gap where nothing paints over the viewport — before the canvas exists, and
     // between the loader unmounting and the first rendered frame. Matching the
-    // loader's darkest stop makes those gaps invisible rather than a white flash.
-    background: #050508;
+    // splash's darkest stop makes those gaps invisible rather than a white flash.
+    background: var(--void);
 }
 
 #root {
@@ -35,7 +54,7 @@ body {
 .heatmap-page {
     position: fixed;
     inset: 0;
-    background: #0b0b12;
+    background: var(--void);
     display: flex;
     flex-direction: column;
 }
@@ -47,9 +66,9 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    background: rgba(15, 15, 25, 0.92);
+    background: var(--panel);
     backdrop-filter: blur(10px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-bottom: 1px solid var(--hairline);
     z-index: 5;
 }
 
@@ -61,41 +80,44 @@ body {
 }
 
 .heatmap-topbar__title {
+    font-family: var(--font-display);
     font-size: 16px;
-    font-weight: 600;
-    color: white;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--ink);
 }
 
 .heatmap-topbar__link {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--ink);
     text-decoration: none;
     padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+    background: var(--panel-raised);
     font-size: 13px;
     font-weight: 500;
 }
 
 .heatmap-topbar__link:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: var(--signal);
+    color: var(--signal);
 }
 
 .heatmap-topbar__button {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--ink);
     padding: 8px 10px;
-    border-radius: 8px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+    background: var(--panel-raised);
     font-size: 13px;
     font-weight: 600;
     cursor: pointer;
 }
 
 .heatmap-topbar__button:hover {
-    background: rgba(255, 255, 255, 0.15);
-    border-color: rgba(255, 255, 255, 0.25);
+    border-color: var(--signal);
+    color: var(--signal);
 }
 
 .heatmap-frame {
@@ -131,11 +153,12 @@ body {
     height: 100vh;
     backdrop-filter: blur(10px);
     padding: 0;
-    color: white;
+    color: var(--ink);
     z-index: 1000;
     display: block;
-    box-shadow: 2px 0 20px rgba(0, 0, 0, 0.5);
-    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    // A hairline rather than a soft drop shadow — the panel reads as a bonded edge,
+    // not a card floating above the scene.
+    border-right: 1px solid var(--hairline);
     transition: transform 0.25s ease;
     overflow: visible;
 
@@ -154,12 +177,12 @@ body {
     width: 42px;
     height: 42px;
     padding: 0;
-    color: white;
-    background: rgba(15, 15, 25, 0.9);
+    color: var(--ink);
+    background: var(--panel);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 1px solid var(--hairline);
     border-left: 0;
-    border-radius: 0 8px 8px 0;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
     cursor: pointer;
 
     svg {
@@ -174,7 +197,8 @@ body {
     }
 
     &:hover {
-        background: rgba(255, 255, 255, 0.15);
+        border-color: var(--signal);
+        color: var(--signal);
     }
 
     .navigation-panel--collapsed & svg {
@@ -183,12 +207,12 @@ body {
 }
 
 .nav-title {
-    font-size: 28px;
-    font-weight: 600;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
+    font-family: var(--font-display);
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink);
     margin-bottom: 8px;
 }
 
@@ -199,12 +223,15 @@ body {
 }
 
 .nav-section-title {
-    font-size: 12px;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
     margin-bottom: 4px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--hairline);
 }
 
 .nav-speeds {
@@ -228,30 +255,32 @@ body {
 }
 
 .nav-btn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    color: white;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
     padding: 12px 16px;
-    border-radius: 8px;
+    border-radius: var(--radius-sm);
     cursor: pointer;
     font-size: 14px;
     font-weight: 500;
-    transition: all 0.2s ease;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
     text-align: left;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.15);
-        border-color: rgba(255, 255, 255, 0.25);
-        transform: translateX(4px);
+        border-color: var(--hairline-bright);
+        background: var(--panel-raised);
     }
 
     &:active {
-        transform: translateX(4px) scale(0.98);
+        transform: scale(0.98);
     }
 
+    // A left-edge tick in the signal colour rather than a full gradient fill — the
+    // amber marks "this is the one selected," it does not repaint the whole button.
     &.active {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        border-color: transparent;
-        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        background: var(--signal-dim);
+        border-color: var(--signal);
+        color: var(--ink);
+        box-shadow: inset 2px 0 0 var(--signal);
     }
 }

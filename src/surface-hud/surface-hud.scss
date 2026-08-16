@@ -9,12 +9,12 @@
     z-index: 1000;
     width: 232px;
     padding: 16px 18px;
-    border-radius: 10px;
-    background: var(--primary-black);
+    border-radius: var(--radius-md);
+    background: var(--panel);
     backdrop-filter: blur(10px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
-    color: white;
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    font-family: var(--font-body);
 
     // The canvas underneath is being dragged to look around, so the panel must never
     // swallow the pointer. The site picker opts back in below.
@@ -33,12 +33,15 @@
 }
 
 .surface-hud__title {
-    font-size: 12px;
-    font-weight: 600;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    color: rgba(255, 255, 255, 0.5);
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
     margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--hairline);
 }
 
 // Walking and driving both keep their rows and their key legend in the DOM the whole
@@ -86,23 +89,23 @@
     pointer-events: auto;
     width: 100%;
     padding: 8px 10px;
-    border-radius: 7px;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    background: rgba(255, 255, 255, 0.06);
-    color: white;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+    background: var(--panel-raised);
+    color: var(--ink);
     font-size: 12px;
     font-family: inherit;
     cursor: pointer;
 
     &:hover {
-        background: rgba(255, 255, 255, 0.11);
+        border-color: var(--hairline-bright);
     }
 
     // The list itself is drawn by the OS and does not inherit the panel's palette,
     // so the options need it stated outright or they render black-on-black.
     option {
-        background: #14141f;
-        color: white;
+        background: var(--panel-raised);
+        color: var(--ink);
     }
 }
 
@@ -110,7 +113,7 @@
     margin: 8px 0 12px;
     font-size: 11px;
     line-height: 1.45;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--ink-faint);
     min-height: 2.9em;
 }
 
@@ -121,19 +124,20 @@
     align-items: baseline;
     padding-bottom: 12px;
     margin-bottom: 12px;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
     padding-top: 12px;
 }
 
 .surface-hud__label {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.5);
+    color: var(--ink-dim);
 }
 
 .surface-hud__value {
+    font-family: var(--font-mono);
     font-size: 13px;
-    font-weight: 600;
+    color: var(--telemetry);
     text-align: right;
     // Tabular figures keep the altitude from jittering sideways as digits change.
     font-variant-numeric: tabular-nums;
@@ -152,13 +156,14 @@
     font-size: 11px;
 
     dt {
-        color: rgba(255, 255, 255, 0.9);
-        font-weight: 600;
+        font-family: var(--font-mono);
+        color: var(--signal);
+        font-weight: 500;
         text-align: right;
     }
 
     dd {
-        color: rgba(255, 255, 255, 0.45);
+        color: var(--ink-faint);
     }
 }
 

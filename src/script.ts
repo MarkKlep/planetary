@@ -1162,6 +1162,29 @@ export function initScene() {
     // occasionally dropping a frame to timer jitter sitting right at the threshold.
     const TARGET_FRAME_INTERVAL_MS = 1000 / 60 - 1;
 
+    // The nav panel's live clock — the one piece of chrome that prints an actual
+    // simulation value rather than a label. `Intl.DateTimeFormat` is built once,
+    // not per frame, since constructing one is not free and the format never
+    // changes.
+    const navClockFormatter = new Intl.DateTimeFormat('en-CA', {
+        year: 'numeric', month: '2-digit', day: '2-digit',
+        hour: '2-digit', minute: '2-digit', second: '2-digit',
+        hour12: false, timeZone: 'UTC',
+    });
+    const navClockValue = document.getElementById('nav-clock-value');
+    let navClockRefreshDue = 0;
+
+    function updateNavClock(nowMs: number, simulatedDate: Date) {
+        if (!navClockValue || nowMs < navClockRefreshDue) return;
+        navClockRefreshDue = nowMs + 200; // 5 Hz — a clock does not need 60.
+        // en-CA's default order is already YYYY-MM-DD; `format` still interleaves
+        // it with a comma before the time, which reads wrong for a UTC stamp.
+        const parts = navClockFormatter.formatToParts(simulatedDate);
+        const get = (type: string) => parts.find((p) => p.type === type)?.value ?? '';
+        navClockValue.textContent =
+            `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')} UTC`;
+    }
+
     /**
      * Speeds here are true to scale, so they are genuinely enormous — parked three
      * radii off Earth is already thousands of km/s. Rather than hide that, the
@@ -1275,6 +1298,9 @@ export function initScene() {
         // Everything below is a pure function of this one date, which is what keeps
         // the spin, both orbits and the seasons consistent at any time speed.
         const now = advanceClock();
+        // Ahead of the surface-mode branch below, since the clock reads the same
+        // whichever render path the rest of the frame takes.
+        updateNavClock(frameMs, now);
 
         // --- Orbits and rotations ---
         earthOrbitPosition(now, earthSystem.position);

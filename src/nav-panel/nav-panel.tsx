@@ -129,6 +129,16 @@ export function NavPanel() {
           <div>
             <h1 className="nav-title">Planetary</h1>
             <p className="nav-subtitle"><span aria-hidden="true" />Solar system simulator</p>
+            {/* script.ts owns this value — same pattern as the flight and surface
+                HUDs, and the same reason: it is written every frame from
+                `getSimulatedDate()`, the one clock every position in the scene is a
+                pure function of, so React re-rendering it would fight the render
+                loop for no benefit. The em dash is a neutral placeholder rather
+                than a guessed date, gone within one frame of initScene running. */}
+            <div className="nav-clock">
+              <span className="nav-clock__label">Simulated</span>
+              <span className="nav-clock__value" id="nav-clock-value">—</span>
+            </div>
           </div>
         </header>
         <div className="nav-section nav-section--objects">

@@ -1,3 +1,56 @@
+/**
+ * The chrome's design tokens.
+ *
+ * Not a generic dark-mode palette — grounded in what this app actually is: every
+ * position in the 3D scene is a computed reading from a real clock and a real light
+ * source, not a decoration. The chrome is built to read the same way, as an
+ * instrument reporting real numbers rather than a dashboard skinned to look "space".
+ *
+ * --signal (amber) is not an arbitrary accent choice. `sunLight` in script.ts is a
+ * literal point light at the origin that every visible thing in the scene is lit
+ * by — it is the one light source the whole simulation hangs off. Marking "selected"
+ * and "active" with that same warm light ties the chrome back to the thing driving
+ * it, instead of reaching for the violet/blue gradient most dashboards default to.
+ *
+ * --telemetry (cool cyan) is the counterpart: reserved for numbers rather than
+ * state — speeds, distances, coordinates, the clock — so a glance tells you "this is
+ * a control" (amber) from "this is a measurement" (cyan) without reading the label.
+ */
 :root {
+    --void: #08080a;
+    --panel: #101012;
+    --panel-raised: #16161a;
+    --hairline: rgba(255, 255, 255, 0.1);
+    --hairline-bright: rgba(255, 255, 255, 0.2);
+    --ink: #e9e6df;
+    --ink-dim: rgba(233, 230, 223, 0.5);
+    // 0.42 rather than a more "whispered" 0.25-0.3: this token lands on section
+    // eyebrows and key-legend text at 10-11px, and dropping much below this puts
+    // the contrast ratio against --void under 3:1 — quiet is a valid hierarchy
+    // choice, illegible is not.
+    --ink-faint: rgba(233, 230, 223, 0.42);
+    --signal: #ff8a3d;
+    --signal-dim: rgba(255, 138, 61, 0.16);
+    --telemetry: #6fe0c9;
+
+    /**
+     * IBM Plex over the more commonly reached-for Inter/Space Grotesk/system-ui: it
+     * was drawn for IBM with an explicit engineering brief — "plain, but not
+     * neutral" — rather than for general branding, and it ships a Sans, a Condensed
+     * and a Mono cut with matching metrics. That last part is what makes it a system
+     * rather than a grab-bag: one typeface family covers all three roles below,
+     * instead of stitching together three unrelated fonts for personality points.
+     */
+    --font-display: 'IBM Plex Sans Condensed', -apple-system, sans-serif;
+    --font-body: 'IBM Plex Sans', -apple-system, sans-serif;
+    --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+
+    // Sharp rather than the 8-10px the old gradient-card look used — an instrument
+    // panel is built from hairline-divided rectangles, not soft rounded cards.
+    --radius-sm: 3px;
+    --radius-md: 5px;
+
+    /** Kept for `.heatmap-topbar`, which belongs to the external heatmap sub-app's
+     *  host chrome rather than this design pass — see CLAUDE.md on the two apps. */
     --primary-black: rgba(15, 15, 25, 0.92);
 }

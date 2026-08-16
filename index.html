@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Inline rather than in styles.scss: Vite injects that stylesheet with JS in
      dev, so the bare document paints white before it ever applies. -->
-<html lang="en" style="background: #050508">
+<html lang="en" style="background: #08080a">
 
 <head>
     <meta charset="UTF-8" />
@@ -29,7 +29,13 @@
             align-items: center;
             justify-content: center;
             gap: 28px;
-            background: radial-gradient(circle at 50% 40%, #14141f 0%, #0f0f19 60%, #050508 100%);
+            background: radial-gradient(circle at 50% 40%, #141416 0%, #0d0d0f 60%, #08080a 100%);
+            /* System stack rather than the self-hosted Plex used everywhere else in
+               the chrome — deliberately. Plex ships in styles.scss, which Vite
+               injects with JS; this element's entire job is to be on screen before
+               any JS has run (see the comment above), so depending on that
+               stylesheet would reintroduce the exact race this file exists to
+               avoid. The label is four words at 12px — not worth the risk. */
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             opacity: 1;
             transition: opacity 0.4s ease;
@@ -54,8 +60,11 @@
             width: 14px;
             height: 14px;
             border-radius: 50%;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            box-shadow: 0 0 16px 4px rgba(118, 75, 162, 0.55);
+            /* Amber rather than the old violet gradient — this dot is standing in
+               for the actual Sun the whole scene orbits, so it may as well look
+               like one instead of a generic brand gradient. */
+            background: radial-gradient(circle at 35% 30%, #ffd08a 0%, #ff8a3d 65%, #d95f1e 100%);
+            box-shadow: 0 0 16px 4px rgba(255, 138, 61, 0.5);
         }
 
         /* Only the top edge is lit, so the ring reads as the orbit path while the
@@ -72,7 +81,7 @@
         .splash__ring--outer {
             inset: -18px;
             border-color: rgba(255, 255, 255, 0.06);
-            border-top-color: rgba(118, 75, 162, 0.6);
+            border-top-color: rgba(255, 138, 61, 0.55);
             animation-duration: 2s;
             animation-direction: reverse;
         }
