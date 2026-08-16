@@ -212,6 +212,34 @@ function BodyShape({ id }: BodyIconProps) {
           <circle cx={CENTER} cy={CENTER} r="2.1" fill="#ffce7a" />
         </>
       );
+    case 'orbits':
+      return (
+        <g transform="rotate(-25 10 10)">
+          <ellipse
+            cx={CENTER}
+            cy={CENTER}
+            rx="8.2"
+            ry="4.2"
+            fill="none"
+            stroke="#8996ff"
+            strokeWidth="1.1"
+            opacity="0.75"
+          />
+          <ellipse
+            cx={CENTER}
+            cy={CENTER}
+            rx="5.2"
+            ry="2.7"
+            fill="none"
+            stroke="#ffd9a0"
+            strokeWidth="0.9"
+            opacity="0.55"
+          />
+          <circle cx={CENTER} cy={CENTER} r="1.6" fill="#ffb443" />
+          <circle cx={CENTER + 8.2} cy={CENTER} r="1.1" fill="#9fc4ff" />
+          <circle cx={CENTER - 5.2} cy={CENTER} r="0.9" fill="#ff9c6b" />
+        </g>
+      );
     default:
       return <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#9aa4c7" />;
   }

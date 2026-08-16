@@ -265,7 +265,12 @@ export function NavPanel() {
                     {/* Not a `data-target` button: there is nothing to fly to here.
                         The row is a label for the toggle beside it, which is why it
                         carries no click handler and no active state. */}
-                    <span className="nav-btn nav-btn--satellite nav-btn--static">Orbits</span>
+                    <span className="nav-btn nav-btn--satellite nav-btn--static">
+                      <span className="nav-object-symbol nav-object-symbol--small">
+                        <BodyIcon id="orbits" />
+                      </span>
+                      <span>Orbits</span>
+                    </span>
                     {/* Mirrors script.ts's own default (hidden) so there's no flash of
                         "Hide" before initScene runs and corrects it. */}
                     <button
