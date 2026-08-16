@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
-import { PlanetIcon } from './planet-icons';
+import { BodyIcon } from './planet-icons';
 import './nav-panel.scss';
 
 /**
@@ -125,7 +125,7 @@ export function NavPanel() {
               data-target="sun"
               onClick={() => setActiveTarget('sun')}
             >
-              <span className="nav-object-symbol"><PlanetIcon id="sun" /></span>
+              <span className="nav-object-symbol"><BodyIcon id="sun" /></span>
               <span>Sun</span>
             </button>
             {PLANETS.map((planet) => {
@@ -142,7 +142,7 @@ export function NavPanel() {
                       data-target={planet.id}
                       onClick={() => setActiveTarget(planet.id)}
                     >
-                      <span className="nav-object-symbol"><PlanetIcon id={planet.id} /></span>
+                      <span className="nav-object-symbol"><BodyIcon id={planet.id} /></span>
                       <span>{planet.label}</span>
                     </button>
                     {isExpandable && (
@@ -180,7 +180,8 @@ export function NavPanel() {
                             data-target={satellite.id}
                             onClick={() => setActiveTarget(satellite.id)}
                           >
-                            {satellite.label}
+                            <span className="nav-object-symbol nav-object-symbol--small"><BodyIcon id={satellite.id} /></span>
+                            <span>{satellite.label}</span>
                           </button>
                           {/* Two rows carry one of these, and they are the two things
                               under Earth that aren't simply a body to fly to: the
@@ -233,7 +234,7 @@ export function NavPanel() {
                   data-target="system"
                   onClick={() => setActiveTarget('system')}
                 >
-                  <span className="nav-object-symbol"><PlanetIcon id="system" /></span>
+                  <span className="nav-object-symbol"><BodyIcon id="system" /></span>
                   <span>Solar system</span>
                 </button>
                 <button

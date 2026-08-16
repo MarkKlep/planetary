@@ -77,6 +77,9 @@
 }
 
 .nav-btn--satellite {
+    display: flex;
+    align-items: center;
+    gap: 9px;
     flex: 1;
     padding: 9px 14px;
     font-size: 13px;
@@ -238,16 +241,29 @@
 
     // The icon itself carries its own colour (see planet-icons.tsx), so this is just
     // the layout box — same 20px slot the old glyph occupied, so the row spacing
-    // didn't need to change.
+    // didn't need to change. The icon's SVG is fixed at a 20x20 intrinsic size, so
+    // the box is sized to match and the svg scales to fill it via width/height:100%
+    // rather than clipping at the smaller satellite-row size.
     .nav-object-symbol {
         display: grid;
         width: 20px;
+        height: 20px;
+        flex-shrink: 0;
         place-items: center;
         line-height: 1;
 
         svg {
             display: block;
+            width: 100%;
+            height: 100%;
         }
+    }
+
+    // Satellite rows (Moon, ISS, Analemma, Phobos, Deimos) sit in a shorter button,
+    // so their icon shrinks to match rather than crowding the label.
+    .nav-object-symbol--small {
+        width: 16px;
+        height: 16px;
     }
 
     .nav-expand-btn {
