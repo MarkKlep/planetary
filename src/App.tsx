@@ -36,6 +36,10 @@ export function App() {
   return (
     <>
       <div id="app"></div>
+      <div className="viewport-zoom" aria-label="Camera zoom controls">
+        <button type="button" className="viewport-zoom__button" id="zoom-out" aria-label="Zoom out">−</button>
+        <button type="button" className="viewport-zoom__button" id="zoom-in" aria-label="Zoom in">+</button>
+      </div>
       <NavPanel />
       <FlightHud />
       <SurfaceHud />

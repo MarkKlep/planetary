@@ -51,6 +51,42 @@ body {
     height: 100vh;
 }
 
+.viewport-zoom {
+    position: fixed;
+    right: 20px;
+    bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 1200;
+}
+
+.viewport-zoom__button {
+    width: 48px;
+    height: 48px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    background: rgba(12, 14, 19, 0.8);
+    color: var(--ink);
+    font-size: 28px;
+    line-height: 1;
+    font-weight: 500;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+
+    &:hover {
+        border-color: var(--signal);
+        color: var(--signal);
+        transform: translateY(-1px);
+    }
+
+    &:active {
+        transform: translateY(0);
+    }
+}
+
 .heatmap-page {
     position: fixed;
     inset: 0;

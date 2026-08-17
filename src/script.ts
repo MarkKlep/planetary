@@ -531,18 +531,10 @@ export function initScene(onFirstFrame?: () => void) {
     titan.add(markers[19].sprite);
     iapetus.add(markers[20].sprite);
 
-    // Far enough back from the Sun to take in the whole system, viewed obliquely from
-    // above the ecliptic so the orbits read as circles rather than edge-on. A 75°
-    // vertical field sees 0.77 AU per AU of distance, and Saturn reaches 10.07 AU at
-    // aphelion, so this has to sit at least 13.1 AU back.
-    //
-    // Which is the honest picture, and it keeps getting more startling rather than less.
-    // Jupiter's arrival reduced everything before it to a knot in the middle fifth of
-    // the frame; Saturn's orbit is drawn around *that* with as much room to spare again.
-    // The spacing is roughly geometric — each orbit about half again the last — so this
-    // number is going to keep doubling and the inner system is going to keep shrinking
-    // toward a point, which is what the solar system is actually like.
-    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 14;
+    // Start a little closer than the full-system wide shot so the planets stay readable
+    // without being hidden by a wall of labels. The zoom controls let the user move out
+    // again to inspect the entire system when desired.
+    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 9;
     const SYSTEM_VIEW_DIRECTION = new Vector3(0.3, 0.78, 0.55).normalize();
     // Longer than any nav fly-to: this one crosses 2.6 AU to end up 3 Earth-radii out,
     // and the nav buttons' 1.5–2.5s over that range reads as a jump rather than a move.
@@ -577,6 +569,20 @@ export function initScene(onFirstFrame?: () => void) {
     // body, which would now stop the user short of ever seeing Saturn's orbit whole.
     controls.maxDistance = EARTH_ORBIT_RADIUS * 22;
     controls.enablePan = true;
+
+    const setZoomFromButtons = (direction: 'in' | 'out') => {
+        if (freeFlight.enabled) return;
+
+        const distance = camera.position.distanceTo(controls.target);
+        const scale = direction === 'in' ? 0.82 : 1.2;
+        const nextDistance = Math.min(Math.max(distance * scale, controls.minDistance), controls.maxDistance);
+        const offset = camera.position.clone().sub(controls.target).normalize().multiplyScalar(nextDistance);
+        camera.position.copy(controls.target).add(offset);
+        controls.update();
+    };
+
+    document.getElementById('zoom-in')?.addEventListener('click', () => setZoomFromButtons('in'));
+    document.getElementById('zoom-out')?.addEventListener('click', () => setZoomFromButtons('out'));
 
     // Earth is framed from 3 of its radii; Mars is barely half the size, so matching
     // that framing means measuring the distance in *its* radii rather than reusing
@@ -869,11 +875,8 @@ export function initScene(onFirstFrame?: () => void) {
     // into. Still routed through the setter so the flags and the button label cannot
     // start out disagreeing.
     setVenusCloudsVisible(true);
-    // Off by default. An orbit line is drawn at true scale like everything else, so
-    // from anywhere near a planet it is not a ring at all — it is a straight line
-    // through the whole view, since you are standing on a curve 23,481 units across.
-    // It only reads as an orbit from far enough out to see the shape, which is where
-    // the button that reveals it lives.
+    // Hidden on first load so the app opens cleanly. Orbit paths are only shown when
+    // the user explicitly chooses the Solar system view.
     setOrbitsVisible(false);
 
     /**
@@ -911,6 +914,18 @@ export function initScene(onFirstFrame?: () => void) {
         duration = 2000,
         approachFrom?: Vector3
     ) {
+        const isSystemView =
+            target === sun &&
+            !!approachFrom &&
+            approachFrom.lengthSq() > 0 &&
+            distance >= SYSTEM_VIEW_DISTANCE * 0.8;
+
+        if (isSystemView) {
+            setOrbitsVisible(true);
+        } else {
+            setOrbitsVisible(false);
+        }
+
         // Asking to be taken somewhere is the opposite of flying yourself there.
         // This has to happen *first*: leaving free flight re-parks the orbit pivot,
         // and the animation below captures that pivot as its starting point.
@@ -1367,6 +1382,7 @@ export function initScene(onFirstFrame?: () => void) {
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
                     break;
                 case 'system':
+                    setOrbitsVisible(true);
                     focusOnObject(sun, SYSTEM_VIEW_DISTANCE, 2500, SYSTEM_VIEW_DIRECTION.clone());
                     break;
             }
@@ -1702,18 +1718,54 @@ export function initScene(onFirstFrame?: () => void) {
             updateBodyMarker(marker, camera, viewportHeight);
         }
 
+        const screenPositions: Array<{ label: typeof labels[number]; x: number; y: number }> = [];
+        const systemWideView = camera.position.distanceTo(sun.position) > EARTH_ORBIT_RADIUS * 8;
+
         for (const label of labels) {
             const position = label.body.getWorldPosition(scratchTarget);
             const cameraDistance = camera.position.distanceTo(position);
             const observing =
                 controls.target.distanceTo(position) < label.radius * 1.2 &&
                 cameraDistance < label.radius * 12;
+            const projected = position.clone().project(camera);
+            const onScreen = projected.z >= -1 && projected.z <= 1;
+            const x = (projected.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
+            const y = (-projected.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
+            if (onScreen) {
+                screenPositions.push({ label, x, y });
+            }
 
             // Everything else here is a body you can always find; the analemma is an
             // overlay you might have switched off, and its chip shouldn't linger
             // once the curve it's labelling is gone.
             const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
             const target = forcedHidden || observing || cameraDistance > label.hideBeyond ? 0 : 1;
+            const current = parseFloat(label.element.style.opacity || '0');
+            const next = current + (target - current) * 0.15;
+            label.element.style.opacity = next.toFixed(2);
+            label.object.visible = next > 0.02;
+        }
+
+        for (const { label, x, y } of screenPositions) {
+            const index = labels.indexOf(label);
+            const thisPosition = label.body.getWorldPosition(scratchTarget);
+            const thisDistance = camera.position.distanceTo(thisPosition);
+            let overlap = false;
+            for (const other of screenPositions) {
+                if (other.label === label) continue;
+                const dx = x - other.x;
+                const dy = y - other.y;
+                if (Math.hypot(dx, dy) < 90) {
+                    const otherDistance = camera.position.distanceTo(other.label.body.getWorldPosition(scratchTarget));
+                    if (thisDistance <= otherDistance || otherDistance === thisDistance) {
+                        overlap = true;
+                    }
+                    break;
+                }
+            }
+            const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
+            const hiddenBySystem = systemWideView || thisDistance > label.hideBeyond;
+            const target = forcedHidden || overlap || hiddenBySystem ? 0 : 1;
             const current = parseFloat(label.element.style.opacity || '0');
             const next = current + (target - current) * 0.15;
             label.element.style.opacity = next.toFixed(2);
