@@ -413,6 +413,188 @@ export const EUROPA_GEOMETRIC_ALBEDO = 0.67;
 export const GANYMEDE_GEOMETRIC_ALBEDO = 0.43;
 export const CALLISTO_GEOMETRIC_ALBEDO = 0.22;
 
+// Saturn constants
+//
+// The second gas giant, and the one that makes the case for the shape a sixth time —
+// but it is also the first body here whose defining feature is not the body. Saturn
+// without its rings is a smaller, blander Jupiter; the rings are 99.9% of why anyone
+// has ever pointed a telescope at it, and they get their own section below.
+export const SATURN_EQUATORIAL_RADIUS_KM = 60268;
+/** Very nearly 10% shorter than the equatorial one. */
+export const SATURN_POLAR_RADIUS_KM = 54364;
+/** Volumetric mean, 58232 km — the figure the mass and density are quoted against. */
+export const SATURN_RADIUS_KM = 58232;
+/** ~9.14 units. Nine Earths across, and 95 Earths in mass. */
+export const SATURN_RADIUS = SATURN_RADIUS_KM / EARTH_RADIUS_KM;
+export const SATURN_EQUATORIAL_RADIUS = SATURN_EQUATORIAL_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * Oblateness, (a−b)/a = 0.098 — **the largest of any planet**, half again Jupiter's
+ * already-conspicuous 0.065, and a tenth of the disc.
+ *
+ * Saturn spins nearly as fast as Jupiter on a body nearly as wide, but with a third
+ * of the mass holding it together: mean density 0.687 g/cm³, the only planet that
+ * would float. Less gravity against the same centrifugal throw means more bulge. At
+ * this figure it is not a subtlety to be argued for — Saturn is visibly an ellipse in
+ * any photograph, and `saturn.ts` scales the mesh for it exactly as `jupiter.ts` does.
+ */
+export const SATURN_FLATTENING =
+    (SATURN_EQUATORIAL_RADIUS_KM - SATURN_POLAR_RADIUS_KM) / SATURN_EQUATORIAL_RADIUS_KM;
+/**
+ * IAU rotational elements, same form as everything else here.
+ *
+ * The pole leans **26.73°** from Saturn's orbit normal — the largest obliquity of the
+ * four bodies in this scene that have any worth mentioning, a shade more than Earth's
+ * 23.44°. That figure is stated nowhere in this project; it falls out of the pole
+ * direction below, the same way Mars's 25.19° does.
+ *
+ * It is also the single reason the rings are worth watching over time rather than
+ * looking at once. Saturn holds that lean fixed in space through a 29½-year orbit, so
+ * we see the ring plane open to 27° and close to edge-on twice a year of Saturn's —
+ * about every 15 years, most recently in March 2025. At the crossing the rings vanish
+ * completely for a body 270,000 km across, because they are some tens of metres thick.
+ */
+export const SATURN_POLE_RA_DEG = 40.589;
+export const SATURN_POLE_DEC_DEG = 83.537;
+export const SATURN_PRIME_MERIDIAN_DEG = 38.90;
+/**
+ * System III again, and for the same reason it is used for Jupiter: a gas giant has no
+ * surface to time, and the visible cloud decks shear past one another.
+ *
+ * Saturn makes that problem far worse than Jupiter does. Its equatorial jet blows at
+ * some 470 m/s — four times Jupiter's — so System I and System III disagree by minutes
+ * per rotation, and worse, Saturn's magnetic field is very nearly *axisymmetric*, which
+ * means it gives almost no rotational signal at all. Estimates of the true interior
+ * period have moved by six minutes since Voyager. 810.7939°/day is 10h 39m 22.4s, the
+ * long-standing IAU value; Cassini's ring-seismology result argues for 10h 33m 38s.
+ * The scene is not in a position to adjudicate that, and at any time multiplier where
+ * the spin is visible, six minutes in ten hours is not.
+ */
+export const SATURN_ROTATION_DEG_PER_DAY = 810.7939024;
+export const SATURN_SIDEREAL_DAY = (360 / SATURN_ROTATION_DEG_PER_DAY) * 86400;
+export const SATURN_ORBITAL_PERIOD_DAYS = 10755.698;
+
+// The rings
+//
+// Given as radii from Saturn's *centre*, which is the convention every ring table uses
+// and the only one that makes sense — a ring's position is set by its orbital radius,
+// and the planet's surface is not involved. Divided through by the equatorial radius
+// they run 1.11 to 2.33, so the whole system sits closer to Saturn than the Moon does
+// to Earth by a factor of six.
+//
+// Boundaries are Cassini-era values, good to a few kilometres. The optical depths that
+// go with them live in `saturn/rings.ts`, because unlike these they are a *profile*
+// rather than a set of edges.
+export const SATURN_RING_INNER_KM = 66900; // inner edge of the D ring
+/**
+ * The F ring, and where this model stops.
+ *
+ * There is more beyond it — the G ring, and the Phoebe ring out at 13 million km,
+ * which is a quarter the width of the sky from Saturn and was only found in 2009. None
+ * of it is visible: the E ring's optical depth is 10⁻⁵ and the Phoebe ring's is 10⁻⁸.
+ * Drawing them would be drawing something nobody has ever seen with an eye.
+ */
+export const SATURN_RING_OUTER_KM = 140180;
+export const SATURN_RING_INNER = SATURN_RING_INNER_KM / EARTH_RADIUS_KM;
+export const SATURN_RING_OUTER = SATURN_RING_OUTER_KM / EARTH_RADIUS_KM;
+/**
+ * The rings are ~10 m thick, which is 1.6×10⁻⁶ scene units — four orders of magnitude
+ * under a pixel at any distance, and under the depth buffer's resolution besides. So
+ * they are drawn as a mathematical plane, with no thickness at all, and the edge-on
+ * disappearance comes out right for free rather than being modelled.
+ *
+ * For scale: at the ring system's true proportions, a sheet of paper standing in for
+ * the rings would have to be four kilometres across.
+ */
+
+// The seven major moons
+//
+// Saturn has 274 confirmed moons, more than every other planet put together. These
+// seven are the ones that are *worlds* — round, named before 1790 except Mimas and
+// Enceladus (1789, both by Herschel), and every one of them larger than the largest
+// body that is not. There is a real gap below Mimas: the next moon down, Hyperion, is
+// a tumbling 135 km lump that is not round and does not even rotate predictably.
+export const MIMAS_RADIUS_KM = 198.8;
+export const ENCELADUS_RADIUS_KM = 252.3;
+export const TETHYS_RADIUS_KM = 536.3;
+export const DIONE_RADIUS_KM = 562.5;
+export const RHEA_RADIUS_KM = 764.5;
+/** 2575.5 km — the second largest moon in the solar system, and larger than Mercury. */
+export const TITAN_RADIUS_KM = 2575.5;
+export const IAPETUS_RADIUS_KM = 734.5;
+
+export const MIMAS_RADIUS = MIMAS_RADIUS_KM / EARTH_RADIUS_KM;
+export const ENCELADUS_RADIUS = ENCELADUS_RADIUS_KM / EARTH_RADIUS_KM;
+export const TETHYS_RADIUS = TETHYS_RADIUS_KM / EARTH_RADIUS_KM;
+export const DIONE_RADIUS = DIONE_RADIUS_KM / EARTH_RADIUS_KM;
+export const RHEA_RADIUS = RHEA_RADIUS_KM / EARTH_RADIUS_KM;
+export const TITAN_RADIUS = TITAN_RADIUS_KM / EARTH_RADIUS_KM;
+export const IAPETUS_RADIUS = IAPETUS_RADIUS_KM / EARTH_RADIUS_KM;
+
+/**
+ * Titan's haze deck, and the reason Titan needs two shells the way Venus does.
+ *
+ * Titan is the only moon in the solar system with a real atmosphere — 1.45 bar at the
+ * surface, half again Earth's, on a body a third of Earth's radius. It is opaque in
+ * visible light: an unbroken orange photochemical smog that hid the surface from
+ * Voyager entirely and was only seen through by Cassini, at 938 nm, through a window
+ * between methane absorption bands.
+ *
+ * So the map in `titan.ts` is near-infrared, not colour — the same situation as Venus's
+ * radar map, and the same treatment: the deck is what Titan *looks* like, and the
+ * surface underneath is what has to be revealed. 150 km up is where the main haze
+ * becomes optically thick; the detached haze layer above it reaches 500 km.
+ */
+export const TITAN_HAZE_RADIUS = (TITAN_RADIUS_KM + 150) / EARTH_RADIUS_KM;
+
+/**
+ * Orbit semi-major axes, fitted to JPL's SAT441 ephemeris (see `orbits.ts`).
+ *
+ * The inner five are packed inside 8.75 Saturn radii — for comparison, Jupiter's
+ * outermost Galilean sits at 26 Jupiter radii, and our own Moon at 60 Earth radii.
+ * Then the system stops, and Titan is out at 20 radii with 96% of all the mass that
+ * orbits Saturn, and Iapetus at 59.
+ */
+export const MIMAS_ORBIT_RADIUS = 185536.3 / EARTH_RADIUS_KM;
+export const ENCELADUS_ORBIT_RADIUS = 238034.0 / EARTH_RADIUS_KM;
+export const TETHYS_ORBIT_RADIUS = 294673.1 / EARTH_RADIUS_KM;
+export const DIONE_ORBIT_RADIUS = 377415.2 / EARTH_RADIUS_KM;
+export const RHEA_ORBIT_RADIUS = 527067.7 / EARTH_RADIUS_KM;
+export const TITAN_ORBIT_RADIUS = 1221865.0 / EARTH_RADIUS_KM;
+export const IAPETUS_ORBIT_RADIUS = 3560839.9 / EARTH_RADIUS_KM;
+
+/**
+ * Geometric albedos, and the brightest family of surfaces anywhere.
+ *
+ * Five of the seven are over 0.9 and Enceladus is over 1, which is not a mistake: a
+ * geometric albedo is a comparison against a perfect diffusing disc, and a surface
+ * that backscatters — as fresh, fluffy, sub-micron ice frost does — beats it. Enceladus
+ * is the most reflective body in the solar system, and it is that way because it is
+ * *repainting itself*: its south-polar jets feed the E ring, and the E ring snows back
+ * onto Enceladus and onto everything near it. Mimas, Tethys, Dione and Rhea are all
+ * inside that snowstorm, which is most of why they are so bright.
+ *
+ * Iapetus is the exception and the famous one. It is not one albedo but two — 0.05 on
+ * the leading hemisphere, 0.6 on the trailing — a contrast of more than ten, the
+ * largest on any body in the solar system. Cassini found the cause: the dark side is
+ * sweeping up dust from the Phoebe ring, warms in the Sun, and its ice sublimates away
+ * to refreeze on the cold bright side, which runs away until the two hemispheres are
+ * what they are now. That contrast is *in the map*, so unlike everything else here
+ * Iapetus's figure is only its bright half; see `saturn/moons.ts`.
+ *
+ * These are Verbiscer et al. (2007) for the five icy moons — Horizons rounds four of
+ * them to a flat 0.6 — and Horizons for Titan and Iapetus. As everywhere else in this
+ * project they are *geometric* albedos and need converting before a diffuse material
+ * can use them; `saturn/moons.ts` does it by comparison, the way the Galileans' are.
+ */
+export const MIMAS_GEOMETRIC_ALBEDO = 0.962;
+export const ENCELADUS_GEOMETRIC_ALBEDO = 1.375;
+export const TETHYS_GEOMETRIC_ALBEDO = 1.229;
+export const DIONE_GEOMETRIC_ALBEDO = 0.998;
+export const RHEA_GEOMETRIC_ALBEDO = 0.949;
+export const TITAN_GEOMETRIC_ALBEDO = 0.22;
+/** The *bright* hemisphere only. The leading side is 0.05, and the map carries it. */
+export const IAPETUS_GEOMETRIC_ALBEDO = 0.6;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

@@ -1,7 +1,9 @@
 # Texture credits
 
-All maps here are NASA imagery and are in the **public domain** (NASA media are not
-copyrighted). Credit is courtesy, not a licence requirement.
+Every map here is NASA imagery and in the **public domain** (NASA media are not
+copyrighted) — with exactly one exception, `saturn_color.jpg`, which is CC BY 4.0 and
+is called out separately below. For everything else, credit is courtesy rather than a
+licence requirement.
 
 | File | Source | Original |
 |---|---|---|
@@ -23,6 +25,14 @@ copyrighted). Credit is courtesy, not a licence requirement.
 | `europa_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global mosaic | `Europa_Voyager_GalileoSSI_global_mosaic_500m.tif`, 19631×9816, downscaled to 4096×2048 |
 | `ganymede_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global colour mosaic | `Ganymede_Voyager_GalileoSSI_Global_ClrMosaic_1435m.tif`, 11520×5760, downscaled to 4096×2048 |
 | `callisto_color.jpg` | USGS Astrogeology — Voyager / Galileo SSI global mosaic | `Callisto_Voyager_GalileoSSI_global_mosaic_1km.tif`, 15138×7569, downscaled to 4096×2048 |
+| `saturn_color.jpg` | **Solar System Scope, CC BY 4.0** — see below | 4096×2048, unmodified |
+| `mimas_color.jpg` | NASA/JPL/SSI/LPI — Cassini ISS global map (PIA17214, P. Schenk) | 5760×2880 at 16 px/deg, rolled 180°, downscaled to 4096×2048 |
+| `enceladus_color.jpg` | USGS Astrogeology — Cassini ISS global mosaic | `Enceladus_Cassini_mosaic_global_110m.tif`, 14401×7201, downscaled to 4096×2048 |
+| `tethys_color.jpg` | USGS Astrogeology — Cassini ISS global mosaic | `Tethys_Cassini_mosaic_global_293m.tif`, 11520×5760, downscaled to 4096×2048 |
+| `dione_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Dione_Cassini_Voyager_mosaic_global_154m.tif`, 23040×11520, downscaled to 4096×2048 |
+| `rhea_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Rhea_Cassini_Voyager_mosaic_global_417m.tif`, 11520×5760, downscaled to 4096×2048 |
+| `titan_color.jpg` | USGS Astrogeology — Cassini ISS global mosaic, 938 nm | `Titan_ISS_P19658_Mosaic_Global_4km.tif`, 4040×2020, rolled 180°, resampled to 2048×1024 |
+| `iapetus_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Iapetus_Cassini_Voyager_mosaic_global_783m.tif`, 5760×2880, downscaled to 4096×2048 |
 
 Relief and mask maps were downscaled because they carry only low-frequency detail;
 the colour maps are kept at full resolution since the camera can zoom close.
@@ -184,3 +194,107 @@ figures they are built from are still measured, not invented:
 The relief between those landmarks is fractal noise and a synthetic crater
 population, so the *shapes* are plausible rather than surveyed. Only the overall
 figure, the albedo and Stickney are real.
+
+## Saturn's globe is the one map here that is not NASA's
+
+`saturn_color.jpg` comes from **Solar System Scope** (solarsystemscope.com/textures)
+and is licensed **CC BY 4.0**, not public domain. It is derived from NASA/JPL Cassini
+imagery, but it is a derived work and the attribution above is a licence condition
+rather than a courtesy.
+
+It is here because there is no equivalent to fall back on. Every other planet in this
+scene has a registered global mosaic published by USGS Astrogeology or the PDS; Saturn
+does not. The Cassini imaging team produced plenty of Saturn maps, but they are figures
+in papers and Photojournal releases rather than a cylindrical product with a projection
+label, and none of them is a single global map at a usable resolution.
+
+That matters less for Saturn than it would for anywhere else. Saturn's visible
+appearance is very nearly a function of latitude alone — the belts and zones are seen
+through a haze deep enough to mute their contrast to about a fifth of Jupiter's, and
+there is no long-lived feature like the Great Red Spot to register against. So nothing
+in the scene claims a longitude for anything on Saturn, exactly as nothing does for
+Jupiter, and for a stronger reason.
+
+## The Saturnian moons, and which way round they go
+
+Six of the seven are USGS ISIS mosaics carrying the same trap the Galilean maps do, and
+the same resolution: `LongitudeDirection` changes how longitudes are *numbered*, not
+which way the picture runs, and none of the six is mirrored. The left edge is read off
+each label's `UpperLeftCornerX` and `CenterLongitude` rather than assumed:
+
+| File | Left edge in its own numbering | Transform |
+|---|---|---|
+| `enceladus_color.jpg` | 180° | none — already the scene's left edge |
+| `tethys_color.jpg` | −180° | none |
+| `dione_color.jpg` | −180° | none |
+| `rhea_color.jpg` | 180° | none |
+| `titan_color.jpg` | 0° | rolled 180° |
+| `iapetus_color.jpg` | −180° | none |
+
+`mimas_color.jpg` is the odd one out: it is a JPL Photojournal release with no PDS label
+to read, so it was pinned by a landmark instead.
+
+Every one was then checked against a catalogued feature, rather than trusted:
+
+| Body | Landmark | Catalogued | Lands at |
+|---|---|---|---|
+| Mimas | Herschel, the 130 km crater | 0.4°N, 111.2°W | 0°N, 105°W (needed the 180° roll; unrolled it fell at 285°W) |
+| Tethys | Odysseus, the 450 km basin | 32.8°N, 130°W | 130°W |
+| Rhea | Inktomi, bright ray crater | 14.1°S, 112.1°W | 113°W |
+| Titan | Xanadu, the bright highland | ~10°S, 80–140°W | peak brightness at 122°W |
+| Iapetus | Cassini Regio, the dark hemisphere | centred 90°W | leading side 20% darker than trailing, brightest at 90°E |
+| Dione | wispy terrain, trailing hemisphere | centred 90°E | leading side 4% brighter, as measured |
+| Enceladus | — | — | not checkable: it is uniform to 3% at every longitude |
+
+Enceladus is the honest gap. It is the most uniformly bright surface in the solar system
+and has no albedo feature large enough to pin a rotation against at map scale, so its
+orientation rests on its label alone — which is the same label format as Rhea's, and
+Rhea's is confirmed by Inktomi to a degree.
+
+All six ship **greyscale**, for the reason `venus_surface.jpg` and the two greyscale
+Galileans do: the global products that exist are brightness mosaics. The five icy moons
+are genuinely near-neutral in colour, so they are tinted only for *brightness*. Iapetus
+and Titan carry a hue as well, and both are noted as tints rather than data in
+`src/planets/saturn/moons.ts` and `titan.ts`.
+
+## Titan's two maps, and why one of them is not colour
+
+`titan_color.jpg` is the same situation as `venus_surface.jpg` from the other direction.
+Titan's haze is opaque in visible light, so this mosaic was taken at **938 nm**, in a
+narrow window between methane absorption bands where the haze happens to be thin enough
+to see through. It is not a photograph of Titan and it is not what Titan looks like: it
+is the ground under the smog, which nothing saw at all until Cassini arrived in 2004.
+
+So Titan gets Venus's treatment — two shells. This map is the surface, and what Titan
+actually looks like is generated in `src/planets/saturn/haze.ts`. There is no file for
+the haze for Venus's reason exactly: there are plenty of images of Titan, and there is
+essentially nothing *on* it to map. What visible-light imaging shows is a faint
+north-south asymmetry that reverses over Titan's 29½-year seasons, a darker polar hood,
+and the detached haze at the limb. That is all of it.
+
+It is also kept at half the width of the other mosaics, which is not a corner cut: the
+source is 4 km/pixel — a twentieth of the ground resolution of the icy moons' maps —
+because it was shot through an atmosphere.
+
+## Saturn's rings have no file here
+
+They are generated in `src/planets/saturn/rings.ts`, and unlike Venus's clouds or
+Phobos's relief that is the *stronger* option rather than a fallback.
+
+The rings are a one-dimensional object. There is no longitude structure worth mapping —
+the particles are on independent circular orbits and shear any azimuthal feature out
+within hours — so what the subject actually is, is a radial profile. What is generated
+from measured data is that profile: Cassini-era boundary radii good to a few kilometres,
+and normal optical depths from UVIS and RSS occultations.
+
+And a photograph would be worse for a specific reason. The rings' appearance depends
+entirely on where the Sun and the observer are relative to the ring plane — from the
+sunlit side the B ring is the brightest thing in the system, and from the unlit side it
+is nearly black while the C ring and the Cassini Division become the brightest. Baking
+one of those into an image would fix the answer to a question this scene can ask,
+because it knows where the Sun is. So the file carries optical depths and the appearance
+comes out of them.
+
+Sub-kilometre structure between the tabulated boundaries — the B ring's several hundred
+unexplained bands, the C ring's ringlets and plateaux — is fractal, on the same terms
+Phobos's relief is: measured where measurements exist, generated below them.

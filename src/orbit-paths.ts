@@ -10,6 +10,7 @@ import {
     jupiterOrbitPosition,
     marsOrbitPosition,
     mercuryOrbitPosition,
+    saturnOrbitPosition,
     venusOrbitPosition,
 } from './orbits';
 import {
@@ -17,6 +18,7 @@ import {
     JUPITER_ORBITAL_PERIOD_DAYS,
     MARS_ORBITAL_PERIOD_DAYS,
     MERCURY_ORBITAL_PERIOD_DAYS,
+    SATURN_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
 } from './constants/planets.const';
 
@@ -140,10 +142,24 @@ export const jupiterOrbitPath = traceOrbit(
     0xe8c9a0
 );
 
+// And the one that makes the point the last one started. Jupiter's line reduced the
+// inner four to a knot at the centre; this is drawn around *that*, 1.83 times further
+// out again, and shows what the first five lines together still failed to suggest — the
+// spacing is roughly geometric, so no linear picture ever frames two neighbours well.
+// Adding it also doubled the radius the camera has to pull back to, which is why
+// SYSTEM_VIEW_DISTANCE in script.ts moved from 7.6 AU to 14.
+export const saturnOrbitPath = traceOrbit(
+    saturnOrbitPosition,
+    SATURN_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0xe8d5a8
+);
+
 export const orbitPaths = [
     mercuryOrbitPath,
     venusOrbitPath,
     earthOrbitPath,
     marsOrbitPath,
     jupiterOrbitPath,
+    saturnOrbitPath,
 ];

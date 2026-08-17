@@ -88,6 +88,29 @@ const PLANETS: Planet[] = [
       { id: 'callisto', label: 'Callisto' },
     ],
   },
+  // The longest dropdown here, and the only planet whose list carries both kinds of row
+  // at once: seven moons to fly to, and — under Titan — the one toggle in the outer
+  // system, which is Venus's cloud row again for the only other body whose surface is
+  // hidden by its own atmosphere. Listed inward-out like Jupiter's, which is also
+  // discovery order for five of the seven: Huygens found Titan in 1655, Cassini the four
+  // between 1671 and 1684, and Herschel the two innermost in a single fortnight of 1789.
+  {
+    id: 'saturn',
+    label: 'Saturn',
+    satellites: [
+      { id: 'mimas', label: 'Mimas' },
+      { id: 'enceladus', label: 'Enceladus' },
+      { id: 'tethys', label: 'Tethys' },
+      { id: 'dione', label: 'Dione' },
+      { id: 'rhea', label: 'Rhea' },
+      { id: 'titan', label: 'Titan' },
+      { id: 'iapetus', label: 'Iapetus' },
+    ],
+    // Venus's cloud row again, and it has to be the *planet*-level toggle rather than
+    // one hanging off Titan's row: a bare "Hide" sitting beside a button labelled Titan
+    // reads as hiding Titan. This one gets to say what it takes off.
+    toggle: { label: 'Titan haze', toggleId: 'toggle-titan-haze' },
+  },
 ];
 
 export function NavPanel() {

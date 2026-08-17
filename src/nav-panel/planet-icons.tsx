@@ -25,9 +25,14 @@ const RADIUS = 8.4;
 // Only bodies actually rendered as a sphere in the scene get the lit-sphere shading
 // overlay — applying it to the ISS, the analemma curve, or Phobos/Deimos's lumpy
 // outlines would paint a circular highlight that doesn't track their actual shape.
+// Saturn is the one deliberate omission from an otherwise round body: the shading
+// overlay is a circle, and here the disc is only part of the icon — a circular
+// highlight painted over the rings as well would read as a smear across them. Its
+// globe carries its own drawn shading below instead.
 const SPHERE_IDS = new Set([
     'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
+    'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
 ]);
 
 export function BodyIcon({ id }: BodyIconProps) {
@@ -278,6 +283,131 @@ function BodyShape({ id }: BodyIconProps) {
           <circle cx={13.4} cy={13.2} r="0.9" fill="#a89a86" opacity="0.7" />
           <circle cx={5.4} cy={14.0} r="0.7" fill="#a89a86" opacity="0.6" />
           <circle cx={14.0} cy={6.4} r="0.6" fill="#a89a86" opacity="0.6" />
+        </>
+      );
+    case 'saturn':
+      // The only icon here that is not mostly a disc. The rings *are* the recognition —
+      // a banded ball at 20px is Jupiter — so the globe is drawn small enough to leave
+      // room for them, with the ellipse crossing in front below the equator and behind
+      // above it. That crossing is the whole trick: an ellipse drawn wholly in front
+      // reads as a hoop leaning on a ball, and one drawn wholly behind reads as a halo.
+      return (
+        <>
+          <defs>
+            {/* Clips the front half of the ring to the lower part of the frame, so the
+                upper half can be drawn first and be occluded by the globe. */}
+            <clipPath id="planet-icon-saturn-front">
+              <rect x="0" y="10" width="20" height="10" />
+            </clipPath>
+            <radialGradient id="planet-icon-saturn-shade" cx="35%" cy="32%" r="75%">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.5" />
+              <stop offset="35%" stopColor="#ffffff" stopOpacity="0" />
+              <stop offset="100%" stopColor="#000000" stopOpacity="0.45" />
+            </radialGradient>
+          </defs>
+          {/* Back half of the ring, then the globe over it, then the front half. */}
+          <ellipse
+            cx={CENTER} cy={CENTER} rx="9.3" ry="2.9"
+            fill="none" stroke="#d9c69a" strokeWidth="1.5" opacity="0.9"
+            transform="rotate(-14 10 10)"
+          />
+          <circle cx={CENTER} cy={CENTER} r="5.9" fill="#e5cd9f" />
+          <rect x="4.1" y="8.4" width="11.8" height="1.3" fill="#cdae78" opacity="0.75" />
+          <rect x="4.1" y="11.0" width="11.8" height="1.0" fill="#d4b783" opacity="0.6" />
+          <circle cx={CENTER} cy={CENTER} r="5.9" fill="url(#planet-icon-saturn-shade)" />
+          <g clipPath="url(#planet-icon-saturn-front)">
+            <ellipse
+              cx={CENTER} cy={CENTER} rx="9.3" ry="2.9"
+              fill="none" stroke="#e8d5a8" strokeWidth="1.5"
+              transform="rotate(-14 10 10)"
+            />
+          </g>
+        </>
+      );
+    case 'mimas':
+      // One crater across a third of the disc. Nothing else is needed — Herschel *is*
+      // Mimas at any size.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#c8c8cb" />
+          <circle cx={7.4} cy={8.6} r={2.9} fill="#9d9da3" opacity="0.8" />
+          <circle cx={7.4} cy={8.6} r="0.85" fill="#dededf" opacity="0.9" />
+          <circle cx={13.2} cy={13.0} r="1.1" fill="#a8a8ae" opacity="0.6" />
+        </>
+      );
+    case 'enceladus':
+      // The brightest surface in the solar system, and the four south-polar fractures
+      // that keep it that way — drawn at the bottom, where they are.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#f6f8fa" />
+          <path d="M 6.0 14.2 L 9.4 15.8" stroke="#8fb4c9" strokeWidth="0.9" strokeLinecap="round" opacity="0.85" />
+          <path d="M 8.4 13.2 L 12.2 15.2" stroke="#8fb4c9" strokeWidth="0.9" strokeLinecap="round" opacity="0.85" />
+          <path d="M 11.0 12.6 L 14.4 13.8" stroke="#8fb4c9" strokeWidth="0.8" strokeLinecap="round" opacity="0.75" />
+          <path d="M 4.6 12.2 Q 8.0 11.4 11.0 12.0" stroke="#c3d6e2" strokeWidth="0.7" fill="none" opacity="0.7" />
+        </>
+      );
+    case 'tethys':
+      // Odysseus, a basin 42% of the moon's own diameter, plus Ithaca Chasma running
+      // away from it.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#dcdcde" />
+          <circle cx={8.0} cy={8.2} r={3.4} fill="none" stroke="#a9a9b0" strokeWidth="0.9" opacity="0.85" />
+          <circle cx={8.0} cy={8.2} r="0.9" fill="#b6b6bc" opacity="0.8" />
+          <path d="M 13.0 4.6 Q 13.8 10 12.4 15.6" stroke="#adadb4" strokeWidth="1.0" fill="none" opacity="0.75" />
+        </>
+      );
+    case 'dione':
+      // The wispy terrain: bright ice cliffs on the trailing hemisphere, which Voyager
+      // could only resolve as streaks.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#cfcfd2" />
+          <path d="M 12.0 3.6 Q 13.4 9.4 11.4 15.8" stroke="#f4f4f8" strokeWidth="1.0" fill="none" opacity="0.9" />
+          <path d="M 14.6 5.6 Q 15.6 10.2 14.0 14.4" stroke="#f4f4f8" strokeWidth="0.8" fill="none" opacity="0.8" />
+          <circle cx={6.4} cy={8.4} r={1.7} fill="#a5a5ac" opacity="0.7" />
+          <circle cx={8.2} cy={13.0} r="1.0" fill="#a5a5ac" opacity="0.6" />
+        </>
+      );
+    case 'rhea':
+      // Heavily cratered ice, with Inktomi's bright rays on the leading side.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#d6d6d9" />
+          <circle cx={12.4} cy={11.8} r={1.5} fill="#f6f6fa" opacity="0.9" />
+          <path d="M 12.4 11.8 L 15.8 14.2 M 12.4 11.8 L 15.2 8.6 M 12.4 11.8 L 9.0 14.6"
+                stroke="#f0f0f4" strokeWidth="0.6" strokeLinecap="round" opacity="0.7" />
+          <circle cx={6.6} cy={7.4} r={2.0} fill="#aaaab1" opacity="0.7" />
+          <circle cx={9.0} cy={12.0} r="1.1" fill="#aaaab1" opacity="0.55" />
+        </>
+      );
+    case 'titan':
+      // A blank orange ball, which is the honest icon: this is what Titan looks like,
+      // and the only structure visible-light imaging shows is the polar hood.
+      return (
+        <>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#d99b4a" />
+          <path d="M 2.6 6.6 Q 10 4.6 17.4 6.6 Q 10 8.0 2.6 6.6 Z" fill="#c8873a" opacity="0.55" />
+          <path d="M 3.4 13.6 Q 10 15.4 16.6 13.6 Q 10 12.4 3.4 13.6 Z" fill="#b9762f" opacity="0.5" />
+        </>
+      );
+    case 'iapetus':
+      // Split down the middle, because that is the entire point: coal on one side,
+      // snow on the other, with the boundary you can actually see.
+      return (
+        <>
+          <defs>
+            <clipPath id="planet-icon-iapetus-disc">
+              <circle cx={CENTER} cy={CENTER} r={RADIUS} />
+            </clipPath>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#ececed" />
+          <g clipPath="url(#planet-icon-iapetus-disc)">
+            <path d="M 1.6 1.6 H 10 Q 13.4 10 10 18.4 H 1.6 Z" fill="#4a3a2c" />
+          </g>
+          {/* The equatorial ridge, 13 km high and on no other body anywhere. */}
+          <path d="M 2.2 10 Q 6 9.2 10 10" stroke="#7a6450" strokeWidth="0.8" fill="none" opacity="0.9" />
         </>
       );
     case 'system':

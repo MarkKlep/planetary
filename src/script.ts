@@ -18,6 +18,16 @@ import { venusAtmosphere, venusAtmosphereSunDirection } from './planets/venus/at
 import { mercury } from './planets/mercury/mercury';
 import { jupiter } from './planets/jupiter/jupiter';
 import { callisto, europa, ganymede, io } from './planets/jupiter/moons';
+import { saturn, saturnSunDirectionLocal } from './planets/saturn/saturn';
+import {
+    ringCameraPositionLocal,
+    ringSolarDistance,
+    ringSunDirectionLocal,
+    saturnRings,
+} from './planets/saturn/rings';
+import { dione, enceladus, iapetus, mimas, rhea, tethys } from './planets/saturn/moons';
+import { titan } from './planets/saturn/titan';
+import { titanHaze } from './planets/saturn/haze';
 import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
@@ -27,9 +37,12 @@ import { createFreeFlight } from './free-flight';
 import {
     CALLISTO,
     DEIMOS,
+    DIONE,
     EARTH_OBLIQUITY,
+    ENCELADUS,
     EUROPA,
     GANYMEDE,
+    IAPETUS,
     IO,
     jupiterOrbitPosition,
     jupiterSpinAngle,
@@ -39,10 +52,17 @@ import {
     marsOrbitPosition,
     marsSpinAngle,
     MARS_AXIS_ORIENTATION,
+    MIMAS,
     moonEclipticLongitude,
     moonOrbitPosition,
     PHOBOS,
+    RHEA,
     satelliteState,
+    saturnOrbitPosition,
+    saturnSpinAngle,
+    SATURN_AXIS_ORIENTATION,
+    TETHYS,
+    TITAN,
     mercuryOrbitPosition,
     mercurySpinAngle,
     MERCURY_AXIS_ORIENTATION,
@@ -58,23 +78,41 @@ import {
     CLOUD_ANGULAR_VELOCITY_SCALE,
     DEIMOS_ORBIT_RADIUS,
     DEIMOS_RADIUS,
+    DIONE_ORBIT_RADIUS,
+    DIONE_RADIUS,
     EARTH_RADIUS_KM,
+    ENCELADUS_ORBIT_RADIUS,
+    ENCELADUS_RADIUS,
     EUROPA_ORBIT_RADIUS,
     EUROPA_RADIUS,
     GANYMEDE_ORBIT_RADIUS,
     GANYMEDE_RADIUS,
+    IAPETUS_ORBIT_RADIUS,
+    IAPETUS_RADIUS,
     IO_ORBIT_RADIUS,
     IO_RADIUS,
     JUPITER_RADIUS,
     JUPITER_EQUATORIAL_RADIUS,
     MARS_RADIUS,
     MERCURY_RADIUS,
+    MIMAS_ORBIT_RADIUS,
+    MIMAS_RADIUS,
     MOON_ORBIT_INCLINATION_DEG,
     MOON_RADIUS,
     EARTH_ORBIT_RADIUS,
     PHOBOS_ORBIT_RADIUS,
     PHOBOS_RADIUS,
+    RHEA_ORBIT_RADIUS,
+    RHEA_RADIUS,
+    SATURN_EQUATORIAL_RADIUS,
+    SATURN_RADIUS,
+    SATURN_RING_OUTER,
     SUN_RADIUS,
+    TETHYS_ORBIT_RADIUS,
+    TETHYS_RADIUS,
+    TITAN_HAZE_RADIUS,
+    TITAN_ORBIT_RADIUS,
+    TITAN_RADIUS,
     VENUS_RADIUS,
 } from './constants/planets.const';
 
@@ -125,11 +163,13 @@ export function initScene() {
 
     const scene = new Scene();
 
-    // The orbit is 23,481 units in radius now, so the far plane has to clear the
-    // camera's own pull-back plus the width of the system. Depth precision is set by
-    // the *near* plane, not this, so a far plane this large costs nothing:
-    // resolution goes as z^2/(near * 2^24), which is unchanged.
-    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 400000);
+    // The far plane has to clear the camera's own pull-back plus the width of the
+    // system, and Saturn moved both: framing its orbit puts the camera 14 AU out
+    // (328,700 units) while the far side of that orbit is another 10.07 AU (236,400)
+    // beyond the Sun, so 400,000 would have clipped the whole far half of the outermost
+    // orbit line. Depth precision is set by the *near* plane, not this — resolution
+    // goes as z^2/(near * 2^24) — so doubling it costs nothing at all.
+    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 800000);
 
     // Scene graph. The Sun is at the world origin; each planet hangs off a single
     // moving node so its orbit only has to be applied in one place.
@@ -158,13 +198,25 @@ export function initScene() {
     //   │   │   ├── phobos         <- in Mars's *equatorial* plane, not the ecliptic
     //   │   │   └── deimos
     //   │   └── marsAtmosphere
-    //   └── jupiterSystem          <- 5.2 AU out, further than everything else combined
-    //       └── jupiterAxis        <- fixed IAU pole, leaning only 3.1°
-    //           ├── jupiter        <- 870.5°/day, the fastest spin in the scene
-    //           ├── io             <- all four in Jupiter's *equatorial* plane, and
-    //           ├── europa            locked 4:2:1 without anything here saying so
-    //           ├── ganymede
-    //           └── callisto
+    //   ├── jupiterSystem          <- 5.2 AU out, further than everything else combined
+    //   │   └── jupiterAxis        <- fixed IAU pole, leaning only 3.1°
+    //   │       ├── jupiter        <- 870.5°/day, the fastest spin in the scene
+    //   │       ├── io             <- all four in Jupiter's *equatorial* plane, and
+    //   │       ├── europa            locked 4:2:1 without anything here saying so
+    //   │       ├── ganymede
+    //   │       └── callisto
+    //   └── saturnSystem           <- 9.5 AU, and 1.83x Jupiter's again
+    //       └── saturnAxis         <- fixed IAU pole, leaning 26.7° — the biggest here,
+    //           ├── saturn            and the only one you can *see*, because...
+    //           ├── saturnRings    <- ...the rings lie in the plane this node defines
+    //           ├── mimas          <- all seven in Saturn's equatorial plane
+    //           ├── enceladus
+    //           ├── tethys
+    //           ├── dione
+    //           ├── rhea
+    //           ├── titan          <- and Titan alone carries a second shell
+    //           ├── titanHaze
+    //           └── iapetus
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
     // The tilt is applied here, above the spin, and is never touched again. That is
@@ -256,11 +308,37 @@ export function initScene() {
     jupiterAxis.add(callisto);
     jupiterSystem.add(jupiterAxis);
 
+    // A sixth time, and the first body whose defining feature is not the body. The graph
+    // still does not grow: a system node, an axis node holding a fixed IAU pole, and
+    // children inside it. The rings go under the *axis* for exactly the reason the moons
+    // do — they lie in the equatorial plane and inherit its 26.7° lean, which is what
+    // makes them open and close over the 29½-year orbit without anything animating them.
+    const saturnSystem = new Object3D();
+    const saturnAxis = new Object3D();
+    saturnAxis.quaternion.copy(SATURN_AXIS_ORIENTATION);
+
+    saturnAxis.add(saturn);
+    saturnAxis.add(saturnRings);
+    saturnAxis.add(mimas);
+    saturnAxis.add(enceladus);
+    saturnAxis.add(tethys);
+    saturnAxis.add(dione);
+    saturnAxis.add(rhea);
+    // Titan's two shells are siblings under the axis rather than parent and child, the
+    // same way Venus's ground and deck are: the haze is what Titan looks like, so it has
+    // to be removable without taking the moon with it. Both are moved by the one
+    // `satelliteState` call below.
+    saturnAxis.add(titan);
+    saturnAxis.add(titanHaze);
+    saturnAxis.add(iapetus);
+    saturnSystem.add(saturnAxis);
+
     scene.add(mercurySystem);
     scene.add(venusSystem);
     scene.add(earthSystem);
     scene.add(marsSystem);
     scene.add(jupiterSystem);
+    scene.add(saturnSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
@@ -344,6 +422,23 @@ export function initScene() {
         { ...createLabel('Europa', europa, EUROPA_RADIUS * 2), body: europa, radius: EUROPA_RADIUS, hideBeyond: 670 },
         { ...createLabel('Ganymede', ganymede, GANYMEDE_RADIUS * 2), body: ganymede, radius: GANYMEDE_RADIUS, hideBeyond: 1070 },
         { ...createLabel('Callisto', callisto, CALLISTO_RADIUS * 2), body: callisto, radius: CALLISTO_RADIUS, hideBeyond: 1880 },
+        // Measured off the ring system rather than the planet: the rings reach 2.33
+        // equatorial radii, so a chip placed at the globe's own limb would sit inside
+        // them. This is the one body here whose label has to clear something that is not
+        // the body.
+        { ...createLabel('Saturn', saturnSystem, SATURN_RING_OUTER * 1.05), body: saturnSystem, radius: SATURN_RADIUS, hideBeyond: Infinity },
+        // Scaled from their orbit radii the way the Martian and Galilean moons' are. The
+        // inner five are packed inside 83 units, so their chips have to go early or they
+        // pile up on each other; Iapetus's orbit is 559 units and its chip survives to
+        // nearly the range Callisto's does.
+        { ...createLabel('Mimas', mimas, MIMAS_RADIUS * 2), body: mimas, radius: MIMAS_RADIUS, hideBeyond: 30 },
+        { ...createLabel('Enceladus', enceladus, ENCELADUS_RADIUS * 2), body: enceladus, radius: ENCELADUS_RADIUS, hideBeyond: 38 },
+        { ...createLabel('Tethys', tethys, TETHYS_RADIUS * 2), body: tethys, radius: TETHYS_RADIUS, hideBeyond: 46 },
+        { ...createLabel('Dione', dione, DIONE_RADIUS * 2), body: dione, radius: DIONE_RADIUS, hideBeyond: 59 },
+        { ...createLabel('Rhea', rhea, RHEA_RADIUS * 2), body: rhea, radius: RHEA_RADIUS, hideBeyond: 83 },
+        // Anchored on the haze shell, which is the outer of Titan's two surfaces.
+        { ...createLabel('Titan', titan, TITAN_HAZE_RADIUS * 2), body: titan, radius: TITAN_RADIUS, hideBeyond: 192 },
+        { ...createLabel('Iapetus', iapetus, IAPETUS_RADIUS * 2), body: iapetus, radius: IAPETUS_RADIUS, hideBeyond: 560 },
         // A local Earth-surface feature, not a findable body — meaningful only once
         // you're already close, so this gets a short `hideBeyond` like the ISS's
         // framing rather than the "visible across the whole system" bodies above.
@@ -385,6 +480,23 @@ export function initScene() {
         createBodyMarker(0xfff2e2, EUROPA_RADIUS, 5, EUROPA_ORBIT_RADIUS),
         createBodyMarker(0xd8cfc0, GANYMEDE_RADIUS, 6, GANYMEDE_ORBIT_RADIUS),
         createBodyMarker(0xb0a08c, CALLISTO_RADIUS, 5, CALLISTO_ORBIT_RADIUS),
+        // Saturn's dot is sized against its *rings*, not its globe: the system is 2.33
+        // equatorial radii across, so the disc stops being sub-pixel a good deal later
+        // than the planet alone would. Sized between Jupiter's and Mars's, which is
+        // where it sits in our sky — brighter than Mars at opposition, and never
+        // Jupiter's match.
+        createBodyMarker(0xf0dcae, SATURN_RING_OUTER, 8),
+        // The inner five are tiny and packed inside 83 units, so they fade out early —
+        // the whole of Rhea's orbit is a third the width of Io's. Titan earns a larger
+        // dot for the reason Venus and Jupiter do: it is the one here you could find in
+        // binoculars, and Huygens did find it, in 1655, with a lens he ground himself.
+        createBodyMarker(0xf2f2f4, MIMAS_RADIUS, 4, MIMAS_ORBIT_RADIUS),
+        createBodyMarker(0xffffff, ENCELADUS_RADIUS, 5, ENCELADUS_ORBIT_RADIUS),
+        createBodyMarker(0xf4f4f6, TETHYS_RADIUS, 5, TETHYS_ORBIT_RADIUS),
+        createBodyMarker(0xeeeef0, DIONE_RADIUS, 5, DIONE_ORBIT_RADIUS),
+        createBodyMarker(0xe8e8ea, RHEA_RADIUS, 5, RHEA_ORBIT_RADIUS),
+        createBodyMarker(0xe2a869, TITAN_RADIUS, 7, TITAN_ORBIT_RADIUS),
+        createBodyMarker(0xbfae95, IAPETUS_RADIUS, 5, IAPETUS_ORBIT_RADIUS),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -399,18 +511,27 @@ export function initScene() {
     europa.add(markers[10].sprite);
     ganymede.add(markers[11].sprite);
     callisto.add(markers[12].sprite);
+    saturnSystem.add(markers[13].sprite);
+    mimas.add(markers[14].sprite);
+    enceladus.add(markers[15].sprite);
+    tethys.add(markers[16].sprite);
+    dione.add(markers[17].sprite);
+    rhea.add(markers[18].sprite);
+    titan.add(markers[19].sprite);
+    iapetus.add(markers[20].sprite);
 
     // Far enough back from the Sun to take in the whole system, viewed obliquely from
     // above the ecliptic so the orbits read as circles rather than edge-on. A 75°
-    // vertical field sees 0.77 AU per AU of distance, and Jupiter reaches 5.45 AU at
-    // aphelion, so this has to sit at least 7.1 AU back — nearly three times what
-    // framing Mars's 1.67 AU needed.
+    // vertical field sees 0.77 AU per AU of distance, and Saturn reaches 10.07 AU at
+    // aphelion, so this has to sit at least 13.1 AU back.
     //
-    // Which is the honest picture, and a startling one: at this distance the four
-    // inner planets are a knot around the Sun occupying the middle fifth of the frame,
-    // with Jupiter's orbit drawn around all of them. Everything the scene contained
-    // before fits inside a third of the radius of the one orbit added here.
-    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 7.6;
+    // Which is the honest picture, and it keeps getting more startling rather than less.
+    // Jupiter's arrival reduced everything before it to a knot in the middle fifth of
+    // the frame; Saturn's orbit is drawn around *that* with as much room to spare again.
+    // The spacing is roughly geometric — each orbit about half again the last — so this
+    // number is going to keep doubling and the inner system is going to keep shrinking
+    // toward a point, which is what the solar system is actually like.
+    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 14;
     const SYSTEM_VIEW_DIRECTION = new Vector3(0.3, 0.78, 0.55).normalize();
     // Longer than any nav fly-to: this one crosses 2.6 AU to end up 3 Earth-radii out,
     // and the nav buttons' 1.5–2.5s over that range reads as a jump rather than a move.
@@ -440,10 +561,10 @@ export function initScene() {
     // hundred Deimos-radii away and leave it a speck. The floor now comes from the
     // smallest body in the scene, which is also what the dynamic near plane assumes.
     controls.minDistance = DEIMOS_RADIUS;
-    // Framing Jupiter's orbit needs roughly 5.45 AU/tan(fov/2) ~ 7.1 AU, so this
-    // leaves comfortable headroom past that. It was 4 AU when Mars was the outermost
-    // body, which would now stop the user short of ever seeing Jupiter's orbit whole.
-    controls.maxDistance = EARTH_ORBIT_RADIUS * 12;
+    // Framing Saturn's orbit needs roughly 10.07 AU/tan(fov/2) ~ 13.1 AU, so this
+    // leaves comfortable headroom past that. It was 12 AU when Jupiter was the outermost
+    // body, which would now stop the user short of ever seeing Saturn's orbit whole.
+    controls.maxDistance = EARTH_ORBIT_RADIUS * 22;
     controls.enablePan = true;
 
     // Earth is framed from 3 of its radii; Mars is barely half the size, so matching
@@ -469,6 +590,20 @@ export function initScene() {
     const EUROPA_VIEW_DISTANCE = EUROPA_RADIUS * 3.5;
     const GANYMEDE_VIEW_DISTANCE = GANYMEDE_RADIUS * 3.5;
     const CALLISTO_VIEW_DISTANCE = CALLISTO_RADIUS * 3.5;
+    // The one framing here measured off something that is not the body. Every other
+    // planet is framed at a few of its own radii; do that to Saturn and the rings run
+    // off both edges, because they reach 2.33 equatorial radii and are the thing you
+    // came to look at. 1.6 ring-radii puts the whole system in frame with a margin.
+    const SATURN_VIEW_DISTANCE = SATURN_RING_OUTER * 1.6;
+    const MIMAS_VIEW_DISTANCE = MIMAS_RADIUS * 3.5;
+    const ENCELADUS_VIEW_DISTANCE = ENCELADUS_RADIUS * 3.5;
+    const TETHYS_VIEW_DISTANCE = TETHYS_RADIUS * 3.5;
+    const DIONE_VIEW_DISTANCE = DIONE_RADIUS * 3.5;
+    const RHEA_VIEW_DISTANCE = RHEA_RADIUS * 3.5;
+    // Measured off the haze rather than the ground, which is the outer of Titan's two
+    // surfaces and the one that sets the silhouette.
+    const TITAN_VIEW_DISTANCE = TITAN_HAZE_RADIUS * 3.5;
+    const IAPETUS_VIEW_DISTANCE = IAPETUS_RADIUS * 3.5;
     // The loop itself already reaches ANALEMMA_RADIUS (1.4) out from Earth's centre,
     // so framing it "3 radii out" the way Earth is would put the camera practically
     // inside the curve. Measuring from its own radius instead keeps the whole
@@ -502,6 +637,19 @@ export function initScene() {
         { name: 'Europa', object: europa, radius: EUROPA_RADIUS },
         { name: 'Ganymede', object: ganymede, radius: GANYMEDE_RADIUS },
         { name: 'Callisto', object: callisto, radius: CALLISTO_RADIUS },
+        // Saturn's clearance is measured from the *equatorial* radius, not the rings.
+        // This figure sets the flight speed and the near plane, and both want the
+        // distance to the nearest thing you could hit — the rings are a plane you can
+        // fly straight through, and taking the clearance from their outer edge would
+        // have you crawling at ring speed while still 140,000 km from the planet.
+        { name: 'Saturn', object: saturnSystem, radius: SATURN_EQUATORIAL_RADIUS },
+        { name: 'Mimas', object: mimas, radius: MIMAS_RADIUS },
+        { name: 'Enceladus', object: enceladus, radius: ENCELADUS_RADIUS },
+        { name: 'Tethys', object: tethys, radius: TETHYS_RADIUS },
+        { name: 'Dione', object: dione, radius: DIONE_RADIUS },
+        { name: 'Rhea', object: rhea, radius: RHEA_RADIUS },
+        { name: 'Titan', object: titan, radius: TITAN_HAZE_RADIUS },
+        { name: 'Iapetus', object: iapetus, radius: IAPETUS_RADIUS },
     ];
     let nearestBody = flightBodies[1];
     let nearestClearance = 1;
@@ -551,7 +699,18 @@ export function initScene() {
      * they hold a fixed brightness through all of it. Only lit geometry moves, which
      * is the only thing that should.
      */
-    const MAX_EXPOSURE = 32;
+    /**
+     * The ceiling had to move for Saturn, and it is worth saying why it is not a fudge.
+     *
+     * This number is `d²` at the furthest body in the scene, because that is exactly
+     * what cancels the light's own 1/d² falloff. It was 32 when Jupiter's 5.2 AU needed
+     * 27; Saturn's aphelion is 10.07 AU and needs 101. Leaving it at 32 would not have
+     * been a conservative choice — it would have rendered Saturn three times darker than
+     * the model says it is, which is precisely the artefact `updateExposure` exists to
+     * remove. Sunlight at Saturn is about 1,400 lux, which is an overcast day; it is
+     * dimmer than Jupiter and it is nothing like dark.
+     */
+    const MAX_EXPOSURE = 110;
     /** Seconds to cover most of an exposure change. Slow enough to read as an eye
      *  adjusting rather than a light switch, quick enough to settle inside a fly-to. */
     const EXPOSURE_ADAPT_SECONDS = 0.7;
@@ -674,6 +833,26 @@ export function initScene() {
     toggleVenusCloudsBtn?.addEventListener('click', () =>
         setVenusCloudsVisible(!venusCloudsVisible)
     );
+
+    // The same shape once more, for the only other body in the solar system whose
+    // surface is hidden by its own air. Titan's haze is opaque in visible light, so with
+    // it on you get what Voyager 1 got in 1980 — a blank orange ball, for which it gave
+    // up its shot at Pluto — and with it off you get the ground Cassini mapped through
+    // it at 938 nm, which no eye has ever seen. Both are Titan.
+    let titanHazeVisible = true;
+    const toggleTitanHazeBtn = document.getElementById('toggle-titan-haze');
+
+    function setTitanHazeVisible(visible: boolean) {
+        titanHazeVisible = visible;
+        titanHaze.visible = visible;
+        toggleTitanHazeBtn?.classList.toggle('nav-visibility-btn--off', !visible);
+        if (toggleTitanHazeBtn) {
+            toggleTitanHazeBtn.textContent = visible ? 'Hide' : 'Show';
+        }
+    }
+
+    toggleTitanHazeBtn?.addEventListener('click', () => setTitanHazeVisible(!titanHazeVisible));
+    setTitanHazeVisible(true);
     // On by default, unlike the other two — this is what Venus looks like, so it is
     // scenery rather than an overlay, and the surface underneath is the thing you opt
     // into. Still routed through the setter so the flags and the button label cannot
@@ -712,6 +891,8 @@ export function initScene() {
     const scratchB = new Vector3();
     const scratchTarget = new Vector3();
     const scratchFocus = new Vector3();
+    const scratchSaturnSun = new Vector3();
+    const scratchQuaternion = new Quaternion();
 
     function focusOnObject(
         target: Object3D,
@@ -959,6 +1140,17 @@ export function initScene() {
             case 'j':
                 focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
                 break;
+            // Saturn's obvious key is the one free flight uses to go backwards, and the
+            // two modes are already mutually exclusive, so it means whichever one you
+            // are in: "back" while flying, "Saturn" otherwise. That is a narrower rule
+            // than it sounds — the alternative was leaving the second most recognisable
+            // object in the sky reachable only by mouse, on the grounds that a letter
+            // was spoken for in a mode where nav shortcuts do not apply anyway.
+            case 's':
+                if (!freeFlight.enabled) {
+                    focusOnObject(saturn, SATURN_VIEW_DISTANCE, 3500);
+                }
+                break;
         }
     });
 
@@ -987,6 +1179,22 @@ export function initScene() {
         { hit: europa, focus: europa, distance: EUROPA_VIEW_DISTANCE },
         { hit: ganymede, focus: ganymede, distance: GANYMEDE_VIEW_DISTANCE },
         { hit: callisto, focus: callisto, distance: CALLISTO_VIEW_DISTANCE },
+        { hit: saturn, focus: saturn, distance: SATURN_VIEW_DISTANCE },
+        // The rings are pickable too, and they aim at the planet — clicking a ring means
+        // "take me to Saturn", not "take me to a point 120,000 km off its equator". They
+        // are also the larger target by area from almost every angle.
+        { hit: saturnRings, focus: saturn, distance: SATURN_VIEW_DISTANCE },
+        { hit: mimas, focus: mimas, distance: MIMAS_VIEW_DISTANCE },
+        { hit: enceladus, focus: enceladus, distance: ENCELADUS_VIEW_DISTANCE },
+        { hit: tethys, focus: tethys, distance: TETHYS_VIEW_DISTANCE },
+        { hit: dione, focus: dione, distance: DIONE_VIEW_DISTANCE },
+        { hit: rhea, focus: rhea, distance: RHEA_VIEW_DISTANCE },
+        // Two entries, like Venus's pair, because which one the ray lands on depends on
+        // whether the haze is switched on — and they are siblings, so neither walks up
+        // to the other. Both aim at the same place.
+        { hit: titanHaze, focus: titan, distance: TITAN_VIEW_DISTANCE },
+        { hit: titan, focus: titan, distance: TITAN_VIEW_DISTANCE },
+        { hit: iapetus, focus: iapetus, distance: IAPETUS_VIEW_DISTANCE },
     ];
 
     function pickTarget(event: MouseEvent) {
@@ -1119,6 +1327,30 @@ export function initScene() {
                     break;
                 case 'callisto':
                     focusOnObject(callisto, CALLISTO_VIEW_DISTANCE, 3000);
+                    break;
+                case 'saturn':
+                    focusOnObject(saturn, SATURN_VIEW_DISTANCE, 3500);
+                    break;
+                case 'mimas':
+                    focusOnObject(mimas, MIMAS_VIEW_DISTANCE, 3500);
+                    break;
+                case 'enceladus':
+                    focusOnObject(enceladus, ENCELADUS_VIEW_DISTANCE, 3500);
+                    break;
+                case 'tethys':
+                    focusOnObject(tethys, TETHYS_VIEW_DISTANCE, 3500);
+                    break;
+                case 'dione':
+                    focusOnObject(dione, DIONE_VIEW_DISTANCE, 3500);
+                    break;
+                case 'rhea':
+                    focusOnObject(rhea, RHEA_VIEW_DISTANCE, 3500);
+                    break;
+                case 'titan':
+                    focusOnObject(titan, TITAN_VIEW_DISTANCE, 3500);
+                    break;
+                case 'iapetus':
+                    focusOnObject(iapetus, IAPETUS_VIEW_DISTANCE, 3500);
                     break;
                 case 'sun':
                     focusOnObject(sun, SUN_RADIUS * 4, 2500);
@@ -1351,6 +1583,27 @@ export function initScene() {
         satelliteState(GANYMEDE, now, ganymede.position, ganymede.quaternion);
         satelliteState(CALLISTO, now, callisto.position, callisto.quaternion);
 
+        saturnOrbitPosition(now, saturnSystem.position);
+        saturn.rotation.y = saturnSpinAngle(now);
+
+        // The same call a third time, seven more. Mimas gets round in 22.6 hours and
+        // Iapetus takes 79 days, so at "1 day/s" the inner five blur while Titan and
+        // Iapetus crawl — which is the actual shape of this system, and the reason the
+        // resonances among the inner five took so long to be noticed.
+        satelliteState(MIMAS, now, mimas.position, mimas.quaternion);
+        satelliteState(ENCELADUS, now, enceladus.position, enceladus.quaternion);
+        satelliteState(TETHYS, now, tethys.position, tethys.quaternion);
+        satelliteState(DIONE, now, dione.position, dione.quaternion);
+        satelliteState(RHEA, now, rhea.position, rhea.quaternion);
+        satelliteState(TITAN, now, titan.position, titan.quaternion);
+        // Position only, never orientation. The deck is a fluid with no prime meridian
+        // to lock to the ground, and Titan's stratosphere superrotates besides, so it
+        // would not keep step even if it had one. Venus's deck answers the same problem
+        // the other way, with a rotation rate of its own; here there is nothing on the
+        // haze sharp enough for a rate to be visible, so it is simply not claimed.
+        titanHaze.position.copy(titan.position);
+        satelliteState(IAPETUS, now, iapetus.position, iapetus.quaternion);
+
         // Position and facing together — both moons are tidally locked, so the
         // direction back to Mars that places them is also the direction that aims
         // them. Phobos gets round three times a sol, which is fast enough to watch
@@ -1395,6 +1648,34 @@ export function initScene() {
         // Sun is nothing like Earth's. Venus likewise, one orbit the other way.
         marsAtmosphereSunDirection.copy(marsSystem.position).negate().normalize();
         venusAtmosphereSunDirection.copy(venusSystem.position).negate().normalize();
+
+        // Saturn needs the sun direction in two *local* frames rather than in world
+        // space, which is what keeps both shadow tests to a few lines of arithmetic:
+        // in the ring mesh's frame the ring normal is exactly +Z, and in the planet
+        // mesh's frame the pole is exactly +Y, so each test reduces to one component of
+        // one vector. The alternative is passing a change of basis into both shaders and
+        // doing the work per fragment.
+        //
+        // The matrices are current: the block above moved the whole system, and the
+        // orbit camera's own `updateMatrixWorld` has not run yet, so these are flushed
+        // here rather than relying on the later one.
+        saturnSystem.updateMatrixWorld(true);
+        scratchSaturnSun.copy(saturnSystem.position).negate().normalize();
+        ringSolarDistance.value = saturnSystem.position.length();
+        // Directions, so only the rotation matters — hence the world quaternion rather
+        // than `worldToLocal`, which would apply the translation as well.
+        ringSunDirectionLocal
+            .copy(scratchSaturnSun)
+            .applyQuaternion(saturnRings.getWorldQuaternion(scratchQuaternion).invert());
+        saturnSunDirectionLocal
+            .copy(scratchSaturnSun)
+            .applyQuaternion(saturn.getWorldQuaternion(scratchQuaternion).invert());
+        // A position, not a direction, so this one really does need the full inverse
+        // transform. It is what tells the ring shader which side of the plane you are on
+        // — the difference between the B ring being the brightest thing in the system
+        // and the darkest.
+        ringCameraPositionLocal.copy(camera.position);
+        saturnRings.worldToLocal(ringCameraPositionLocal);
 
         // Smooth interpolation between current and target position
         const elapsedTime = Date.now() - issLastUpdateTime;

@@ -3,10 +3,13 @@ import { latLonToDirection } from './geo';
 import {
     CALLISTO_ORBIT_RADIUS,
     DEIMOS_ORBIT_RADIUS,
+    DIONE_ORBIT_RADIUS,
     EARTH_OBLIQUITY_DEG,
     EARTH_ORBIT_RADIUS,
+    ENCELADUS_ORBIT_RADIUS,
     EUROPA_ORBIT_RADIUS,
     GANYMEDE_ORBIT_RADIUS,
+    IAPETUS_ORBIT_RADIUS,
     IO_ORBIT_RADIUS,
     JUPITER_POLE_DEC_DEG,
     JUPITER_POLE_RA_DEG,
@@ -20,8 +23,16 @@ import {
     MERCURY_POLE_RA_DEG,
     MERCURY_PRIME_MERIDIAN_DEG,
     MERCURY_ROTATION_DEG_PER_DAY,
+    MIMAS_ORBIT_RADIUS,
     MOON_DISTANCE,
     PHOBOS_ORBIT_RADIUS,
+    RHEA_ORBIT_RADIUS,
+    SATURN_POLE_DEC_DEG,
+    SATURN_POLE_RA_DEG,
+    SATURN_PRIME_MERIDIAN_DEG,
+    SATURN_ROTATION_DEG_PER_DAY,
+    TETHYS_ORBIT_RADIUS,
+    TITAN_ORBIT_RADIUS,
     VENUS_CLOUD_DEG_PER_DAY,
     VENUS_POLE_DEC_DEG,
     VENUS_POLE_RA_DEG,
@@ -359,6 +370,29 @@ const JUPITER_ELEMENTS: OrbitalElements = {
 };
 
 /**
+ * Saturn's, from the same table, and the orbit that changes what "the solar system"
+ * means in this scene for the second time.
+ *
+ * Jupiter's arrival put every previous body inside a third of one orbit's radius.
+ * Saturn is 1.83 times further out again, so it now encloses *Jupiter's* orbit with the
+ * same margin to spare — and the pattern is the point: from Mercury out, each orbit is
+ * roughly half again the last, so the diagram is logarithmic and no linear framing ever
+ * shows two neighbours well at once.
+ *
+ * The eccentricity of 0.0539 is the largest of the four outer bodies here and swings
+ * Saturn a full AU — 24,000 scene units, more than the whole radius of Earth's orbit —
+ * between perihelion at 9.03 AU and aphelion at 10.07.
+ */
+const SATURN_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [9.53667594, -0.00125060],
+    eccentricity: [0.05386179, -0.00050991],
+    inclination: [2.48599187, 0.00193609],
+    meanLongitude: [49.95424423, 1222.49362201],
+    perihelionLongitude: [92.59887831, -0.41897216],
+    ascendingNode: [113.66242448, -0.28867794],
+};
+
+/**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
  *
  * There is no closed form, so this is Newton–Raphson. It converges in three or four
@@ -459,6 +493,9 @@ export const mercuryOrbitPosition = (date: Date, target = new Vector3()): Vector
 export const jupiterOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
     keplerianPosition(JUPITER_ELEMENTS, date, target);
 
+export const saturnOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(SATURN_ELEMENTS, date, target);
+
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
  * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
@@ -538,6 +575,26 @@ export const JUPITER_AXIS_ORIENTATION = axisOrientationFromPole(
 );
 
 /**
+ * Saturn's, and the one axis node in this scene that you can *see*.
+ *
+ * Every other planet's tilt has to be inferred from where its terminator falls or how
+ * its poles catch the light. Saturn's is drawn across the sky by the rings, which lie
+ * in the equatorial plane this node defines: the ring plane's opening angle as seen
+ * from Earth is a direct read-out of the 26.73° lean, and it is fixed in space here for
+ * exactly the same reason Earth's is — set once, never touched, so it holds its
+ * direction while the planet goes round. That is what produces the 29½-year cycle of
+ * the rings opening, closing and vanishing edge-on, and none of it is scripted.
+ *
+ * Seven moons hang off this node as well, for the reason Jupiter's four and Mars's two
+ * do: they are deep in the oblateness of the most oblate planet there is, so their
+ * orbits are ruled by the equatorial bulge and not by the Sun.
+ */
+export const SATURN_AXIS_ORIENTATION = axisOrientationFromPole(
+    SATURN_POLE_RA_DEG,
+    SATURN_POLE_DEC_DEG
+);
+
+/**
  * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
  *
  * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
@@ -582,6 +639,15 @@ export const mercurySpinAngle = (date: Date): number =>
  */
 export const jupiterSpinAngle = (date: Date): number =>
     primeMeridianAngle(JUPITER_PRIME_MERIDIAN_DEG, JUPITER_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Saturn's, in System III — with the caveat, recorded on the constant, that Saturn's
+ * magnetic field is so nearly axisymmetric that its own rotation period is genuinely
+ * unsettled by several minutes. This is the IAU's number, not a measurement anyone is
+ * confident in.
+ */
+export const saturnSpinAngle = (date: Date): number =>
+    primeMeridianAngle(SATURN_PRIME_MERIDIAN_DEG, SATURN_ROTATION_DEG_PER_DAY, date);
 
 /**
  * Venus's cloud deck, which does not turn with the planet.
@@ -665,6 +731,32 @@ export interface SatelliteElements {
     periapsisRateDegPerDay: number;
     meanLongitudeJ2000Deg: number;
     meanMotionDegPerDay: number;
+    /**
+     * A sinusoid added to the mean longitude — the one term here that is not a
+     * two-body element, and the only one any moon in this scene has needed.
+     *
+     * Everything else in this interface describes a body going round a point mass on an
+     * ellipse that slowly turns. Mimas is not doing that: it is locked to Tethys in a
+     * 4:2 resonance, and the resonant argument *librates* rather than holding still, so
+     * Mimas swings tens of degrees back and forth along its own orbit over decades. A
+     * precessing ellipse has nowhere to put that, and leaving it out costs 6.7° RMS —
+     * thirty times the worst residual of any other moon in the file, and easily visible.
+     *
+     * So it goes in explicitly. Two moons carry one: Mimas, and Tethys, which is the
+     * other half of the same resonance and shows the same signal an order of magnitude
+     * smaller, in the ratio the two masses lead you to expect. Nothing else in this
+     * project wants it and nothing else sets it.
+     *
+     * The period is *fitted over 2000–2030 alongside everything else*, and is not a
+     * measurement of the resonance's true libration period. A thirty-year arc covers
+     * under half a cycle of a ~70-year libration, so what comes out is the effective
+     * single tone that best reproduces JPL's ephemeris over the window this file is
+     * checked against — pinning it to the published 70.6 years instead makes Mimas nine
+     * times worse.
+     */
+    librationAmplitudeDeg?: number;
+    librationPeriodDays?: number;
+    librationPhaseDeg?: number;
 }
 
 interface Satellite extends SatelliteElements {
@@ -875,6 +967,267 @@ export const CALLISTO = defineSatellite({
     meanMotionDegPerDay: 21.5710728,
 }, JUPITER_AXIS_INVERSE);
 
+// ---------------------------------------------------------------------------
+// The seven major Saturnian moons
+//
+// The same `satelliteState` a third time, for the same structural reason: all seven are
+// deep inside the oblateness of the most oblate planet there is, so their orbits are
+// ruled by Saturn's equatorial bulge rather than by the Sun, and they hang off the
+// *axis* node. All seven are tidally locked, so the same call that places them aims
+// them.
+//
+// Elements fitted to JPL's SAT441 ephemeris over 2000-2030, in the frame this scene
+// uses (Saturn's equator, `eclipticDirection` handedness), so they drop straight in.
+// Compared against JPL's published mean elements, none of which the fit was given:
+//
+//                        fitted           published
+//   Mimas      a         185,536 km       186,000
+//              e         0.019663         0.020
+//              i         1.5677°          1.6°
+//              period    0.94242674 d     0.942422
+//   Enceladus  a         238,034 km       238,400
+//              e         0.004728         0.005
+//              period    1.37021815 d     1.370218
+//   Tethys     a         294,673 km       295,000
+//              i         1.0909°          1.1°
+//              period    1.88780305 d     1.887802
+//   Dione      a         377,415 km       377,700
+//              e         0.002193         0.002
+//              period    2.73691555 d     2.736916
+//   Rhea       a         527,068 km       527,200
+//              i         0.3318°          0.3°
+//              period    4.51750274 d     4.517503
+//   Titan      a         1,221,865 km     1,221,900
+//              e         0.028701         0.029
+//              i         0.3451°          0.3°
+//              period    15.94544735 d    15.945448
+//   Iapetus    a         3,560,840 km     3,561,700
+//              e         0.028409         0.028
+//              i         7.5743°          7.6°
+//              period    79.33089448 d    79.331002
+//
+// Run back against Horizons over the whole 2000-2030 span:
+//
+//              RMS      max angle    max distance   (of its own orbit radius)
+//   Mimas      0.210°   0.686°       2,206 km       1.19%
+//   Enceladus  0.229°   0.429°       1,787 km       0.75%
+//   Tethys     0.019°   0.056°         292 km       0.10%
+//   Dione      0.022°   0.052°         341 km       0.09%
+//   Rhea       0.011°   0.032°         293 km       0.06%
+//   Titan      0.016°   0.033°         674 km       0.06%
+//   Iapetus    0.059°   0.115°       7,079 km       0.20%
+//
+// **The Enceladus-Dione 2:1 resonance is not in this file.** Enceladus goes round twice
+// for each of Dione's orbits, and being held eccentric by it is the entire power source
+// for the south-polar jets — the plumes that feed the E ring, and the reason Enceladus
+// is the most reflective body in the solar system and one of two places anywhere with a
+// confirmed liquid-water ocean venting into space. The resonance condition is
+//
+//     2·n_Dione − n_Enceladus − ϖ̇_Enceladus = +6.3×10⁻⁵ °/day
+//
+// which is 2.4×10⁻⁷ of Enceladus's own mean motion. The two mean motions and the apsidal
+// rate were fitted from separate ephemeris queries with no knowledge of each other, so
+// like Mercury's 3:2 and Jupiter's Laplace resonance, this is a result rather than an
+// input. Note that it only closes when the apsidal precession is carried: the raw period
+// ratio is 1.99743, which looks like a *near* miss and is in fact exact.
+//
+// The Mimas-Tethys 4:2 is the one exception to that rule, and the only place in this
+// project where a resonance had to be put in by hand — see `librationAmplitudeDeg`.
+// Its argument closes to 9.5×10⁻⁶ of Mimas's mean motion on the fitted rates, but the
+// *libration about* it is tens of degrees and no two-body model can carry it.
+//
+// The Laplace planes show the same distance-dependence Jupiter's do, only much further.
+// The inner five sit within 0.03° of Saturn's own pole — that deep in a 0.098 oblateness,
+// the equator is the only plane there is. Titan's is 0.6° off it. Iapetus's is **14.8°**
+// off, out at 59 Saturn radii where the Sun has largely won, and that single fact is why
+// Iapetus's "inclination" is usually quoted as 15.5°: only 7.6° of it is the orbit's tilt
+// within its own Laplace plane, and the rest is the plane.
+// ---------------------------------------------------------------------------
+
+const SATURN_AXIS_INVERSE = SATURN_AXIS_ORIENTATION.clone().invert();
+
+/**
+ * Mimas — the smallest body in the solar system still round enough for gravity to have
+ * made it so, and only just: it is an ellipsoid a tenth longer than it is tall.
+ *
+ * Herschel, its 130 km crater, is a third of the moon's own diameter; the impact that
+ * made it very nearly did not leave a Mimas. The 4:2 resonance with Tethys is what
+ * `librationAmplitudeDeg` below is for, and it is not a small correction.
+ */
+export const MIMAS = defineSatellite({
+    laplacePoleRaDeg: 40.5941,
+    laplacePoleDecDeg: 83.5367,
+    semiMajorAxis: MIMAS_ORBIT_RADIUS,
+    // Forced, like Io's: tides would have circularised this long ago, and it is Tethys
+    // that keeps pumping it back up.
+    eccentricity: 0.019663,
+    inclinationDeg: 1.5677,
+    nodeJ2000Deg: 111.6533,
+    // A full degree a day — the fastest node regression in this project by a factor of
+    // two, and a consequence of sitting 3.08 radii above a planet a tenth out of round.
+    // Mimas's orbit plane turns right round in under a year.
+    nodeRateDegPerDay: -0.9994652,
+    periapsisJ2000Deg: 84.4495,
+    // And the apse advances at very nearly the same rate the node regresses, for the
+    // reason Phobos's do: one bulge drives both.
+    periapsisRateDegPerDay: 1.0008894,
+    meanLongitudeJ2000Deg: 106.3842,
+    meanMotionDegPerDay: 381.9925578,
+    librationAmplitudeDeg: 33.0927,
+    librationPeriodDays: 23218.1,
+    librationPhaseDeg: 139.8020,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Enceladus. 252 km across, and geologically alive: a hundred jets of water vapour and
+ * ice out of four fractures at the south pole, erupting continuously, feeding the E
+ * ring and snowing back onto the moon. It is the reason five of the seven moons here
+ * are so bright.
+ */
+export const ENCELADUS = defineSatellite({
+    laplacePoleRaDeg: 40.5752,
+    laplacePoleDecDeg: 83.5379,
+    semiMajorAxis: ENCELADUS_ORBIT_RADIUS,
+    // The number the whole moon runs on: 0.0047 of forced eccentricity, held by Dione,
+    // flexing the ice shell twice per orbit. Circularise this and the plumes stop.
+    eccentricity: 0.004728,
+    inclinationDeg: 0.0031,
+    nodeJ2000Deg: 16.4910,
+    nodeRateDegPerDay: -0.3786513,
+    periapsisJ2000Deg: 292.5945,
+    // This rate is the third term of the resonance condition in the note above, and it
+    // is what makes 1.99743 come out exact.
+    periapsisRateDegPerDay: 0.3379131,
+    meanLongitudeJ2000Deg: 303.1200,
+    meanMotionDegPerDay: 262.7318866,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Tethys. Almost pure water ice — density 0.956, less than water itself, so there is
+ * essentially no rock in it. Carries Ithaca Chasma, a canyon 2,000 km long running
+ * three quarters of the way round the moon, and Odysseus, a 450 km basin on a 1,070 km
+ * body whose floor has relaxed back to the curve of the surface.
+ */
+export const TETHYS = defineSatellite({
+    laplacePoleRaDeg: 40.5683,
+    laplacePoleDecDeg: 83.5365,
+    semiMajorAxis: TETHYS_ORBIT_RADIUS,
+    // Effectively zero — three parts in a hundred thousand. Unlike Mimas's and
+    // Enceladus's, nothing is forcing it.
+    eccentricity: 0.000030,
+    inclinationDeg: 1.0909,
+    nodeJ2000Deg: 336.6731,
+    nodeRateDegPerDay: -0.1978501,
+    periapsisJ2000Deg: 310.4403,
+    periapsisRateDegPerDay: 0.2431647,
+    meanLongitudeJ2000Deg: 265.1745,
+    meanMotionDegPerDay: 190.6978592,
+    // The other half of Mimas's libration, and the evidence that it is the resonance
+    // rather than a fitting artefact: same signal, same window, 12.6 times smaller —
+    // roughly the ratio of the two masses, which is how a resonance divides a libration.
+    librationAmplitudeDeg: 2.6158,
+    librationPeriodDays: 28661.2,
+    librationPhaseDeg: 329.3642,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Dione. Denser than its neighbours, so there is real rock inside, and cracked across
+ * its trailing hemisphere by the bright "wispy terrain" that Voyager took for frost
+ * streaks and Cassini resolved into ice cliffs hundreds of metres high.
+ */
+export const DIONE = defineSatellite({
+    laplacePoleRaDeg: 40.5536,
+    laplacePoleDecDeg: 83.5422,
+    semiMajorAxis: DIONE_ORBIT_RADIUS,
+    eccentricity: 0.002193,
+    inclinationDeg: 0.0270,
+    nodeJ2000Deg: 68.7792,
+    nodeRateDegPerDay: -0.0831080,
+    periapsisJ2000Deg: 356.8408,
+    periapsisRateDegPerDay: 0.0842525,
+    meanLongitudeJ2000Deg: 319.3808,
+    // Twice this, less Enceladus's apsidal rate, is Enceladus's own mean motion — see
+    // the resonance note above.
+    meanMotionDegPerDay: 131.5349315,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Rhea. Saturn's second largest moon and, at 1,528 km across, still under a fifth of
+ * Titan's diameter and a hundredth of its mass — the gap between Titan and everything
+ * else here is not a detail.
+ */
+export const RHEA = defineSatellite({
+    laplacePoleRaDeg: 40.3272,
+    laplacePoleDecDeg: 83.5518,
+    semiMajorAxis: RHEA_ORBIT_RADIUS,
+    eccentricity: 0.000936,
+    inclinationDeg: 0.3318,
+    nodeJ2000Deg: 108.1774,
+    nodeRateDegPerDay: -0.0275855,
+    periapsisJ2000Deg: 331.1636,
+    // Near enough zero that the apse barely moves in a human lifetime. At this
+    // eccentricity it is worth almost nothing to the position either way.
+    periapsisRateDegPerDay: -0.0004671,
+    meanLongitudeJ2000Deg: 168.9793,
+    meanMotionDegPerDay: 79.6900457,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Titan, which is a planet in everything but what it orbits: larger than Mercury, with
+ * a nitrogen atmosphere half again Earth's surface pressure, weather, rain, rivers,
+ * dunes and seas. The only other place in the solar system with standing liquid on the
+ * surface — methane and ethane, at 94 K.
+ *
+ * The Laplace pole here is pinned to JPL's published value rather than fitted. Titan's
+ * node takes 3,400 years to come round, so over the thirty-year window this file is
+ * checked against it moves a third of a degree, and the pole, the inclination and the
+ * node are only determined in combination. A free fit walks the pole tens of degrees
+ * for two thousandths of a degree of residual and lands on a plane that is arithmetically
+ * as good and physically meaningless.
+ */
+export const TITAN = defineSatellite({
+    laplacePoleRaDeg: 36.4000,
+    laplacePoleDecDeg: 84.0000,
+    semiMajorAxis: TITAN_ORBIT_RADIUS,
+    // The largest of the seven, and unexplained: tides should have circularised a moon
+    // this size long ago, and nothing is currently forcing it.
+    eccentricity: 0.028701,
+    inclinationDeg: 0.3451,
+    nodeJ2000Deg: 155.5638,
+    nodeRateDegPerDay: -0.0010862,
+    periapsisJ2000Deg: 341.5486,
+    periapsisRateDegPerDay: 0.0014244,
+    meanLongitudeJ2000Deg: 145.1433,
+    meanMotionDegPerDay: 22.5769771,
+}, SATURN_AXIS_INVERSE);
+
+/**
+ * Iapetus, the strangest-looking body in the solar system: one hemisphere as dark as
+ * coal and the other as bright as snow, split down a line, with a 13 km ridge running
+ * along the equator through the dark half that nothing else anywhere has.
+ *
+ * Its Laplace pole is 14.8° from Saturn's, which is the largest such tilt in this
+ * project by two orders of magnitude and is the whole reason Iapetus's orbit looks so
+ * inclined. Out at 59 Saturn radii the planet's bulge has stopped being the dominant
+ * influence and the Sun has taken over — the same transition Callisto shows at 0.29°,
+ * fifty times further along. Pinned to JPL's published value for the reason Titan's is.
+ */
+export const IAPETUS = defineSatellite({
+    laplacePoleRaDeg: 288.7000,
+    laplacePoleDecDeg: 78.9000,
+    semiMajorAxis: IAPETUS_ORBIT_RADIUS,
+    eccentricity: 0.028409,
+    // To its *own* Laplace plane. The 15.5° usually quoted is this plus the 14.8° the
+    // plane itself is tilted — the same distinction Callisto's entry makes.
+    inclinationDeg: 7.5743,
+    nodeJ2000Deg: 98.8214,
+    nodeRateDegPerDay: -0.0002883,
+    periapsisJ2000Deg: 15.7762,
+    periapsisRateDegPerDay: 0.0002462,
+    meanLongitudeJ2000Deg: 224.4032,
+    meanMotionDegPerDay: 4.5379546,
+}, SATURN_AXIS_INVERSE);
+
 const satelliteNode = new Vector3();
 const satellitePole = new Vector3();
 const satelliteAcross = new Vector3();
@@ -904,8 +1257,18 @@ export function satelliteState(
     const days = daysSinceJ2000(date);
     const node = (satellite.nodeJ2000Deg + satellite.nodeRateDegPerDay * days) * DEG;
     const periapsis = (satellite.periapsisJ2000Deg + satellite.periapsisRateDegPerDay * days) * DEG;
-    const meanLongitude =
+    let meanLongitude =
         (satellite.meanLongitudeJ2000Deg + satellite.meanMotionDegPerDay * days) * DEG;
+    // The resonant libration, for the two moons that have one. Zero-cost for the other
+    // seven: the amplitude is undefined and the branch never runs.
+    if (satellite.librationAmplitudeDeg) {
+        meanLongitude +=
+            satellite.librationAmplitudeDeg *
+            DEG *
+            Math.sin(
+                ((360 / satellite.librationPeriodDays!) * days + satellite.librationPhaseDeg!) * DEG
+            );
+    }
 
     // The ascending node sweeps round the Laplace plane; the orbit pole is the
     // Laplace pole tipped by the inclination about it, so the orbit keeps a constant
