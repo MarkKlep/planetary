@@ -15,15 +15,19 @@ export function HeatmapPage() {
           <span className="heatmap-topbar__title">Heat map</span>
         </div>
         <div className="heatmap-topbar__right">
+          {/* Three controls that look identical at rest but do three different
+              things — navigate away, leave the app entirely for a raw endpoint,
+              or act in place — is exactly the kind of gap a plain toolbar hides.
+              The icons carry that distinction rather than the label wording alone. */}
           <a className="heatmap-topbar__link" href="http://localhost:3002/api/data" target="_blank" rel="noreferrer">
-            Open API
+            <span className="heatmap-topbar__icon" aria-hidden="true">↗</span>Open API
           </a>
           <button
             type="button"
             className="heatmap-topbar__button"
             onClick={() => setFrameKey((k) => k + 1)}
           >
-            Refresh
+            <span className="heatmap-topbar__icon" aria-hidden="true">⟳</span>Refresh
           </button>
         </div>
       </header>

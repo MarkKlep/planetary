@@ -295,11 +295,20 @@ export function initScene() {
         element.style.bottom = '12px';
         element.style.transform = 'translateX(-50%)';
         element.style.whiteSpace = 'nowrap';
-        element.style.color = 'white';
-        element.style.fontSize = '14px';
-        element.style.padding = '2px 6px';
-        element.style.background = 'rgba(0, 0, 0, 0.45)';
-        element.style.borderRadius = '4px';
+        // CSS custom properties resolve fine in inline styles, same as in a
+        // stylesheet, so this chip stays on the one token source in variables.scss
+        // rather than carrying its own hardcoded copy of "the panel colour" that
+        // silently drifts from the real one. Built imperatively rather than in
+        // nav-panel.scss because CSS2DObject content has to exist as real DOM
+        // nodes attached to a Three.js object, not JSX.
+        element.style.color = 'var(--ink)';
+        element.style.fontFamily = 'var(--font-body)';
+        element.style.fontSize = '13px';
+        element.style.padding = '3px 7px';
+        element.style.background = 'rgba(8, 8, 10, 0.72)';
+        element.style.border = '1px solid var(--hairline)';
+        element.style.borderRadius = 'var(--radius-sm)';
+        element.style.backdropFilter = 'blur(6px)';
         element.style.opacity = '0';
         element.style.transition = 'opacity 0.1s linear';
         element.style.pointerEvents = 'none';

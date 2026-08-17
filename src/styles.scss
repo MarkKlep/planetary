@@ -89,6 +89,9 @@ body {
 }
 
 .heatmap-topbar__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--ink);
     text-decoration: none;
     padding: 8px 10px;
@@ -99,12 +102,24 @@ body {
     font-weight: 500;
 }
 
+// Same small-icon-before-label treatment as the main panel's `.nav-action-icon`,
+// but under this page's own class rather than reusing that one directly — it's
+// scoped to `.navigation-panel` and the topbar sits outside it.
+.heatmap-topbar__icon {
+    color: var(--signal);
+    font-size: 13px;
+    line-height: 1;
+}
+
 .heatmap-topbar__link:hover {
     border-color: var(--signal);
     color: var(--signal);
 }
 
 .heatmap-topbar__button {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     color: var(--ink);
     padding: 8px 10px;
     border-radius: var(--radius-sm);
