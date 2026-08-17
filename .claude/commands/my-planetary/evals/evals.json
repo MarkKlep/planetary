@@ -1,0 +1,23 @@
+{
+  "skill_name": "my-app",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I just cloned this repo and I'm not sure what I'm working on. Can you give me a quick overview?",
+      "expected_output": "A concise explanation of what the Planetary project is, its main purpose, and the key components",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "What are the core features of this application?",
+      "expected_output": "A structured list of the main features including 3D solar system, ISS tracking, lunar surface mode, and heatmap visualization",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Explain what this project does and how to run it",
+      "expected_output": "Project explanation plus the basic npm commands to get started (dev:planetary, dev:mf:full, build)",
+      "files": []
+    }
+  ]
+}
