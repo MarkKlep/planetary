@@ -1,4 +1,4 @@
-import { Mesh, MeshStandardMaterial, SRGBColorSpace, SphereGeometry, TextureLoader } from 'three';
+import { Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import {
     DIONE_RADIUS,
     ENCELADUS_RADIUS,
@@ -7,6 +7,7 @@ import {
     RHEA_RADIUS,
     TETHYS_RADIUS,
 } from '../../constants/planets.const';
+import { loadLowPriorityColorMap } from '../../low-priority-texture';
 
 /**
  * Saturn's six major icy moons. Titan gets its own pair of files, for the reason Venus
@@ -69,13 +70,20 @@ import {
  * before the tone mapper sees it, and `updateExposure` in script.ts is what develops it.
  */
 
-const textureLoader = new TextureLoader();
-
-function colorMap(file: string) {
-    const texture = textureLoader.load(file);
-    texture.colorSpace = SRGBColorSpace;
-    texture.anisotropy = 8;
-    return texture;
+/**
+ * Loaded at `fetchPriority: 'low'` rather than through the ordinary `TextureLoader`
+ * every other body here uses — see `low-priority-texture.ts` for the mechanism and why
+ * a same-tick delay cannot substitute for it. These six are 2.5–2.7 MB apiece and
+ * almost nobody flies to any specific one of them on a given visit; there is nothing
+ * to buy by racing all six against a body's own textures for one of a handful of
+ * HTTP/1.1 connections on the frame that matters. The material starts out wearing its
+ * tint alone, which is a perfectly readable sphere for the moment before the map lands.
+ */
+function colorMap(material: MeshStandardMaterial, file: string) {
+    loadLowPriorityColorMap(file, (texture) => {
+        material.map = texture;
+        material.needsUpdate = true;
+    });
 }
 
 /**
@@ -85,12 +93,14 @@ function colorMap(file: string) {
  * which describe the figure but carry no relief to wrap.
  */
 function moon(radius: number, map: string, color: number) {
+    const material = new MeshStandardMaterial({ color, roughness: 0.95, metalness: 0 });
+    colorMap(material, map);
     return new Mesh(
         // 96 segments, matching the Galileans. Five of these six are smaller again —
         // Mimas is a fortieth of Earth's radius — but Rhea and Iapetus are large enough
         // to fly up to, and there are six of them to keep consistent.
         new SphereGeometry(radius, 96, 96),
-        new MeshStandardMaterial({ map: colorMap(map), color, roughness: 0.95, metalness: 0 })
+        material
     );
 }
 

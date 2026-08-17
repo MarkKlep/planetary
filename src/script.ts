@@ -116,7 +116,18 @@ import {
     VENUS_RADIUS,
 } from './constants/planets.const';
 
-export function initScene() {
+/**
+ * @param onFirstFrame Called once the scene has actually been drawn to the canvas for
+ * the first time — not when this function returns, which happens the instant the
+ * synchronous setup below finishes and says nothing about whether a single pixel has
+ * been painted. `App.tsx` uses this to time the splash's removal: dismissing it on
+ * return alone raced the real first frame, which stalls on GPU work this function only
+ * *schedules* — shader compilation in particular is typically paid synchronously on
+ * whichever `renderer.render()` call first uses a given material, not before, and a
+ * scene with several custom `ShaderMaterial`s (the rings among them) can lose that race
+ * by a couple of seconds even though `initScene()` itself returns in milliseconds.
+ */
+export function initScene(onFirstFrame?: () => void) {
     const container = document.getElementById('app') as HTMLElement;
 
     if (!container) {
@@ -1394,6 +1405,7 @@ export function initScene() {
     // because the user picked a six-times time multiplier.
     let lastFrameMs = performance.now();
     let hudRefreshDue = 0;
+    let firstFrameRendered = false;
 
     // Nothing here needs more than 60fps — camera moves are either an eased fly-to
     // or a scale-invariant drift, neither of which reads any smoother at 120. A
@@ -1771,6 +1783,43 @@ export function initScene() {
 
         renderer.render(scene, camera);
         labelRenderer.render(scene, camera);
+
+        // The one thing worth reporting exactly once: draw calls for a real frame have
+        // now been issued, which is where shader compilation actually stalls (paid
+        // synchronously, inside this very `render()` call, the first time each material
+        // is used) — everything before this point was setup, not pixels.
+        if (!firstFrameRendered) {
+            firstFrameRendered = true;
+            onFirstFrame?.();
+
+            // Open on the whole system, then fly straight in to Earth, so the first
+            // thing you see is where Earth actually sits before the camera commits to
+            // it. Routed through the same `focusOnObject` as the nav buttons rather
+            // than a bespoke path: it re-derives Earth's position every frame, which
+            // matters here more than anywhere else, since Earth moves a long way along
+            // its orbit during a fly-to this long.
+            //
+            // Scheduled from *this* moment rather than from `initScene()` returning,
+            // which is what it did before `onFirstFrame` existed. That version's clock
+            // started at setup-complete, before a pixel had been drawn, so on a scene
+            // slow enough to stall the splash it could equally stall this: the 800ms
+            // hold would elapse while the canvas was still blank, and the fly-to could
+            // be mid-flight or already finished by the time the splash lifted — the
+            // exact "system view, then Earth" shot this hold exists to guarantee would
+            // never be seen. Tied to the real first frame, the hold and the splash's
+            // fade always start from the same moment, however long getting there took.
+            window.setTimeout(() => {
+                // A nav button or a click on a body during the hold has already started
+                // its own fly-to, and free flight means the user is driving: either way
+                // the intro is no longer what they asked for.
+                if (focusAnimation || freeFlight.enabled) return;
+
+                // Marked active only now, with the flight, because until it starts the
+                // honest answer to "where is the camera" is the system view, not Earth.
+                document.querySelector('.nav-btn[data-target="earth"]')?.classList.add('active');
+                focusOnObject(earth, EARTH_VIEW_DISTANCE, INTRO_FLIGHT_DURATION);
+            }, INTRO_HOLD_DURATION);
+        }
     }
 
     // Handle window resize
@@ -1785,28 +1834,4 @@ export function initScene() {
     });
 
     animate();
-
-    // Open on the whole system, then fly straight in to Earth, so the first thing you
-    // see is where Earth actually sits before the camera commits to it. Routed through
-    // the same `focusOnObject` as the nav buttons rather than a bespoke path: it
-    // re-derives Earth's position every frame, which matters here more than anywhere
-    // else, since Earth moves a long way along its orbit during a fly-to this long.
-    //
-    // The hold before it buys two things that both need the same beat. The splash
-    // takes SPLASH_FADE_MS to fade out, so a fly-to starting immediately would spend
-    // its opening — the part that shows the system whole, and the part an ease-out
-    // spends most of its distance on — behind it. And the first rendered frame stalls
-    // the thread compiling shaders and uploading textures, which a fly-to driven by
-    // wall-clock elapsed time would sit out and then jump to catch up on.
-    window.setTimeout(() => {
-        // A nav button or a click on a body during the hold has already started its
-        // own fly-to, and free flight means the user is driving: either way the intro
-        // is no longer what they asked for.
-        if (focusAnimation || freeFlight.enabled) return;
-
-        // Marked active only now, with the flight, because until it starts the honest
-        // answer to "where is the camera" is the system view, not Earth.
-        document.querySelector('.nav-btn[data-target="earth"]')?.classList.add('active');
-        focusOnObject(earth, EARTH_VIEW_DISTANCE, INTRO_FLIGHT_DURATION);
-    }, INTRO_HOLD_DURATION);
 }

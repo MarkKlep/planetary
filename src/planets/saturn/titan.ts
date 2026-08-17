@@ -1,5 +1,6 @@
-import { Mesh, MeshStandardMaterial, SRGBColorSpace, SphereGeometry, TextureLoader } from 'three';
+import { Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import { TITAN_RADIUS } from '../../constants/planets.const';
+import { loadLowPriorityColorMap } from '../../low-priority-texture';
 
 /**
  * Titan's **surface** — which is not what Titan looks like.
@@ -36,20 +37,26 @@ import { TITAN_RADIUS } from '../../constants/planets.const';
  * geometric albedo 0.22 against Enceladus's 1.375.
  */
 
-const textureLoader = new TextureLoader();
-const colorMap = textureLoader.load('/textures/titan_color.jpg');
-colorMap.colorSpace = SRGBColorSpace;
-colorMap.anisotropy = 8;
+const material = new MeshStandardMaterial({
+    // Luminance 0.099 from the table in `moons.ts`, carried at the Huygens hue. This is
+    // what the sphere wears until the map below arrives, and it is not a placeholder —
+    // it is the real diffuse colour a Titan without its ground texture would still have.
+    color: 0x635741,
+    roughness: 1,
+    metalness: 0,
+});
 
 export const titan = new Mesh(
     // 128 rather than the icy moons' 96: Titan is larger than Mercury, which is drawn at
     // 128 here, and its limb is a silhouette you can actually get close to.
     new SphereGeometry(TITAN_RADIUS, 128, 128),
-    new MeshStandardMaterial({
-        map: colorMap,
-        // Luminance 0.099 from the table in `moons.ts`, carried at the Huygens hue.
-        color: 0x635741,
-        roughness: 1,
-        metalness: 0,
-    })
+    material
 );
+
+// Loaded at `fetchPriority: 'low'`, the way the six icy moons are — see
+// `low-priority-texture.ts`. This one is doubly unhurried: it sits under the opaque
+// haze in `haze.ts` by default, so most sessions never see it uncovered at all.
+loadLowPriorityColorMap('/textures/titan_color.jpg', (texture) => {
+    material.map = texture;
+    material.needsUpdate = true;
+});
