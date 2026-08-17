@@ -11,7 +11,14 @@ import {
     WebGLRenderer,
 } from 'three';
 import { MOON_HORIZON_M } from '../../../constants/planets.const';
-import { buildTerrain, regolithSunDirectionView, SHADOW_ONLY_LAYER, type Terrain } from './terrain';
+import {
+    buildTerrain,
+    regolithSunDirectionView,
+    SHADOW_ONLY_LAYER,
+    SHADOW_PROXY_RADIUS_M,
+    type Terrain,
+} from './terrain';
+import { createTracks } from './tracks';
 import { primeSiteSamples, sampleSite } from './site-samples';
 import { createSky, SKY_ZOOM_FOV, SURFACE_FOV, type Sky, type SkyState } from './sky';
 import { createWalker, type Walker } from './walk';
@@ -54,15 +61,30 @@ import { DEFAULT_SITE, type LandingSite } from './sites';
  * diffuse material — so this is the *exposure*, and it is no more arbitrary than the
  * f-stop on the Hasselblads the crews actually carried. Everything on the surface is
  * lit by one light of one strength; the choice is only how bright to develop it.
+ *
+ * Stopped down by 1.4 when the ground stopped being Lambertian. `terrain.ts`'s
+ * lunar-Lambert term brightens the average first-person view by about that much —
+ * measured over twelve of them, across four Sun elevations and three directions of
+ * look — so the same number comes back out here to leave the overall level where it
+ * was. What the change actually buys is not brightness but *distribution*: the views
+ * down-Sun brighten and the views into the Sun darken, which is the phase contrast
+ * that Lambert had been flattening away.
  */
-const SUNLIGHT_INTENSITY = 8.5;
+const SUNLIGHT_INTENSITY = 6.1;
 /**
  * Bounce off the ground. Real, and the reason the shadowed side of a boulder is not
  * simply black in the Apollo photography — with nothing in the sky to scatter light,
  * every photon that reaches a shaded surface came off the regolith first. Lit from
  * below with a black sky above, which is the correct shape for that.
+ *
+ * Stopped down by the same 1.4 as the Sun, so the fill *ratio* is untouched. It has to
+ * move with it: the photometric function is applied by multiplying `diffuseColor`,
+ * which every light then sees, so the fills ride along with the Sun whether or not that
+ * is strictly right for them. At 4% of the Sun's strength the error in doing so is well
+ * under anything visible, and bounce off a rough surface is closer to Lommel-Seeliger
+ * than to Lambert anyway.
  */
-const BOUNCE_INTENSITY = 0.35;
+const BOUNCE_INTENSITY = 0.25;
 /**
  * Earthshine, which is the only light on the near side at night.
  *
@@ -82,18 +104,54 @@ const BOUNCE_INTENSITY = 0.35;
  * Scaled by Earth's phase and cut off when Earth is down, so the far-side sites stay
  * as black as they really are.
  */
-const EARTHSHINE_INTENSITY = 0.45;
+const EARTHSHINE_INTENSITY = 0.32;
 
-/**
- * Half-width of the shadow map's footprint, metres. Only the near field: at 1024²
- * this resolves 23 cm, which carries the boulders and the crater rims you are
- * standing among. Further out the low Sun and the surface normals do the work — a
- * crater wall turned away from the Sun is dark because of its normal, not because
- * something shadowed it.
- */
-const SHADOW_EXTENT_M = 120;
+const SHADOW_MAP_SIZE = 1024;
 /** How far up-Sun the shadow camera sits. Must clear the tallest thing it can see. */
 const SHADOW_DISTANCE_M = 900;
+
+/**
+ * Half-width of the shadow map's footprint — and it cannot be one number, because the
+ * only thing that sets it is how low the Sun is.
+ *
+ * A shadow is as long as its caster is tall over the tangent of the Sun's altitude, and
+ * on the Moon that spans four orders of magnitude across a single day: a 3 m mast
+ * throws 3 m of shadow at noon and 170 m at one degree above the horizon. Sizing the
+ * box for the worst case, which is what a fixed 120 m was doing, spends the whole map
+ * on empty ground every time the Sun is up properly — 23 cm a texel when the shadows
+ * being drawn are two metres long.
+ *
+ * So it tracks the Sun. Near field plus whatever the longest shadow needs, quantised so
+ * the projection is not rebuilt every frame, and clamped at both ends. In practice it
+ * sits at the floor for any Sun above about 8°, which is 10.7 cm a texel — better than
+ * twice the resolution it used to have, exactly where the boulders you are standing
+ * among are.
+ */
+const SHADOW_NEAR_EXTENT_M = 40;
+/** Tallest thing that casts: the LRV's antenna mast, and the biggest boulders. */
+const SHADOW_TALLEST_M = 3;
+const SHADOW_MIN_EXTENT_M = 55;
+const SHADOW_MAX_EXTENT_M = 240;
+const SHADOW_EXTENT_STEP_M = 5;
+
+/**
+ * Below this the ground stops casting, and that is a fix rather than a limitation.
+ *
+ * One shadow texel spans `texel / tan(altitude)` of *depth* across a near-flat surface,
+ * so at 3° the 11 cm texel covers 2 m of depth and the ground can only ever shadow
+ * itself in stripes. No bias setting resolves that — enough to suppress the stripes is
+ * enough to detach every shadow in the scene from the thing casting it.
+ *
+ * What matters is that this only afflicts surfaces nearly *parallel* to the light. A
+ * boulder, the rover and a descent stage are not, so they go on casting their long
+ * shadows perfectly well; all that is dropped is the ground's ability to shadow itself,
+ * which at a grazing Sun is already carried by N·L — a crater wall turned away from the
+ * Sun is dark because of its normal, not because something shadowed it. Shackleton, at
+ * 89.9° south, spends its entire existence below this line and looks the better for it.
+ */
+const GROUND_SHADOW_MIN_ALTITUDE = MathUtils.degToRad(6);
+/** How far either side of the light the depth range has to reach. */
+const SHADOW_DEPTH_MARGIN_M = SHADOW_PROXY_RADIUS_M + 60;
 
 /** Seconds for the field of view to travel between standing and the long lens. */
 const ZOOM_SECONDS = 0.28;
@@ -164,21 +222,19 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
 
     const sunLight = new DirectionalLight(0xfff6e8, SUNLIGHT_INTENSITY);
     sunLight.castShadow = true;
-    sunLight.shadow.mapSize.set(1024, 1024);
-    sunLight.shadow.camera.left = -SHADOW_EXTENT_M;
-    sunLight.shadow.camera.right = SHADOW_EXTENT_M;
-    sunLight.shadow.camera.top = SHADOW_EXTENT_M;
-    sunLight.shadow.camera.bottom = -SHADOW_EXTENT_M;
-    sunLight.shadow.camera.near = 1;
-    sunLight.shadow.camera.far = SHADOW_DISTANCE_M * 2;
-    // Grazing light on a near-flat surface is the worst case for shadow acne, and on
-    // the Moon the light is grazing most of the time.
-    sunLight.shadow.bias = -0.0006;
-    sunLight.shadow.normalBias = 0.05;
+    sunLight.shadow.mapSize.set(SHADOW_MAP_SIZE, SHADOW_MAP_SIZE);
+    // Depth range fitted to what is actually in the box rather than left spanning the
+    // whole distance to the light. The near plane used to sit at 1 m for a light 900 m
+    // away, so 99.8% of the depth buffer covered empty space — and since `shadow.bias`
+    // is in *normalised* depth, every unit of it bought four times more world-space
+    // offset than it needed to, which is peter-panning paid for nothing.
+    sunLight.shadow.camera.near = Math.max(1, SHADOW_DISTANCE_M - SHADOW_DEPTH_MARGIN_M);
+    sunLight.shadow.camera.far = SHADOW_DISTANCE_M + SHADOW_DEPTH_MARGIN_M;
     // The ground casts through a decimated proxy that lives on its own layer — the
-    // depth map is 23 cm a texel, so casting the full-resolution terrain into it is
-    // eight times the triangles for the same shadow. Enabling the layer here is what
-    // lets the shadow camera see it; the colour camera still cannot.
+    // depth map is 10 cm a texel, so casting the full-resolution terrain into it is
+    // eight times the triangles for the same shadow. Enabling the layer is what lets
+    // the shadow camera see it; the colour camera still cannot, and `updateShadow`
+    // turns it back off when the Sun gets too low for the ground to shadow itself.
     sunLight.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
     scene.add(sunLight);
     scene.add(sunLight.target);
@@ -196,9 +252,14 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     const dust = createDust();
     scene.add(dust.object);
 
-    const walker = createWalker(camera, domElement, dust);
+    // Likewise one track field, and for a stronger reason than the dust: boots and
+    // wheels press into the *same ground*, so a rut driven across your own footprints
+    // has to overwrite them in the one place both are stored.
+    const tracks = createTracks();
+
+    const walker = createWalker(camera, domElement, dust, tracks);
     const rover = createRover();
-    const driver = createDriver(rover, camera, domElement, dust);
+    const driver = createDriver(rover, camera, domElement, dust, tracks);
     scene.add(rover.object);
 
     let sky: Sky | null = null;
@@ -214,7 +275,11 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     /** Aim the first look somewhere worth looking, once the sky is known. */
     let needsFacing = false;
 
-    const sunPosition = new Vector3();
+    const shadowTarget = new Vector3();
+    const shadowRight = new Vector3();
+    const shadowUp = new Vector3();
+    const WORLD_UP = new Vector3(0, 1, 0);
+    let shadowExtent = 0;
     const dismount = new Vector3();
     const dishAim = new Vector3();
     const roverToLocal = new Quaternion();
@@ -231,6 +296,76 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (event.code === 'KeyZ') zoomed = !zoomed;
         if (event.code === 'KeyR') surface.toggleRover();
+    }
+
+    /**
+     * Point the shadow camera at the observer and size it for the Sun.
+     *
+     * Three things move together here and they are not independent: the box shrinks
+     * when shadows are short, which makes the texels finer, which lets the bias come
+     * down, which is what stops shadows detaching from what casts them.
+     */
+    function updateShadow(observer: Vector3, altitude: number, sunDirection: Vector3): void {
+        const reach = SHADOW_TALLEST_M / Math.max(Math.tan(Math.max(altitude, 1e-3)), 1e-3);
+        const extent = MathUtils.clamp(
+            Math.round((SHADOW_NEAR_EXTENT_M + reach) / SHADOW_EXTENT_STEP_M) *
+                SHADOW_EXTENT_STEP_M,
+            SHADOW_MIN_EXTENT_M,
+            SHADOW_MAX_EXTENT_M
+        );
+        if (extent !== shadowExtent) {
+            shadowExtent = extent;
+            const box = sunLight.shadow.camera;
+            box.left = -extent;
+            box.right = extent;
+            box.top = extent;
+            box.bottom = -extent;
+            box.updateProjectionMatrix();
+        }
+
+        const texel = (2 * extent) / SHADOW_MAP_SIZE;
+
+        // Snapped to whole texels *in the light's own frame*, because the box follows
+        // the observer and an unsnapped one slides under the shadow map continuously:
+        // every edge in the scene crawls and fizzes as you walk, which is far more
+        // conspicuous than the aliasing it is made of. The basis has to be the one
+        // three.js will build — `Matrix4.lookAt` takes x = up x z and y = z x x, with
+        // z the direction from the target to the light — or the snap is to the wrong
+        // grid and does nothing at all.
+        shadowTarget.set(observer.x, 0, observer.z);
+        shadowRight.crossVectors(WORLD_UP, sunDirection);
+        // Sun at the zenith, where the cross product collapses. Any perpendicular will
+        // do; the shadows are directly underneath everything and a texel wide.
+        if (shadowRight.lengthSq() < 1e-8) shadowRight.set(1, 0, 0);
+        shadowRight.normalize();
+        shadowUp.crossVectors(sunDirection, shadowRight).normalize();
+
+        const alongRight = shadowTarget.dot(shadowRight);
+        const alongUp = shadowTarget.dot(shadowUp);
+        shadowTarget
+            .addScaledVector(shadowRight, Math.round(alongRight / texel) * texel - alongRight)
+            .addScaledVector(shadowUp, Math.round(alongUp / texel) * texel - alongUp);
+
+        sunLight.target.position.copy(shadowTarget);
+        sunLight.position
+            .copy(sunDirection)
+            .multiplyScalar(SHADOW_DISTANCE_M)
+            .add(shadowTarget);
+
+        // Derived rather than dialled in. The depth across one texel of a surface lying
+        // at `altitude` to the light is texel/tan(altitude), and that — no more — is
+        // what the bias has to cover. Below the ground-casting cut-off there is nothing
+        // left that is anywhere near parallel to the light, so it stops growing.
+        const grazing = Math.max(Math.tan(altitude), Math.tan(GROUND_SHADOW_MIN_ALTITUDE));
+        const depthRange = sunLight.shadow.camera.far - sunLight.shadow.camera.near;
+        sunLight.shadow.bias = -MathUtils.clamp(texel / grazing, 0.05, 0.35) / depthRange;
+        sunLight.shadow.normalBias = MathUtils.clamp(texel * 1.5, 0.05, 0.3);
+
+        if (altitude > GROUND_SHADOW_MIN_ALTITUDE) {
+            sunLight.shadow.camera.layers.enable(SHADOW_ONLY_LAYER);
+        } else {
+            sunLight.shadow.camera.layers.disable(SHADOW_ONLY_LAYER);
+        }
     }
 
     function teardown(): void {
@@ -255,8 +390,13 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         teardown();
         site = next;
 
+        // Untouched ground. Nobody has walked on Copernicus, and arriving at a site
+        // still carrying the last one's footprints would be the loudest possible way of
+        // saying so.
+        tracks.reset(renderer);
+
         const sample = sampleSite(site.latitude, site.longitude);
-        terrain = buildTerrain(site, sample);
+        terrain = buildTerrain(site, sample, tracks);
         // Thrown grains are the same material as the ground they came off, so a landing
         // on Tycho's bright ejecta throws bright dust and one on mare basalt does not.
         dust.setAlbedo(sample.albedo);
@@ -492,12 +632,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
 
             // --- lights ---
             const observer = driving ? driver.position : walker.position;
-            sunLight.target.position.set(observer.x, 0, observer.z);
-            sunPosition
-                .copy(state.sunDirection)
-                .multiplyScalar(SHADOW_DISTANCE_M)
-                .add(sunLight.target.position);
-            sunLight.position.copy(sunPosition);
+            updateShadow(observer, state.sunAltitude, state.sunDirection);
             // Below the horizon is below the horizon. Without this the Sun would go on
             // lighting the ground from underneath through the whole lunar night.
             sunLight.intensity = state.sunAltitude > 0 ? SUNLIGHT_INTENSITY : 0;
@@ -526,6 +661,11 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
 
         render() {
             if (!active || !sky) return;
+
+            // Whatever was stamped this frame, folded into the field before anything
+            // samples it. Costs one draw of a handful of quads while you are moving and
+            // nothing whatever while you are not.
+            tracks.commit(renderer);
 
             const previousAutoClear = renderer.autoClear;
             renderer.autoClear = false;

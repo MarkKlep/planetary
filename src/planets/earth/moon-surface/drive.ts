@@ -7,6 +7,7 @@ import {
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
 import { WHEEL_BURST_SPACING_M, type Dust } from './dust';
+import type { Tracks } from './tracks';
 import type { Rover } from './rover';
 
 /**
@@ -54,6 +55,16 @@ const STEER_RETURN_RATE = 2.4;
  */
 const SPRAY_THRESHOLD_MS = 0.4;
 
+/**
+ * Metres between rut segments, and it has no threshold of its own — unlike the spray,
+ * which needs the wheels to be turning fast enough to fling anything clear, a rut is
+ * pressed in at any speed at all. Creeping forward still leaves a track.
+ *
+ * Closer together than the segments are long, so consecutive stamps overlap into a
+ * continuous line rather than a dashed one.
+ */
+const RUT_SPACING_M = 0.08;
+
 const LOOK_SENSITIVITY = 0.0022;
 const PITCH_LIMIT = MathUtils.degToRad(85);
 /** How far you can turn in the seat before the suit stops you. */
@@ -97,7 +108,8 @@ export function createDriver(
     rover: Rover,
     camera: PerspectiveCamera,
     domElement: HTMLElement,
-    dust: Dust
+    dust: Dust,
+    tracks: Tracks
 ): Driver {
     const held = new Set<string>();
     // The look direction is relative to the *vehicle*, not to the world: turning your
@@ -112,6 +124,9 @@ export function createDriver(
     // recomputed, because the dust has to come off the same four points the vehicle's
     // attitude was derived from.
     const contacts = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
+    // Where the same four wheels were last frame. Ruts are laid *between* the two, so
+    // the track stays continuous however long a frame took — see `layRuts`.
+    const previousContacts = [new Vector3(), new Vector3(), new Vector3(), new Vector3()];
 
     let ground: (x: number, z: number) => number = () => 0;
     let enabled = false;
@@ -121,6 +136,8 @@ export function createDriver(
     let steer = 0;
     let odometer = 0;
     let nextSpray = WHEEL_BURST_SPACING_M;
+    /** Distance driven since the last rut segment went down. */
+    let rutCarry = 0;
 
     /**
      * Attitude from the ground under the wheels.
@@ -170,6 +187,43 @@ export function createDriver(
             .setFromAxisAngle(Y_AXIS, heading)
             .multiply(spin.setFromAxisAngle(X_AXIS, pitch))
             .multiply(spin.setFromAxisAngle(Z_AXIS, roll));
+    }
+
+    /**
+     * Press rut into the ground under all four wheels.
+     *
+     * Emitted per metre driven rather than per frame, and *interpolated* between where
+     * each wheel was last frame and where it is now. Stamping only at this frame's
+     * contact points would make the track a function of the frame rate: at 60 fps and
+     * full speed a wheel advances 6 cm and the segments overlap into a line, but a
+     * frame that took 200 ms would jump it 72 cm and leave a gap. Walking the gap
+     * instead means the rut is continuous whatever the renderer is doing, which is the
+     * same argument `dust.ts` makes for keying emission to distance.
+     */
+    function layRuts(travelled: number): void {
+        const moved = Math.abs(travelled);
+        rutCarry += moved;
+        if (rutCarry < RUT_SPACING_M) return;
+
+        const forwardX = -Math.sin(heading);
+        const forwardZ = -Math.cos(heading);
+        const steps = Math.floor(rutCarry / RUT_SPACING_M);
+
+        for (let step = 1; step <= steps; step++) {
+            // How far back along this frame's motion this segment belongs.
+            const back = rutCarry - step * RUT_SPACING_M;
+            const along = moved > 1e-6 ? MathUtils.clamp(1 - back / moved, 0, 1) : 1;
+            for (let i = 0; i < contacts.length; i++) {
+                tracks.wheel(
+                    MathUtils.lerp(previousContacts[i].x, contacts[i].x, along),
+                    MathUtils.lerp(previousContacts[i].z, contacts[i].z, along),
+                    forwardX,
+                    forwardZ
+                );
+            }
+        }
+
+        rutCarry -= steps * RUT_SPACING_M;
     }
 
     function onPointerDown(event: PointerEvent): void {
@@ -275,7 +329,11 @@ export function createDriver(
             steer = 0;
             odometer = 0;
             nextSpray = WHEEL_BURST_SPACING_M;
+            rutCarry = 0;
             settle();
+            // Set down, not driven in: the first frame of driving must lay rut from
+            // here rather than from wherever the wheels last happened to be.
+            for (let i = 0; i < contacts.length; i++) previousContacts[i].copy(contacts[i]);
             rover.object.position.copy(position);
             rover.object.quaternion.copy(orientation);
             rover.setSteering(0);
@@ -334,7 +392,9 @@ export function createDriver(
             position.z -= travelled * Math.cos(heading);
             odometer += Math.abs(travelled);
 
+            for (let i = 0; i < contacts.length; i++) previousContacts[i].copy(contacts[i]);
             settle();
+            layRuts(travelled);
 
             // Off distance travelled rather than off the clock, so the tails hold the
             // same density whatever the frame rate is doing and stop dead the instant

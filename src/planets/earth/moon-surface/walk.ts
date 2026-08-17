@@ -5,6 +5,7 @@ import {
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
 import type { Dust } from './dust';
+import type { Tracks } from './tracks';
 
 /**
  * Walking, which is a different problem from flying.
@@ -60,6 +61,12 @@ const BOB_WAVELENGTH = 1.6;
  * standing still emits nothing at all.
  */
 const FOOTFALL_SPACING = BOB_WAVELENGTH / 2;
+/**
+ * Half the distance between the two lines of prints. A pressurised suit does not let
+ * you put one foot in front of the other — the crews walked and loped with their feet
+ * well apart, which is why Apollo trails read as two parallel tracks rather than one.
+ */
+const STANCE_HALF_WIDTH_M = 0.13;
 
 export interface Walker {
     /** Eye position in the local scene frame, metres. */
@@ -86,7 +93,8 @@ const UP = new Vector3(0, 1, 0);
 export function createWalker(
     camera: PerspectiveCamera,
     domElement: HTMLElement,
-    dust: Dust
+    dust: Dust,
+    tracks: Tracks
 ): Walker {
     const held = new Set<string>();
     // 'YXZ' is what keeps this roll-free: yaw about the world up, pitch about the
@@ -106,10 +114,31 @@ export function createWalker(
     let distanceWalked = 0;
     let nextFootfall = FOOTFALL_SPACING;
     let speed = 0;
+    /** Which foot goes down next. Flipped per footfall, so the trail is two lines. */
+    let footSide = 1;
     const contact = new Vector3();
 
     function standingHeight(): number {
         return ground(position.x, position.z) + MOON_EYE_HEIGHT_M;
+    }
+
+    /**
+     * Press a boot into the ground, offset to one side of the line of travel.
+     *
+     * The print is oriented by where the observer is *facing* rather than by where they
+     * are moving, which is the difference between walking and strafing: feet point
+     * forward either way, and sidestepping leaves prints across your own path.
+     */
+    function printBoot(side: number, strength = 1): void {
+        const forwardX = -Math.sin(orientation.y);
+        const forwardZ = -Math.cos(orientation.y);
+        tracks.boot(
+            position.x - forwardZ * STANCE_HALF_WIDTH_M * side,
+            position.z + forwardX * STANCE_HALF_WIDTH_M * side,
+            forwardX,
+            forwardZ,
+            strength
+        );
     }
 
     function onPointerDown(event: PointerEvent): void {
@@ -275,6 +304,11 @@ export function createWalker(
                     // A two-second fall at a sixth of a gravity still lands at 1.6 m/s.
                     contact.set(position.x, standing - MOON_EYE_HEIGHT_M, position.z);
                     dust.impact(contact, Math.min(Math.abs(verticalSpeed) * 0.55, 1.4));
+                    // Landing puts both boots down at once, and puts the observer's
+                    // whole weight through them — so the pair is pressed in harder than
+                    // a walking step is.
+                    printBoot(1);
+                    printBoot(-1);
                     position.y = standing;
                     verticalSpeed = 0;
                     airborne = false;
@@ -285,6 +319,8 @@ export function createWalker(
                     nextFootfall = distanceWalked + FOOTFALL_SPACING;
                     contact.set(position.x, standing - MOON_EYE_HEIGHT_M, position.z);
                     dust.footfall(contact, orientation.y, speed);
+                    footSide = -footSide;
+                    printBoot(footSide);
                 }
                 // Glued to the ground, which is also what carries you over crater rims
                 // and down into bowls without any collision work: the surface *is* the

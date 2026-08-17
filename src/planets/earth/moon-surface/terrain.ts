@@ -19,6 +19,15 @@ import {
 import { CRATER_REACH, craterDiameter, craterProfile } from '../../../craters';
 import { fbm, mulberry32 } from '../../../noise';
 import { MOON_RADIUS_M } from '../../../constants/planets.const';
+import {
+    TRACK_ALBEDO_FACTOR,
+    TRACK_BOWL_M,
+    TRACK_FIELD_M,
+    TRACK_RIM_M,
+    TRACK_SURGE_LOSS,
+    TRACK_TEXEL_M,
+    type Tracks,
+} from './tracks';
 import type { LandingSite } from './sites';
 import type { SiteSample } from './site-samples';
 
@@ -73,8 +82,8 @@ const SPOKES = 320;
  * about a quarter of it. Cut into wedges, each with its own bounds, three.js throws
  * away the ones behind you before they cost anything.
  *
- * It pays twice. The shadow camera only covers 120 m around the observer, so the depth
- * pass drops nearly every wedge as well.
+ * It pays twice. The shadow camera covers only the near field around the observer — 55 m
+ * for any Sun above about 8° — so the depth pass drops nearly every wedge as well.
  *
  * 16 wedges of 22.5°: enough that an 85° horizontal field keeps only five or six, few
  * enough that the draw calls stay cheaper than the geometry they save. It has to
@@ -86,21 +95,24 @@ const SPOKES_PER_SECTOR = SPOKES / SECTORS;
  * How far out the *shadow* proxy reaches, and how coarsely it is built.
  *
  * The wedges themselves cast nothing. A wedge running the full 6 km has a bounding
- * sphere some 3 km across, which intersects the shadow camera's 120 m box whichever
- * way the observer faces — so letting them cast means drawing all 102,000 triangles
- * into a depth map covering 0.04% of their area, every frame, and no amount of
- * splitting fixes it because the shadow region genuinely surrounds you.
+ * sphere some 3 km across, which intersects the shadow camera's box whichever way the
+ * observer faces — so letting them cast means drawing all 102,000 triangles into a
+ * depth map covering a fraction of a percent of their area, every frame, and no amount
+ * of splitting fixes it because the shadow region genuinely surrounds you.
  *
- * What fixes it is noticing that the shadow map is 1024 texels over 240 m, or 23 cm a
- * texel. Terrain detail finer than that cannot be represented in the map at all, so
- * casting it is work thrown away. One decimated proxy — every fourth ring, every
- * second spoke, sharing the same vertices — carries the same surface at 1/8 the
- * triangles and produces an identical shadow.
+ * What fixes it is noticing that the shadow map is 1024 texels over the box, which at
+ * its usual 110 m is about 11 cm a texel. Terrain detail finer than that cannot be
+ * represented in the map at all, so casting it is work thrown away. One decimated proxy
+ * — every fourth ring, every second spoke, sharing the same vertices — carries the same
+ * surface at 1/8 the triangles and produces an identical shadow.
+ *
+ * `moon-surface.ts` also stops the proxy casting altogether below 6° of Sun elevation,
+ * where a texel spans metres of depth and the ground can only shadow itself in stripes.
  *
  * It lives on its own layer so the colour camera never sees it, which is cleaner than
  * trying to make a mesh invisible but still casting.
  */
-const SHADOW_PROXY_RADIUS_M = 150;
+export const SHADOW_PROXY_RADIUS_M = 150;
 const SHADOW_PROXY_RING_STEP = 4;
 const SHADOW_PROXY_SPOKE_STEP = 2;
 /** The layer the colour camera does not draw and the shadow camera does. */
@@ -387,28 +399,209 @@ export const regolithSunDirectionView = new Vector3(1, 0, 0);
 const OPPOSITION_AMPLITUDE = 0.7;
 const OPPOSITION_WIDTH = 0.06;
 
-function buildSurfaceMaterial(): MeshStandardMaterial {
+/**
+ * ...and what happens *away* from opposition, which is the other half of the same
+ * question and was for a long time simply Lambert.
+ *
+ * Lambert is the wrong law for regolith, and the Moon is the standard illustration of
+ * how wrong. A Lambertian sphere lit head-on is brightest at the centre of its disc and
+ * falls to zero at the limb; the full Moon does no such thing, it is a flat disc of
+ * near-uniform brightness right out to the edge. That is not a subtlety, it is the most
+ * familiar thing about the Moon's appearance, and any surface rendered with Lambert
+ * carries the error down to the ground with it — shading far too contrasty, slopes
+ * facing away from the Sun dropping off far faster than they really do.
+ *
+ * The correction is the **lunar-Lambert** function: a mix, weighted by phase angle,
+ * between Lommel-Seeliger scattering (μ₀/(μ₀+μ), what a semi-infinite particulate
+ * medium actually does) and Lambert. Written as a multiplier on the Lambert term the
+ * renderer already computes, it is
+ *
+ *     2·L(α)/(μ₀+μ) + (1 − L(α))
+ *
+ * and it needs no recalibration of the albedo, because at normal incidence and normal
+ * emission it is exactly 1 — which is the geometry a *normal albedo* is defined at, and
+ * the geometry the mosaic `site-samples.ts` reads was normalised to.
+ *
+ * L(α) is McEwen's, the empirical limb-darkening parameter that essentially every
+ * published lunar mosaic — including the LROC one sampled two files over — was
+ * photometrically normalised with. Using the same function to put the light back is the
+ * closest this can get to a round trip.
+ *
+ * ## Why the roughness correction is a clamp rather than sixty lines of Hapke
+ *
+ * Hapke's full model carries a macroscopic-roughness term S(i,e,ψ;θ̄) that the two terms
+ * above do not. Left out entirely, μ (the emission cosine) is catastrophic here: a
+ * ground plane seen from 1.7 m is past 80° of emission by 10 m out and past 89° by 100,
+ * so μ → 0 over nearly the whole frame, the disk function collapses to 2L, and the
+ * ground goes *uniformly bright regardless of the Sun* — every slope, every crater
+ * wall, flat. Measured over twelve first-person views it drove the mean brightness up
+ * 61% with individual fragments running 1,180× Lambert.
+ *
+ * What that term physically does at grazing angles is the part worth keeping: a rough
+ * surface never presents a facet at grazing, it presents one near its mean slope angle,
+ * so neither effective cosine can actually reach zero. Imposing that as a floor at
+ * sin θ̄ — θ̄ = 20°, the standard fit for the maria — captures it in one clamp, and it
+ * is the honest choice for a surface that *also* carries a detail normal map: the
+ * sub-grid roughness is already there geometrically, and a full S(i,e,ψ) on top would
+ * be counting some of it twice. With the floor the same twelve views come to a mean of
+ * ×1.35, no fragment exceeds ×2.9, and the shading stays shading.
+ *
+ * `SUNLIGHT_INTENSITY` in `moon-surface.ts` was divided by that 1.4 to pay for it. What
+ * moves is the *distribution*: views down-Sun brighten (the opposition washout gets its
+ * true reach), views into the Sun darken (high phase really is dark), and the contrast
+ * between the two is now a real ×2 rather than nothing.
+ */
+const ROUGHNESS_FLOOR = Math.sin((20 * Math.PI) / 180);
+
+/** How far out a print's 2 cm of relief is still worth a pixel. See `trackChunk`. */
+const TRACK_RELIEF_RANGE_M = 30;
+
+/**
+ * Sampled once per fragment out of the track field. Compaction reads back three ways —
+ * see `tracks.ts`; the surge loss is the biggest of them and the reason a bootprint is
+ * visible at zero phase where nothing casts a shadow at all.
+ */
+function trackChunk(): string {
+    return /* glsl */ `
+        vec2 trackUv = vSurfaceXZ * ${(1 / TRACK_FIELD_M).toFixed(9)} + 0.5;
+        vec2 fromCentre = abs(trackUv - 0.5);
+        // Faded at the rim, or the field would end on a visible square edge.
+        float within = 1.0 - smoothstep(0.44, 0.5, max(fromCentre.x, fromCentre.y));
+
+        // The ground runs out to a 2,430 m horizon and the field is 128 m across, so on
+        // any view that is not straight down at your own boots most of the frame is
+        // ground that can have nothing on it. Branching on that is worth a great deal —
+        // measured, it is the whole of this feature's cost — and it is safe despite the
+        // fetches taking their mip level from derivatives: the only quads with mixed
+        // control flow straddle the boundary where the fade reaches zero, and whatever
+        // they compute there is multiplied by it.
+        if (within > 0.0) {
+            vec4 here = texture2D(uTrackMap, trackUv);
+            compaction = here.r * within;
+
+            // Relief is dropped past the range where it could be resolved at all. The
+            // bowl is 2 cm deep; at 30 m that subtends two thirds of a pixel, so the
+            // three extra fetches would be buying a sub-pixel shading difference on the
+            // fragments there are most of. Compaction is *not* dropped with it, because
+            // it is an area average and stays meaningful at any distance — which is
+            // exactly why the trail still reads to the horizon after the relief has
+            // gone. Same argument as the shadow proxy, one scale down.
+            float relief = 1.0 - smoothstep(
+                ${(TRACK_RELIEF_RANGE_M * 0.7).toFixed(1)},
+                ${TRACK_RELIEF_RANGE_M.toFixed(1)},
+                length(vViewPosition)
+            );
+            if (relief > 0.0) {
+                // Forward differences over a *two* texel baseline, sharing the sample
+                // already taken above: three fetches rather than five, and the wider
+                // baseline is the point rather than a compromise.
+                //
+                // The wall of a real bootprint is 2 cm deep over about 2 cm of ground —
+                // 45°, but only 2 cm of it. Stored at 6.25 cm a texel that wall is
+                // necessarily smeared across three times its true width, so a gradient
+                // that preserves the *slope* triples the area of ground standing at it,
+                // and the print stops reading as a print and starts reading as a
+                // trench. Differencing over two texels halves it to about 12°, which is
+                // what keeps the walls from tipping past the terminator — with a fill
+                // light 4% of the Sun's, a normal that crosses it does not go dark, it
+                // goes black, and a row of black slashes is what this looked like
+                // before. The depth stays honest; only the slope is spread.
+                const float step = ${((2 * TRACK_TEXEL_M) / TRACK_FIELD_M).toFixed(9)};
+                float h0 = trackRelief(here);
+                float hX = trackRelief(texture2D(uTrackMap, trackUv + vec2(step, 0.0)));
+                float hZ = trackRelief(texture2D(uTrackMap, trackUv + vec2(0.0, step)));
+                vec3 slope = vec3(-(hX - h0), 0.0, -(hZ - h0)) *
+                    (within * relief / ${(2 * TRACK_TEXEL_M).toFixed(6)});
+
+                // First-order perturbation, applied in view space so the ground's own
+                // normal — crater walls, the regional slope, the detail map — survives
+                // underneath it. mat3(viewMatrix) is the world-to-view rotation; the
+                // ground is unscaled and unrotated, so nothing more is needed.
+                normal = normalize(normal + mat3(viewMatrix) * slope);
+            }
+        }
+    `;
+}
+
+function buildSurfaceMaterial(tracks: Tracks | null): MeshStandardMaterial {
     const material = new MeshStandardMaterial({ roughness: 1, metalness: 0 });
 
     material.onBeforeCompile = (shader) => {
         shader.uniforms.uSunDirectionView = { value: regolithSunDirectionView };
 
-        shader.fragmentShader = `uniform vec3 uSunDirectionView;\n` + shader.fragmentShader;
+        let prefix = 'uniform vec3 uSunDirectionView;\n';
+
+        if (tracks) {
+            shader.uniforms.uTrackMap = { value: tracks.map };
+            prefix +=
+                'uniform sampler2D uTrackMap;\n' +
+                'varying vec2 vSurfaceXZ;\n' +
+                // Reassembled from the two positive channels it is stored in.
+                `float trackRelief(vec4 t) {
+                    return t.b * ${TRACK_RIM_M.toFixed(5)} - t.g * ${TRACK_BOWL_M.toFixed(5)};
+                }\n`;
+
+            shader.vertexShader = 'varying vec2 vSurfaceXZ;\n' + shader.vertexShader;
+            shader.vertexShader = shader.vertexShader.replace(
+                '#include <begin_vertex>',
+                /* glsl */ `
+                #include <begin_vertex>
+                vSurfaceXZ = (modelMatrix * vec4(transformed, 1.0)).xz;
+                `
+            );
+        }
+
+        shader.fragmentShader = prefix + shader.fragmentShader;
+        // Injected here, immediately before the material struct is assembled, because
+        // this is the first point in the chain where the shading normal exists *and*
+        // `diffuseColor` has not yet been consumed. The old surge patch sat at
+        // <color_fragment>, which is earlier than the normal and could therefore only
+        // ever use terms that did not need one.
         shader.fragmentShader = shader.fragmentShader.replace(
-            '#include <color_fragment>',
+            '#include <lights_physical_fragment>',
             /* glsl */ `
-            #include <color_fragment>
             {
-                // Phase angle: the angle at this point between the direction to the
-                // camera and the direction to the Sun. vViewPosition already runs
-                // from the fragment toward the camera, and the Sun is far enough off
-                // that its direction is the same across the whole view.
-                float cosPhase = clamp(dot(normalize(vViewPosition), normalize(uSunDirectionView)), -1.0, 1.0);
-                float phase = acos(cosPhase);
+                // vViewPosition runs from the fragment toward the camera; the Sun is
+                // far enough off that its direction is the same across the whole view.
+                vec3 viewDir = normalize(vViewPosition);
+                vec3 sunDir = normalize(uSunDirectionView);
+
+                float compaction = 0.0;
+                ${tracks ? trackChunk() : ''}
+
+                // Phase angle, between the direction to the camera and the direction to
+                // the Sun. Zero is looking straight at your own shadow.
+                float phase = acos(clamp(dot(viewDir, sunDir), -1.0, 1.0));
+
                 float surge = ${OPPOSITION_AMPLITUDE.toFixed(2)} /
                     (1.0 + tan(min(phase, 3.0) * 0.5) / ${OPPOSITION_WIDTH.toFixed(3)});
-                diffuseColor.rgb *= 1.0 + surge;
+                // Compacted ground has had the porosity that produces the surge crushed
+                // out of it, so it keeps only a quarter of it. This is most of a print.
+                surge *= 1.0 - ${TRACK_SURGE_LOSS.toFixed(3)} * compaction;
+
+                // --- lunar-Lambert ---
+                float mu0 = dot(normal, sunDir);
+                float mu = dot(normal, viewDir);
+                float phaseDeg = degrees(phase);
+                // McEwen's L(alpha). Goes negative past about 105 deg of phase, where
+                // the fit stops meaning anything and the surface is Lambertian anyway.
+                float limb = clamp(
+                    1.0 - 0.019 * phaseDeg + 0.000242 * phaseDeg * phaseDeg
+                        - 1.46e-6 * phaseDeg * phaseDeg * phaseDeg,
+                    0.0, 1.0
+                );
+                const float rough = ${ROUGHNESS_FLOOR.toFixed(5)};
+                float disk = (2.0 * limb) / (max(mu0, rough) + max(mu, rough)) + (1.0 - limb);
+                // Faded out where the Sun does not reach: what lights a surface turned
+                // away from it is bounce off the regolith, which arrives from all over
+                // the sky at once and is genuinely closer to Lambert.
+                disk = mix(1.0, disk, smoothstep(0.0, 0.12, mu0));
+
+                diffuseColor.rgb *= (1.0 + surge) * disk;
+                // ...and the packing itself, which is much the smaller effect.
+                diffuseColor.rgb *= mix(1.0, ${TRACK_ALBEDO_FACTOR.toFixed(3)}, compaction);
             }
+            #include <lights_physical_fragment>
             `
         );
     };
@@ -435,7 +628,7 @@ function relief(x: number, z: number, seed: number, octaves = 2): number {
     return fbm(noisePoint.set(x, 0, z), seed, octaves);
 }
 
-export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
+export function buildTerrain(site: LandingSite, sample: SiteSample, tracks: Tracks): Terrain {
     const craters = buildCraterField(site);
     const random = mulberry32(site.seed + 977);
 
@@ -686,7 +879,7 @@ export function buildTerrain(site: LandingSite, sample: SiteSample): Terrain {
     master.computeVertexNormals();
 
     const detailMap = buildDetailNormalMap(site.seed);
-    const groundMaterial = buildSurfaceMaterial();
+    const groundMaterial = buildSurfaceMaterial(tracks);
     groundMaterial.vertexColors = true;
     groundMaterial.normalMap = detailMap;
 
@@ -885,7 +1078,9 @@ function buildBoulders(
     const coarse = placements.filter((p) => p.size * 2 < BOULDER_DETAIL_THRESHOLD_M);
     const fine = placements.filter((p) => p.size * 2 >= BOULDER_DETAIL_THRESHOLD_M);
 
-    const material = buildSurfaceMaterial();
+    // No track field: nobody leaves a bootprint on a rock, and a boulder sampling the
+    // ground's compaction at its own footprint would wear whatever ran past its base.
+    const material = buildSurfaceMaterial(null);
     // Exposed blocks are brighter than the powder around them — that powder is what a
     // few billion years of micrometeorite grinding did to rock exactly like this.
     material.color.copy(sample.albedo).multiplyScalar(1.35);
