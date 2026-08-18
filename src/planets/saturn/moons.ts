@@ -8,6 +8,8 @@ import {
     TETHYS_RADIUS,
 } from '../../constants/planets.const';
 import { loadLowPriorityColorMap } from '../../low-priority-texture';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 /**
  * Saturn's six major icy moons. Titan gets its own pair of files, for the reason Venus
@@ -99,7 +101,7 @@ function moon(radius: number, map: string, color: number) {
         // 96 segments, matching the Galileans. Five of these six are smaller again —
         // Mimas is a fortieth of Earth's radius — but Rhea and Iapetus are large enough
         // to fly up to, and there are six of them to keep consistent.
-        new SphereGeometry(radius, 96, 96),
+        new SphereGeometry(radius, quality.moonSegments, quality.moonSegments),
         material
     );
 }
@@ -114,7 +116,7 @@ function moon(radius: number, map: string, color: number) {
  * arriving back after passing through the body. The resemblance to a certain battle
  * station is entirely coincidental and four years too late.
  */
-export const mimas = moon(MIMAS_RADIUS, '/textures/mimas_color.jpg', 0xcccccc);
+export const mimas = moon(MIMAS_RADIUS, texturePath('mimas_color.jpg'), 0xcccccc);
 
 /**
  * Enceladus. 504 km across, and the brightest surface in the solar system — it reflects
@@ -129,7 +131,7 @@ export const mimas = moon(MIMAS_RADIUS, '/textures/mimas_color.jpg', 0xcccccc);
  * the 0.0047 of orbital eccentricity Dione holds it at, which is in `orbits.ts` and is
  * doing more work than any other number in this project.
  */
-export const enceladus = moon(ENCELADUS_RADIUS, '/textures/enceladus_color.jpg', 0xffffff);
+export const enceladus = moon(ENCELADUS_RADIUS, texturePath('enceladus_color.jpg'), 0xffffff);
 
 /**
  * Tethys. Density 0.956 g/cm³ — *less than water* — so it is essentially a ball of ice
@@ -140,7 +142,7 @@ export const enceladus = moon(ENCELADUS_RADIUS, '/textures/enceladus_color.jpg',
  * to the curve of the surface because ice at these temperatures flows. Ithaca Chasma is
  * a graben 100 km wide and 2,000 km long, running most of the way from pole to pole.
  */
-export const tethys = moon(TETHYS_RADIUS, '/textures/tethys_color.jpg', 0xd7d7d7);
+export const tethys = moon(TETHYS_RADIUS, texturePath('tethys_color.jpg'), 0xd7d7d7);
 
 /**
  * Dione. The densest of the icy six, so there is real rock inside, and the one whose
@@ -148,14 +150,14 @@ export const tethys = moon(TETHYS_RADIUS, '/textures/tethys_color.jpg', 0xd7d7d7
  * resolved only as smears and were assumed to be frost deposits, until Cassini got
  * close enough to show them as a network of ice cliffs several hundred metres high.
  */
-export const dione = moon(DIONE_RADIUS, '/textures/dione_color.jpg', 0xb8b8b8);
+export const dione = moon(DIONE_RADIUS, texturePath('dione_color.jpg'), 0xb8b8b8);
 
 /**
  * Rhea. Saturn's second largest moon, and the gap between it and the largest is the
  * thing worth noticing: at 1,528 km across it is under a fifth of Titan's diameter and
  * about a hundredth of its mass. Saturn's satellite system is Titan and some gravel.
  */
-export const rhea = moon(RHEA_RADIUS, '/textures/rhea_color.jpg', 0xd5d5d5);
+export const rhea = moon(RHEA_RADIUS, texturePath('rhea_color.jpg'), 0xd5d5d5);
 
 /**
  * Iapetus — the one moon here that is not in the E ring's snowstorm, and the strangest
@@ -177,4 +179,4 @@ export const rhea = moon(RHEA_RADIUS, '/textures/rhea_color.jpg', 0xd5d5d5);
  * comparison above set. The bright half is very slightly too warm as a result, which is
  * the cheaper of the two errors.
  */
-export const iapetus = moon(IAPETUS_RADIUS, '/textures/iapetus_color.jpg', 0x9c9385);
+export const iapetus = moon(IAPETUS_RADIUS, texturePath('iapetus_color.jpg'), 0x9c9385);

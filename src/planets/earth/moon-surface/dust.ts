@@ -9,6 +9,7 @@ import {
     Vector3,
 } from 'three';
 import { MOON_SURFACE_GRAVITY } from '../../../constants/planets.const';
+import { quality } from '../../../quality';
 
 /**
  * Moon dust — the grains a boot or a wheel throws up.
@@ -55,7 +56,7 @@ import { MOON_SURFACE_GRAVITY } from '../../../constants/planets.const';
  * its launch velocity buys it — so this leaves headroom for a hop landing on top
  * without ever growing.
  */
-const CAPACITY = 6000;
+const CAPACITY = quality.dustCapacity;
 
 /**
  * Apparent grain size, metres. These are not single particles of regolith, which are

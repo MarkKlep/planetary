@@ -297,9 +297,24 @@ Two further notes. The profile texture stores `sqrt(τ/τ_max)` rather than `τ/
 
 ### Textures
 
-Live in `public/textures/` (NASA, public domain — with one CC BY 4.0 exception, `saturn_color.jpg`; see `CREDITS.md` there), referenced by absolute URL like `/textures/earth_day.jpg`. They must stay under `public/` — Vite only copies `public/` into `dist/`, so assets elsewhere in the project root work in dev but silently 404 in a production build. Colour maps need `texture.colorSpace = SRGBColorSpace`; height maps and masks must **not** get it, as they carry data rather than colour.
+Live in `public/textures/` (NASA, public domain — with one CC BY 4.0 exception, `saturn_color.jpg`; see `CREDITS.md` there). They must stay under `public/` — Vite only copies `public/` into `dist/`, so assets elsewhere in the project root work in dev but silently 404 in a production build. Colour maps need `texture.colorSpace = SRGBColorSpace`; height maps and masks must **not** get it, as they carry data rather than colour.
+
+**Never write a `/textures/...` path directly — go through `texturePath('earth_day.jpg')` from `src/textures.ts`.** Beside the originals sit two reduced sets, `half/` and `quarter/`, written by `scripts/generate-texture-variants.sh`, and `texturePath` picks the directory from the quality tier. This is not cosmetic: a JPEG's compression is gone once it is decoded, every map reaches the GPU as RGBA8, mipmaps add a third, and the full set is roughly **800 MB of texture memory** — which on a phone sharing 3–4 GB with the rest of the device is the difference between running and being killed by the OS. It applies just as much to the two places that read a map as *data* rather than as a texture (`site-samples.ts`, Earth's height and land-mask maps): not for correctness, but because the browser cache is keyed on the URL, so a module reaching past `texturePath` downloads and decodes a second copy at four times the size. Re-run the script after adding a texture.
 
 **Albedo tints derived by comparison must be computed in linear light, not from sRGB-encoded map means.** `material.color` is decoded from sRGB on the way in and so is the map, so the multiply happens in linear space. `jupiter/moons.ts` compares sRGB means, which is very nearly harmless there because every tint it produces is above 0.79 and the two spaces agree closely near white — but it does not generalise. `saturn/moons.ts` spans down to Titan's 0.099, and 0.099 read as sRGB is 0.011 of linear light: a factor of nine, which renders the only mapped surface in the outer solar system as a black disc. It is written the correct way and says so; don't "align" it with Jupiter's table.
+
+### Quality tiers and adaptive resolution (`src/quality.ts`)
+
+Two mechanisms, answering different questions, and it matters which one a new knob belongs to.
+
+**The tier** — `low` | `medium` | `high` | `ultra` — is decided once at module load from `hardwareConcurrency`, `deviceMemory`, `(pointer: coarse)`, `devicePixelRatio` and the GPU's own name (read through a throwaway context, chiefly to catch SwiftShader/llvmpipe, where there is no GPU at all). It is a *score*, not a decision tree, because no single signal is reliable. It owns everything that has to be chosen before anything is built and cannot change afterwards: sphere segment counts, the terrain grid, shadow-map and track-field sizes, the dust budget, the starfield population, MSAA, the frame-rate target, and the texture directory. **Add build-time budgets here rather than inlining a second constant**, and note that `terrainSpokes` must stay divisible by `SECTORS` (16) and by the shadow proxy's spoke step (2).
+
+**The adaptive scale** moves the drawing buffer's size continuously, from the measured frame time. This is the part that actually keeps a device cool, because thermal throttling, battery saver and a window dragged onto a 5K display are invisible to every capability check and all show up immediately in the frame interval. Two things about it are easy to undo:
+
+- **It is fed the gap between frames that were drawn, not time spent inside the frame.** `renderer.render()` returns when the commands are submitted, so a scene that is ~99% fragment work measures as costing nothing from inside. Only the *next* frame arriving late reveals the cost.
+- **Which makes the two tests asymmetric, deliberately.** The loop throttles itself to a target rate, so there is no such thing as an observably fast frame — the measurement is clamped from below. "Too slow" is a real reading; "there is headroom" can only be inferred from hitting the target exactly and then *tested* by taking one step up. Hence the long cooldown after a drop: without it the buffer resizes back and forth forever.
+
+`?quality=low|medium|high|ultra` or `planetary:quality` in localStorage pins the tier and disables the adaptive scale, which is the only way to profile a path this machine would never select. `ultra` is never chosen automatically — it is the settings the project had before any of this existed.
 
 ### Styling
 

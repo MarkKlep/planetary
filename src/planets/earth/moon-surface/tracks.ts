@@ -22,6 +22,7 @@ import {
     WebGLRenderer,
 } from 'three';
 import { LRV_WHEEL_WIDTH_M } from '../../../constants/planets.const';
+import { quality } from '../../../quality';
 
 /**
  * The ground remembers.
@@ -109,7 +110,7 @@ import { LRV_WHEEL_WIDTH_M } from '../../../constants/planets.const';
  * picture everywhere on the Moon except six small patches.
  */
 export const TRACK_FIELD_M = 128;
-const TRACK_TEXELS = 2048;
+const TRACK_TEXELS = quality.trackTexels;
 const TRACK_TEXEL_M = TRACK_FIELD_M / TRACK_TEXELS;
 
 /**

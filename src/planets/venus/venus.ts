@@ -1,5 +1,7 @@
 import { SphereGeometry, Mesh, MeshStandardMaterial, TextureLoader, SRGBColorSpace } from 'three';
 import { VENUS_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
@@ -19,7 +21,7 @@ const textureLoader = new TextureLoader();
  * which is the honest split: the *structure* is measured, the *hue* is not in the
  * data at all.
  */
-const radarMap = textureLoader.load('/textures/venus_surface.jpg');
+const radarMap = textureLoader.load(texturePath('venus_surface.jpg'));
 radarMap.colorSpace = SRGBColorSpace;
 radarMap.anisotropy = 8;
 
@@ -27,10 +29,10 @@ radarMap.anisotropy = 8;
 // of Diana Chasma to the summit of Maxwell Montes, against Mars's 29 km on a globe
 // barely half the size — so there is far less relief here than on any other surface
 // in this scene, and it is worth not overstating.
-const heightMap = textureLoader.load('/textures/venus_height.png');
+const heightMap = textureLoader.load(texturePath('venus_height.png'));
 heightMap.anisotropy = 4;
 
-const geometry = new SphereGeometry(VENUS_RADIUS, 128, 128);
+const geometry = new SphereGeometry(VENUS_RADIUS, quality.planetSegments[0], quality.planetSegments[1]);
 
 const material = new MeshStandardMaterial({
     map: radarMap,

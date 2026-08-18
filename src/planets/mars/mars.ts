@@ -1,21 +1,23 @@
 import { SphereGeometry, Mesh, MeshStandardMaterial, TextureLoader, SRGBColorSpace } from 'three';
 import { MARS_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
 // Viking MDIM 2.1 colour mosaic. The polar caps, Syrtis Major and the great dust
 // albedo features are all in the map itself rather than being shaded on.
-const colorMap = textureLoader.load('/textures/mars_color.jpg');
+const colorMap = textureLoader.load(texturePath('mars_color.jpg'));
 colorMap.colorSpace = SRGBColorSpace;
 colorMap.anisotropy = 8;
 
 // MOLA elevation, the full 29 km from the floor of Hellas to the summit of Olympus
 // Mons. Mars has enough air to soften shadows a little but nothing like Earth's, so
 // as on the Moon the relief along the terminator is what sells the surface as solid.
-const heightMap = textureLoader.load('/textures/mars_height.png');
+const heightMap = textureLoader.load(texturePath('mars_height.png'));
 heightMap.anisotropy = 4;
 
-const geometry = new SphereGeometry(MARS_RADIUS, 128, 128);
+const geometry = new SphereGeometry(MARS_RADIUS, quality.planetSegments[0], quality.planetSegments[1]);
 
 const material = new MeshStandardMaterial({
     map: colorMap,

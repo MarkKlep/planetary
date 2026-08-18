@@ -13,6 +13,7 @@ import {
     VENUS_CLOUD_RADIUS,
     VENUS_GEOMETRIC_ALBEDO,
 } from '../../constants/planets.const';
+import { quality } from '../../quality';
 
 /**
  * Venus's cloud deck — which is to say, Venus.
@@ -146,6 +147,6 @@ const material = new MeshStandardMaterial({
 });
 
 export const venusClouds = new Mesh(
-    new SphereGeometry(VENUS_CLOUD_RADIUS, 128, 128),
+    new SphereGeometry(VENUS_CLOUD_RADIUS, quality.planetSegments[0], quality.planetSegments[1]),
     material
 );

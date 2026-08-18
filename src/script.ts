@@ -32,6 +32,7 @@ import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surf
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, getTimeSpeed, isPaused, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
+import { createAdaptiveResolution, initialPixelRatio, quality } from './quality';
 import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
 import {
@@ -145,17 +146,37 @@ export function initScene(onFirstFrame?: () => void) {
 
     const { width: initialWidth, height: initialHeight } = getSize();
 
-    const renderer = new WebGLRenderer({ antialias: true });
+    const renderer = new WebGLRenderer({
+        antialias: quality.antialias,
+        // Asking for the discrete GPU on a machine that has one. Without it a browser is
+        // entitled to run a WebGL page on the integrated part, which is the right default
+        // for a page with a spinning cube on it and the wrong one for a scene made of
+        // overdrawing shells.
+        powerPreference: 'high-performance',
+    });
     renderer.setSize(initialWidth, initialHeight);
     // Fragment cost is quadratic in pixel ratio, and this scene spends most of a
     // frame in fragment shaders: several transparent, additively blended shells
     // (the atmospheres, the corona, the clouds) overdraw the same pixels more than
     // once with no early-Z rejection, since blending needs depth writes off. A
     // Retina display's devicePixelRatio of 2 was asking for that four times over
-    // for a sharpness difference that is barely visible. 1.5 keeps it close to
-    // native while cutting the fragment workload roughly in half.
-    const MAX_PIXEL_RATIO = 1.5;
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    // for a sharpness difference that is barely visible.
+    //
+    // The ceiling now comes from `quality.ts` rather than being one number here, and
+    // `adaptiveResolution` below moves a scale underneath it as the measured frame time
+    // asks — which is the only part of the system that can respond to a device that is
+    // thermally throttling, since nothing about that is visible to a capability check.
+    renderer.setPixelRatio(initialPixelRatio());
+    const adaptiveResolution = createAdaptiveResolution((ratio) => {
+        renderer.setPixelRatio(ratio);
+        // `setPixelRatio` alone does not resize the drawing buffer — three.js reads the
+        // ratio on the next `setSize`, so without this the new value is stored and never
+        // applied. The CSS size is unchanged, so nothing else has to be told: the camera
+        // aspect, the label overlay and the surface mode's own camera all key off that
+        // rather than off the buffer.
+        const { width, height } = getSize();
+        renderer.setSize(width, height);
+    });
     // Filmic tone mapping keeps the sunlit face from clipping to flat white where
     // deserts and cloud tops are brightest.
     renderer.toneMapping = ACESFilmicToneMapping;
@@ -455,6 +476,48 @@ export function initScene(onFirstFrame?: () => void) {
         // framing rather than the "visible across the whole system" bodies above.
         { ...createLabel('Analemma', analemmaAnchor, 0.05), body: analemmaAnchor, radius: ANALEMMA_RADIUS, hideBeyond: 15 },
     ];
+
+    // --- per-frame label scratch ------------------------------------------
+    //
+    // Allocated once, at the size the label list actually is, and reused every frame.
+    // See the block in `animate()` that fills them.
+
+    const labelCount = labels.length;
+    const labelDistance = new Float64Array(labelCount);
+    const labelX = new Float64Array(labelCount);
+    const labelY = new Float64Array(labelCount);
+    const labelObserving = new Uint8Array(labelCount);
+    const labelForcedHidden = new Uint8Array(labelCount);
+    /** Indices of the labels on screen this frame, filled from 0 to `onScreenCount`. */
+    const labelOnScreen = new Int32Array(labelCount);
+    /**
+     * Each label's current opacity, held here rather than read back out of the DOM.
+     * `parseFloat(element.style.opacity)` per label per frame was doing a string parse
+     * to recover a number this loop had itself written a frame earlier — and reading a
+     * style property is the sort of thing that is cheap right up until it is not.
+     * Starts at zero because `createLabel` writes `opacity: 0`.
+     */
+    const labelOpacity = new Float64Array(labelCount);
+
+    /** Pixels between two label chips before the further one gives way. */
+    const LABEL_OVERLAP_PX = 90;
+
+    /**
+     * Step one label's fade toward `target` and push the result to the DOM.
+     *
+     * The write is skipped when the rounded value has not moved, which is most frames
+     * for most labels: an exponential approach spends its whole tail inside one
+     * hundredth, and every one of those writes was invalidating the element's style
+     * for a value identical to the one already there.
+     */
+    function fadeLabel(index: number, target: number) {
+        const label = labels[index];
+        const next = labelOpacity[index] + (target - labelOpacity[index]) * 0.15;
+        labelOpacity[index] = next;
+        const text = next.toFixed(2);
+        if (label.element.style.opacity !== text) label.element.style.opacity = text;
+        label.object.visible = next > 0.02;
+    }
 
     // Distance markers so the planets stay findable once the whole system is in
     // frame and they are all well under a pixel across.
@@ -1399,6 +1462,8 @@ export function initScene(onFirstFrame?: () => void) {
     let lastFrameMs = performance.now();
     let hudRefreshDue = 0;
     let firstFrameRendered = false;
+    /** Whether the previous drawn frame was also a target-rate one. */
+    let wasChanging = false;
 
     // Nothing here needs more than 60fps — camera moves are either an eased fly-to
     // or a scale-invariant drift, neither of which reads any smoother at 120. A
@@ -1406,7 +1471,11 @@ export function initScene(onFirstFrame?: () => void) {
     // which would otherwise run every one of those overdrawn shells twice as often
     // as the scene has any use for. The 1ms slack keeps a 60Hz display from
     // occasionally dropping a frame to timer jitter sitting right at the threshold.
-    const TARGET_FRAME_INTERVAL_MS = 1000 / 60 - 1;
+    //
+    // The rate itself is the tier's rather than a constant, and it only ever differs on
+    // the low tier: 30 there, because on a device that selects it the alternative is not
+    // a smoother 60 but a stuttering 40 that also heats the thing up.
+    const TARGET_FRAME_INTERVAL_MS = 1000 / quality.targetFps - 1;
 
     // ...and most of the time it does not need 60 either. At the default "Real" rate
     // Earth turns 0.0042°/s and the Sun's granules evolve off the same clock, so with
@@ -1416,7 +1485,7 @@ export function initScene(onFirstFrame?: () => void) {
     // scene falls back to 15fps whenever nothing is actually changing, and returns to
     // 60 on the first sign that something is: a quarter of the GPU work for an image
     // no different from the one it replaces.
-    const IDLE_FRAME_INTERVAL_MS = 1000 / 15 - 1;
+    const IDLE_FRAME_INTERVAL_MS = 1000 / quality.idleFps - 1;
     // Long enough to cover OrbitControls' damping tail and the label opacity fades
     // that follow a camera move, so neither finishes at the idle rate.
     const INPUT_GRACE_MS = 1200;
@@ -1597,8 +1666,17 @@ export function initScene(onFirstFrame?: () => void) {
 
         // Clamped for the same reason the simulated clock is: a backgrounded tab
         // should not resume by hurling the camera across the solar system.
-        const realDelta = Math.min((frameMs - lastFrameMs) / 1000, 0.1);
+        const frameGapMs = frameMs - lastFrameMs;
+        const realDelta = Math.min(frameGapMs / 1000, 0.1);
         lastFrameMs = frameMs;
+
+        // Only the run of frames drawn back-to-back at the *target* rate says anything
+        // about what the GPU can manage: the gap out of an idle frame is the idle
+        // interval by construction, and the first target-rate frame after one is
+        // measuring the wait rather than the work. See `createAdaptiveResolution`.
+        if (sceneIsChanging && wasChanging) adaptiveResolution.sample(frameGapMs);
+        else adaptiveResolution.reset();
+        wasChanging = sceneIsChanging;
 
         // Everything below is a pure function of this one date, which is what keeps
         // the spin, both orbits and the seasons consistent at any time speed.
@@ -1754,58 +1832,81 @@ export function initScene(onFirstFrame?: () => void) {
             updateBodyMarker(marker, camera, viewportHeight);
         }
 
-        const screenPositions: Array<{ label: typeof labels[number]; x: number; y: number; forcedHidden: boolean; observing: boolean }> = [];
         const systemWideView = camera.position.distanceTo(sun.position) > EARTH_ORBIT_RADIUS * 8;
         setZoomButtonsVisible(systemWideView && !freeFlight.enabled);
 
-        for (const label of labels) {
+        // Every label's world position, distance and screen point, read exactly once.
+        //
+        // This used to be derived where it was needed, which meant `getWorldPosition`
+        // was called 22 times in the first pass, up to 22 more in the second, and up to
+        // 22 x 22 inside the second pass's overlap test — some five hundred times a
+        // frame for twenty-two positions. It is not a cheap call: it walks the object's
+        // parent chain recomputing world matrices on the way down, and half of these
+        // objects are three deep. The projection also allocated a `Vector3` per label
+        // per frame and the pass allocated an object literal per label on screen, all of
+        // which the collector then had to pick up sixty times a second.
+        const clientWidth = renderer.domElement.clientWidth;
+        const clientHeight = renderer.domElement.clientHeight;
+        let onScreenCount = 0;
+
+        for (let i = 0; i < labelCount; i++) {
+            const label = labels[i];
             const position = label.body.getWorldPosition(scratchTarget);
             const cameraDistance = camera.position.distanceTo(position);
-            const observing =
+            labelDistance[i] = cameraDistance;
+            labelObserving[i] =
                 controls.target.distanceTo(position) < label.radius * 1.2 &&
-                cameraDistance < label.radius * 12;
-            const projected = position.clone().project(camera);
-            const onScreen = projected.z >= -1 && projected.z <= 1;
-            const x = (projected.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
-            const y = (-projected.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
+                cameraDistance < label.radius * 12
+                    ? 1
+                    : 0;
             // Everything else here is a body you can always find; the analemma is an
             // overlay you might have switched off, and its chip shouldn't linger
             // once the curve it's labelling is gone.
-            const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
-            if (onScreen) {
-                screenPositions.push({ label, x, y, forcedHidden, observing });
-            }
-
-            const target = forcedHidden || observing || cameraDistance > label.hideBeyond ? 0 : 1;
-            const current = parseFloat(label.element.style.opacity || '0');
-            const next = current + (target - current) * 0.15;
-            label.element.style.opacity = next.toFixed(2);
-            label.object.visible = next > 0.02;
+            labelForcedHidden[i] = label.body === analemmaAnchor && !analemmaVisible ? 1 : 0;
+            // Projected in place rather than into a clone — `project` mutates, and both
+            // things the unprojected position was wanted for have already been read.
+            position.project(camera);
+            labelX[i] = (position.x * 0.5 + 0.5) * clientWidth;
+            labelY[i] = (-position.y * 0.5 + 0.5) * clientHeight;
+            if (position.z >= -1 && position.z <= 1) labelOnScreen[onScreenCount++] = i;
         }
 
-        for (const { label, x, y, forcedHidden, observing } of screenPositions) {
-            const index = labels.indexOf(label);
-            const thisPosition = label.body.getWorldPosition(scratchTarget);
-            const thisDistance = camera.position.distanceTo(thisPosition);
+        for (let i = 0; i < labelCount; i++) {
+            const label = labels[i];
+            fadeLabel(
+                i,
+                labelForcedHidden[i] || labelObserving[i] || labelDistance[i] > label.hideBeyond
+                    ? 0
+                    : 1
+            );
+        }
+
+        for (let n = 0; n < onScreenCount; n++) {
+            const i = labelOnScreen[n];
+            const x = labelX[i];
+            const y = labelY[i];
+            const thisDistance = labelDistance[i];
             let overlap = false;
-            for (const other of screenPositions) {
-                if (other.label === label) continue;
-                const dx = x - other.x;
-                const dy = y - other.y;
-                if (Math.hypot(dx, dy) < 90) {
-                    const otherDistance = camera.position.distanceTo(other.label.body.getWorldPosition(scratchTarget));
-                    if (thisDistance <= otherDistance || otherDistance === thisDistance) {
-                        overlap = true;
-                    }
+            for (let m = 0; m < onScreenCount; m++) {
+                const other = labelOnScreen[m];
+                if (other === i) continue;
+                const dx = x - labelX[other];
+                const dy = y - labelY[other];
+                // Compared squared, which keeps `Math.hypot` out of the one genuinely
+                // quadratic loop in the frame. It is carefully written to avoid
+                // intermediate overflow and correspondingly slow — several times the
+                // cost of the multiply it replaces, for a threshold test that never
+                // needed the exact distance.
+                if (dx * dx + dy * dy < LABEL_OVERLAP_PX * LABEL_OVERLAP_PX) {
+                    if (thisDistance <= labelDistance[other]) overlap = true;
                     break;
                 }
             }
-            const hiddenBySystem = systemWideView || thisDistance > label.hideBeyond;
-            const target = forcedHidden || observing || overlap || hiddenBySystem ? 0 : 1;
-            const current = parseFloat(label.element.style.opacity || '0');
-            const next = current + (target - current) * 0.15;
-            label.element.style.opacity = next.toFixed(2);
-            label.object.visible = next > 0.02;
+            const hiddenBySystem = systemWideView || thisDistance > labels[i].hideBeyond;
+            fadeLabel(
+                i,
+                labelForcedHidden[i] || labelObserving[i] || overlap || hiddenBySystem ? 0 : 1
+            );
         }
 
         // --- Camera ---
@@ -1919,6 +2020,9 @@ export function initScene(onFirstFrame?: () => void) {
         labelRenderer.setSize(width, height);
         // The surface mode keeps its own camera — same canvas, different scene.
         moonSurface.resize(width, height);
+        // A resize reallocates the drawing buffer and stalls a frame or two doing it,
+        // which is not the GPU telling us anything about how hard the scene is.
+        adaptiveResolution.reset();
     });
 
     animate();

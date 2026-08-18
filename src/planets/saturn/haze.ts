@@ -10,6 +10,7 @@ import {
 import { fbm } from '../../noise';
 import { latLonToDirection } from '../../geo';
 import { TITAN_GEOMETRIC_ALBEDO, TITAN_HAZE_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
 
 /**
  * Titan's haze — which is to say, Titan.
@@ -125,7 +126,7 @@ function buildHazeTexture(): CanvasTexture {
 const DIFFUSE_ALBEDO = TITAN_GEOMETRIC_ALBEDO * 1.5;
 
 export const titanHaze = new Mesh(
-    new SphereGeometry(TITAN_HAZE_RADIUS, 96, 96),
+    new SphereGeometry(TITAN_HAZE_RADIUS, quality.shellSegments, quality.shellSegments),
     new MeshStandardMaterial({
         map: buildHazeTexture(),
         color: new Color().setScalar(DIFFUSE_ALBEDO),

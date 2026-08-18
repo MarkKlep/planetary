@@ -1,5 +1,7 @@
 import { SphereGeometry, Mesh, MeshStandardMaterial, TextureLoader, SRGBColorSpace } from 'three';
 import { MERCURY_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
@@ -15,17 +17,17 @@ const textureLoader = new TextureLoader();
  * geologists, so it is mostly undone. Luminance was left untouched, since that is
  * albedo and it is what carries the craters and the ray systems.
  */
-const colorMap = textureLoader.load('/textures/mercury_color.jpg');
+const colorMap = textureLoader.load(texturePath('mercury_color.jpg'));
 colorMap.colorSpace = SRGBColorSpace;
 colorMap.anisotropy = 8;
 
 // MESSENGER laser altimetry and stereo. Only 9.9 km from the floor of Rachmaninoff
 // to the high ground near the equator — a quarter of Mars's range, on a body a
 // quarter of the size, so proportionally Mercury is about as rumpled as Mars is.
-const heightMap = textureLoader.load('/textures/mercury_height.png');
+const heightMap = textureLoader.load(texturePath('mercury_height.png'));
 heightMap.anisotropy = 4;
 
-const geometry = new SphereGeometry(MERCURY_RADIUS, 128, 128);
+const geometry = new SphereGeometry(MERCURY_RADIUS, quality.planetSegments[0], quality.planetSegments[1]);
 
 const material = new MeshStandardMaterial({
     map: colorMap,

@@ -1,5 +1,6 @@
 import { Color } from 'three';
 import { MOON_RADIUS_M, MOON_REGOLITH_ALBEDO } from '../../../constants/planets.const';
+import { texturePath } from '../../../textures';
 
 /**
  * Reading the two lunar maps as *data* rather than as textures.
@@ -17,8 +18,8 @@ import { MOON_RADIUS_M, MOON_REGOLITH_ALBEDO } from '../../../constants/planets.
  * lands on the intro.
  */
 
-const COLOR_MAP_URL = '/textures/moon_color.jpg';
-const HEIGHT_MAP_URL = '/textures/moon_height.png';
+const COLOR_MAP_URL = texturePath('moon_color.jpg');
+const HEIGHT_MAP_URL = texturePath('moon_height.png');
 
 /**
  * The colour map is downscaled on the way into the canvas. Mare/highland boundaries

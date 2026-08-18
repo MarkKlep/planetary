@@ -5,6 +5,8 @@ import {
     GANYMEDE_RADIUS,
     IO_RADIUS,
 } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 /**
  * The four Galilean moons.
@@ -75,7 +77,7 @@ function moon(radius: number, map: string, color: number, roughness = 0.95) {
         // 96 segments rather than the planets' 128: these are a quarter the size of the
         // rocky planets and are only ever seen from a distance where that reads the
         // same, but there are four of them.
-        new SphereGeometry(radius, 96, 96),
+        new SphereGeometry(radius, quality.moonSegments, quality.moonSegments),
         new MeshStandardMaterial({ map: colorMap(map), color, roughness, metalness: 0 })
     );
 }
@@ -91,7 +93,7 @@ function moon(radius: number, map: string, color: number, roughness = 0.95) {
  *
  * Untinted: it is the anchor the table above is built from.
  */
-export const io = moon(IO_RADIUS, '/textures/io_color.jpg', 0xffffff);
+export const io = moon(IO_RADIUS, texturePath('io_color.jpg'), 0xffffff);
 
 /**
  * Europa. Water ice, cracked through by the same tidal kneading that melts Io — the
@@ -103,7 +105,7 @@ export const io = moon(IO_RADIUS, '/textures/io_color.jpg', 0xffffff);
  * hemisphere is stained reddish-brown by sulphur swept off Io and implanted by
  * Jupiter's magnetosphere, while the leading side stays nearly white.
  */
-export const europa = moon(EUROPA_RADIUS, '/textures/europa_color.jpg', 0xfff9f0);
+export const europa = moon(EUROPA_RADIUS, texturePath('europa_color.jpg'), 0xfff9f0);
 
 /**
  * Ganymede. The largest moon in the solar system, larger than Mercury, and the only
@@ -115,7 +117,7 @@ export const europa = moon(EUROPA_RADIUS, '/textures/europa_color.jpg', 0xfff9f0
  * Roughly a third of the surface is old and two thirds young, which is a division no
  * other icy moon shows this plainly.
  */
-export const ganymede = moon(GANYMEDE_RADIUS, '/textures/ganymede_color.jpg', 0xcbcbcb);
+export const ganymede = moon(GANYMEDE_RADIUS, texturePath('ganymede_color.jpg'), 0xcbcbcb);
 
 /**
  * Callisto. The outermost Galilean, the only one outside the Laplace resonance, and
@@ -130,4 +132,4 @@ export const ganymede = moon(GANYMEDE_RADIUS, '/textures/ganymede_color.jpg', 0x
  * Greyscale map, so the grey-brown is a tint: dirty ice, with the ice sublimated away
  * from the high ground and a dark residue of rock and organics left behind.
  */
-export const callisto = moon(CALLISTO_RADIUS, '/textures/callisto_color.jpg', 0xdbc9b3);
+export const callisto = moon(CALLISTO_RADIUS, texturePath('callisto_color.jpg'), 0xdbc9b3);

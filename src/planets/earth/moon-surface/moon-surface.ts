@@ -27,6 +27,7 @@ import { createArtefacts, type Artefacts } from './artefacts';
 import { createRover } from './rover';
 import { createDriver, type Driver } from './drive';
 import { DEFAULT_SITE, type LandingSite } from './sites';
+import { quality } from '../../../quality';
 
 /**
  * Standing on the Moon.
@@ -106,7 +107,7 @@ const BOUNCE_INTENSITY = 0.25;
  */
 const EARTHSHINE_INTENSITY = 0.32;
 
-const SHADOW_MAP_SIZE = 1024;
+const SHADOW_MAP_SIZE = quality.shadowMapSize;
 /** How far up-Sun the shadow camera sits. Must clear the tallest thing it can see. */
 const SHADOW_DISTANCE_M = 900;
 

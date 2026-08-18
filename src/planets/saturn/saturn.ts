@@ -13,6 +13,8 @@ import {
     SATURN_RING_OUTER,
 } from '../../constants/planets.const';
 import { RING_TAU_MAX, ringProfileTexture } from './rings';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
@@ -27,7 +29,7 @@ const textureLoader = new TextureLoader();
  * buys the model is a map that is very nearly a function of latitude alone, which is
  * why longitude registration matters even less here than it does for Jupiter.
  */
-const colorMap = textureLoader.load('/textures/saturn_color.jpg');
+const colorMap = textureLoader.load(texturePath('saturn_color.jpg'));
 colorMap.colorSpace = SRGBColorSpace;
 colorMap.anisotropy = 8;
 
@@ -43,7 +45,7 @@ colorMap.anisotropy = 8;
 
 // 192 x 128, matching Jupiter's: these two have much the largest discs in the scene, so
 // they are the only silhouettes where a polygonal limb would be visible against the sky.
-const geometry = new SphereGeometry(SATURN_EQUATORIAL_RADIUS, 192, 128);
+const geometry = new SphereGeometry(SATURN_EQUATORIAL_RADIUS, quality.gasGiantSegments[0], quality.gasGiantSegments[1]);
 /**
  * The oblateness, applied as a scale on the polar axis so the mesh stays a unit sphere
  * for raycasting and the constant above stays the equatorial radius it is named for.

@@ -9,6 +9,8 @@ import {
     Texture,
 } from 'three';
 import { NIGHT_LIGHTS_FALLOFF } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
@@ -33,13 +35,13 @@ function loadDataMap(url: string): Texture {
     return texture;
 }
 
-const dayMap = loadColorMap('/textures/earth_day.jpg');
-const nightMap = loadColorMap('/textures/earth_night.jpg');
-const heightMap = loadDataMap('/textures/earth_height.jpg');
+const dayMap = loadColorMap(texturePath('earth_day.jpg'));
+const nightMap = loadColorMap(texturePath('earth_night.jpg'));
+const heightMap = loadDataMap(texturePath('earth_height.jpg'));
 // NASA's bathymetry doubles as a land/water mask: land is pure white, ocean is a
 // depth ramp. Driving roughness with it makes oceans glossy and land matte, which
 // is what produces a specular glint on the sea near the subsolar point.
-const landMask = loadDataMap('/textures/earth_landmask.jpg');
+const landMask = loadDataMap(texturePath('earth_landmask.jpg'));
 
 /** Sun direction in *view* space, kept up to date by the render loop. */
 export const earthSunDirectionView = new Vector3(1, 0, 0);
@@ -102,6 +104,6 @@ material.onBeforeCompile = (shader) => {
 
 // 128 segments: at 32 the silhouette showed obvious polygonal faceting against the
 // dark sky, which no amount of texture detail can hide.
-const geometry = new SphereGeometry(1, 128, 128);
+const geometry = new SphereGeometry(1, quality.planetSegments[0], quality.planetSegments[1]);
 
 export const earth = new Mesh(geometry, material);

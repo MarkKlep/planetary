@@ -13,6 +13,7 @@ import {
     Color,
     Vector3,
 } from 'three';
+import { quality } from '../quality';
 
 /**
  * Deep-space background built the way real sky-survey viewers build it: everything
@@ -183,6 +184,23 @@ interface StarLayerOptions {
     profile: SpriteProfile;
 }
 
+/**
+ * The tier's share of a layer's population.
+ *
+ * Points are the cheapest thing in the scene per *vertex* and among the most expensive
+ * per *pixel*: every one of the 17,760 is an alpha-blended sprite drawn with depth
+ * writes off, so there is no early-Z and every star costs its full area in fragments
+ * whether or not something is already in front of it. Thinning the field is therefore a
+ * fill-rate saving rather than a geometry one, which is why it is worth doing at all.
+ *
+ * The floor of 12 is there so that the flare layer — 60 stars at the top tier — does not
+ * thin to a handful and leave the sky visibly missing its brightest points, which is the
+ * one part of the field the eye keeps a count of.
+ */
+function population(count: number): number {
+    return quality.starFraction >= 1 ? count : Math.max(12, Math.round(count * quality.starFraction));
+}
+
 function createStarLayer({
     count,
     size,
@@ -191,6 +209,7 @@ function createStarLayer({
     brightness,
     profile,
 }: StarLayerOptions): Points {
+    count = population(count);
     const positions = new Float32Array(count * 3);
     const colors = new Float32Array(count * 3);
     const dir = new Vector3();
@@ -380,7 +399,7 @@ function createGalaxyDome(): Mesh {
         toneMapped: false,
     });
 
-    const dome = new Mesh(new SphereGeometry(SKY_RADIUS * 1.05, 48, 32), material);
+    const dome = new Mesh(new SphereGeometry(SKY_RADIUS * 1.05, 32, 24), material);
     dome.renderOrder = -2;
     return dome;
 }

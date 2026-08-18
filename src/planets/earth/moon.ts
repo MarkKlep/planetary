@@ -1,18 +1,20 @@
 import { SphereGeometry, Mesh, MeshStandardMaterial, TextureLoader, SRGBColorSpace } from 'three';
 import { MOON_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
-const colorMap = textureLoader.load('/textures/moon_color.jpg');
+const colorMap = textureLoader.load(texturePath('moon_color.jpg'));
 colorMap.colorSpace = SRGBColorSpace;
 colorMap.anisotropy = 8;
 
 // LOLA elevation. The Moon has no atmosphere to soften shadows, so relief along the
 // terminator is the dominant visual cue that the surface has depth.
-const heightMap = textureLoader.load('/textures/moon_height.png');
+const heightMap = textureLoader.load(texturePath('moon_height.png'));
 heightMap.anisotropy = 4;
 
-const geometry = new SphereGeometry(MOON_RADIUS, 128, 128);
+const geometry = new SphereGeometry(MOON_RADIUS, quality.planetSegments[0], quality.planetSegments[1]);
 
 // Lit by the same directional sun as Earth, so the Moon runs through real phases as
 // it orbits instead of reading as a flat disc.

@@ -3,6 +3,8 @@ import {
     JUPITER_EQUATORIAL_RADIUS,
     JUPITER_FLATTENING,
 } from '../../constants/planets.const';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 const textureLoader = new TextureLoader();
 
@@ -25,7 +27,7 @@ const textureLoader = new TextureLoader();
  * instead of showing the fill's edge, which is the same treatment Mercury's poles get
  * for the same reason.
  */
-const colorMap = textureLoader.load('/textures/jupiter_color.jpg');
+const colorMap = textureLoader.load(texturePath('jupiter_color.jpg'));
 colorMap.colorSpace = SRGBColorSpace;
 colorMap.anisotropy = 8;
 
@@ -42,7 +44,7 @@ colorMap.anisotropy = 8;
 // Segment counts are up from the 128 the rocky planets use. Jupiter's disc is the
 // largest in the scene by a wide margin, so its limb is the one silhouette where a
 // polygonal edge would actually be visible against the sky.
-const geometry = new SphereGeometry(JUPITER_EQUATORIAL_RADIUS, 192, 128);
+const geometry = new SphereGeometry(JUPITER_EQUATORIAL_RADIUS, quality.gasGiantSegments[0], quality.gasGiantSegments[1]);
 // The oblateness, applied as a scale on the polar axis rather than baked into the
 // geometry, so the mesh stays a unit sphere for raycasting and the number above stays
 // the equatorial radius it is named for. 6.5% is not subtle — it is visible in any

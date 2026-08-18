@@ -1,6 +1,8 @@
 import { Mesh, MeshStandardMaterial, SphereGeometry } from 'three';
 import { TITAN_RADIUS } from '../../constants/planets.const';
 import { loadLowPriorityColorMap } from '../../low-priority-texture';
+import { quality } from '../../quality';
+import { texturePath } from '../../textures';
 
 /**
  * Titan's **surface** — which is not what Titan looks like.
@@ -49,14 +51,14 @@ const material = new MeshStandardMaterial({
 export const titan = new Mesh(
     // 128 rather than the icy moons' 96: Titan is larger than Mercury, which is drawn at
     // 128 here, and its limb is a silhouette you can actually get close to.
-    new SphereGeometry(TITAN_RADIUS, 128, 128),
+    new SphereGeometry(TITAN_RADIUS, quality.planetSegments[0], quality.planetSegments[1]),
     material
 );
 
 // Loaded at `fetchPriority: 'low'`, the way the six icy moons are — see
 // `low-priority-texture.ts`. This one is doubly unhurried: it sits under the opaque
 // haze in `haze.ts` by default, so most sessions never see it uncovered at all.
-loadLowPriorityColorMap('/textures/titan_color.jpg', (texture) => {
+loadLowPriorityColorMap(texturePath('titan_color.jpg'), (texture) => {
     material.map = texture;
     material.needsUpdate = true;
 });

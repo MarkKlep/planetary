@@ -30,6 +30,7 @@ import {
 } from './tracks';
 import type { LandingSite } from './sites';
 import type { SiteSample } from './site-samples';
+import { quality } from '../../../quality';
 
 /**
  * The ground you stand on.
@@ -70,8 +71,20 @@ import type { SiteSample } from './site-samples';
 
 // --- the grid --------------------------------------------------------------
 
-const RINGS = 160;
-const SPOKES = 320;
+/**
+ * 160 x 320 at the top tier, and the number that has to be watched when it comes down is
+ * `SPOKES`: `SECTORS` below divides it, and so does the shadow proxy's spoke step, so
+ * every tier's figure is a multiple of 32. `RINGS` is free — it only sets how many rings
+ * the geometric spacing is spread over, and `RING_GROWTH` re-derives itself from it.
+ *
+ * Coming down costs less than it looks like it should, for the same reason the grid is
+ * polar in the first place: the spacing is geometric, so halving the ring count does not
+ * halve the resolution anywhere in particular — it widens every ring by the same *ratio*,
+ * which the eye reads as a uniform loss of fineness rather than as a horizon that has
+ * come closer or ground that has gone flat underfoot.
+ */
+const RINGS = quality.terrainRings;
+const SPOKES = quality.terrainSpokes;
 /**
  * How many wedges the grid is cut into for culling, and the one number here that is
  * about the renderer rather than the Moon.
@@ -275,7 +288,7 @@ function tileNoise(x: number, y: number, period: number, seed: number): number {
     return (a + (b - a) * sx) * (1 - sy) + (c + (d - c) * sx) * sy;
 }
 
-const DETAIL_TEXTURE_SIZE = 512;
+const DETAIL_TEXTURE_SIZE = quality.terrainDetailTexture;
 /** Metres covered by one tile of the detail map. */
 const DETAIL_TILE_M = 2.2;
 /** Height of the finest relief, metres — the pitting and gardening of the regolith. */

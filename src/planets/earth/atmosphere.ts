@@ -1,5 +1,6 @@
 import { Mesh, SphereGeometry, ShaderMaterial, BackSide, AdditiveBlending, Vector3 } from 'three';
 import { ATMOSPHERE_RADIUS } from '../../constants/planets.const';
+import { quality } from '../../quality';
 
 /** Sun direction in world space, kept up to date by the render loop. */
 export const atmosphereSunDirection = new Vector3(1, 0, 0);
@@ -69,4 +70,4 @@ const material = new ShaderMaterial({
     `,
 });
 
-export const atmosphere = new Mesh(new SphereGeometry(ATMOSPHERE_RADIUS, 96, 96), material);
+export const atmosphere = new Mesh(new SphereGeometry(ATMOSPHERE_RADIUS, quality.shellSegments, quality.shellSegments), material);

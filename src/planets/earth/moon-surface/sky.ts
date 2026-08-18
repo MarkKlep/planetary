@@ -15,6 +15,7 @@ import {
 import { latLonToDirection } from '../../../geo';
 import { NIGHT_LIGHTS_FALLOFF, SUN_RADIUS } from '../../../constants/planets.const';
 import type { LandingSite } from './sites';
+import { texturePath } from '../../../textures';
 
 /**
  * The sky over the landing site.
@@ -91,9 +92,9 @@ export interface Sky {
 }
 
 function buildEarth(): Mesh {
-    const dayMap = textureLoader.load('/textures/earth_day.jpg');
+    const dayMap = textureLoader.load(texturePath('earth_day.jpg'));
     dayMap.colorSpace = SRGBColorSpace;
-    const nightMap = textureLoader.load('/textures/earth_night.jpg');
+    const nightMap = textureLoader.load(texturePath('earth_night.jpg'));
     nightMap.colorSpace = SRGBColorSpace;
 
     const material = new MeshStandardMaterial({ map: dayMap, roughness: 1, metalness: 0 });
