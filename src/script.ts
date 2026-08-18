@@ -30,7 +30,7 @@ import { titan } from './planets/saturn/titan';
 import { titanHaze } from './planets/saturn/haze';
 import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
-import { advanceClock, getSimulatedDate, setPaused, setTimeSpeed } from './simulation';
+import { advanceClock, getSimulatedDate, getTimeSpeed, isPaused, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
@@ -1185,13 +1185,17 @@ export function initScene(onFirstFrame?: () => void) {
         { hit: iapetus, focus: iapetus, distance: IAPETUS_VIEW_DISTANCE },
     ];
 
+    // Hoisted: `pickTarget` runs on every hover event, and rebuilding this array per
+    // event allocated garbage on the mouse's own event rate. The set never changes.
+    const clickTargetMeshes = clickTargets.map((t) => t.hit);
+
     function pickTarget(event: MouseEvent) {
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
         raycaster.setFromCamera(mouse, camera);
-        const intersects = raycaster.intersectObjects(clickTargets.map((t) => t.hit), true);
+        const intersects = raycaster.intersectObjects(clickTargetMeshes, true);
         if (intersects.length === 0) return null;
 
         // Walk up to whichever registered target owns the mesh that was hit. The hit
@@ -1215,8 +1219,19 @@ export function initScene(onFirstFrame?: () => void) {
 
     // Both of these stand down while flying: the drag is a look-around, not a pick,
     // and free flight owns the cursor.
+    //
+    // The hover is throttled because a pick is not cheap — it raycasts against the
+    // real 128×128 spheres, so any cursor actually over a planet is tested against
+    // 32k triangles in JS — while `mousemove` fires as fast as the pointer reports,
+    // which on a trackpad is well past the frame rate. 30Hz is quicker than anyone
+    // notices a cursor change and does a fraction of the work. The click path below
+    // is deliberately not throttled: that one has to be exact.
+    let hoverPickDue = 0;
     renderer.domElement.addEventListener('mousemove', (event: MouseEvent) => {
         if (freeFlight.enabled || moonSurface.active) return;
+        const nowMs = performance.now();
+        if (nowMs < hoverPickDue) return;
+        hoverPickDue = nowMs + 33;
         const picked = pickTarget(event);
         // The Moon stays clickable even once you are parked at it, because there the
         // click means something else — see below.
@@ -1393,6 +1408,45 @@ export function initScene(onFirstFrame?: () => void) {
     // occasionally dropping a frame to timer jitter sitting right at the threshold.
     const TARGET_FRAME_INTERVAL_MS = 1000 / 60 - 1;
 
+    // ...and most of the time it does not need 60 either. At the default "Real" rate
+    // Earth turns 0.0042°/s and the Sun's granules evolve off the same clock, so with
+    // the camera parked the whole frame is identical to the last one to far under a
+    // pixel — and the profile says ~99% of a frame is fragment work, not JS. Redrawing
+    // that still image 60 times a second is what keeps a laptop's fans up. So the
+    // scene falls back to 15fps whenever nothing is actually changing, and returns to
+    // 60 on the first sign that something is: a quarter of the GPU work for an image
+    // no different from the one it replaces.
+    const IDLE_FRAME_INTERVAL_MS = 1000 / 15 - 1;
+    // Long enough to cover OrbitControls' damping tail and the label opacity fades
+    // that follow a camera move, so neither finishes at the idle rate.
+    const INPUT_GRACE_MS = 1200;
+    // "Real" is 1; the next step up is 3600 (1 hr/s), which spins Earth at 15°/s and
+    // genuinely needs the frames. Anything at or below this is static to the eye.
+    const STATIC_TIME_SPEED = 60;
+
+    // Only input that can actually change the image counts. A bare hover does not —
+    // it moves the cursor and nothing else. `pointerdown` on the document also catches
+    // every nav-panel click (toggling the cloud deck, the orbit lines, the time rate),
+    // which change the scene without going through a fly-to.
+    let lastInputMs = performance.now();
+    const markInput = () => { lastInputMs = performance.now(); };
+    document.addEventListener('keydown', markInput, { passive: true });
+    document.addEventListener('wheel', markInput, { passive: true });
+
+    // A held pointer is tracked as a state rather than inferred from `buttons` on each
+    // pointermove, because a drag has to hold the full frame rate for as long as it
+    // lasts and a missed event would drop it back to the idle rate mid-gesture — which
+    // is the one moment the smoothness is actually being watched. `pointerup` is on the
+    // window, not the canvas: release the button off the edge of the canvas after a
+    // drag and the canvas never hears about it, leaving the scene pinned at 60fps for
+    // the rest of the session.
+    let pointerHeld = false;
+    document.addEventListener('pointerdown', () => { pointerHeld = true; markInput(); }, { passive: true });
+    window.addEventListener('pointerup', () => { pointerHeld = false; markInput(); }, { passive: true });
+    window.addEventListener('pointercancel', () => { pointerHeld = false; }, { passive: true });
+    // A drag interrupted by a tab switch never delivers its pointerup.
+    window.addEventListener('blur', () => { pointerHeld = false; });
+
     // The nav panel's live clock — the one piece of chrome that prints an actual
     // simulation value rather than a label. `Intl.DateTimeFormat` is built once,
     // not per frame, since constructing one is not free and the format never
@@ -1512,12 +1566,32 @@ export function initScene(onFirstFrame?: () => void) {
     function animate() {
         requestAnimationFrame(animate);
 
+        // rAF is already throttled in a backgrounded tab, but a window that is merely
+        // occluded by another one is not reliably covered — and that is exactly the
+        // case where the scene is burning a GPU nobody is looking at.
+        if (document.hidden) {
+            return;
+        }
+
         const frameMs = performance.now();
-        // Skip the whole frame — physics and all — until roughly a 60Hz interval has
-        // passed, rather than let a high-refresh display drive it faster. `lastFrameMs`
-        // only advances on a frame that actually proceeds, so realDelta below still
+        // The two first-person modes are the ones the eye actually tracks, and a fly-to
+        // is a moving camera by definition. Past those, it comes down to whether the
+        // user has touched anything recently and whether the clock is running fast
+        // enough for the motion to show.
+        const sceneIsChanging =
+            freeFlight.enabled ||
+            moonSurface.active ||
+            focusAnimation !== null ||
+            pointerHeld ||
+            frameMs - lastInputMs < INPUT_GRACE_MS ||
+            (!isPaused() && getTimeSpeed() > STATIC_TIME_SPEED);
+
+        // Skip the whole frame — physics and all — until the interval has passed,
+        // rather than let a high-refresh display drive it faster. `lastFrameMs` only
+        // advances on a frame that actually proceeds, so realDelta below still
         // measures real elapsed time between rendered frames, not between rAF ticks.
-        if (frameMs - lastFrameMs < TARGET_FRAME_INTERVAL_MS) {
+        const frameInterval = sceneIsChanging ? TARGET_FRAME_INTERVAL_MS : IDLE_FRAME_INTERVAL_MS;
+        if (frameMs - lastFrameMs < frameInterval) {
             return;
         }
 
