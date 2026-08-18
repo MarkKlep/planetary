@@ -584,6 +584,15 @@ export function initScene(onFirstFrame?: () => void) {
     document.getElementById('zoom-in')?.addEventListener('click', () => setZoomFromButtons('in'));
     document.getElementById('zoom-out')?.addEventListener('click', () => setZoomFromButtons('out'));
 
+    // The buttons only make sense as a way to move between "the whole system" and
+    // "somewhere in it", so they only show up in the former — everywhere else, the
+    // nav panel and mouse wheel already own zooming. Default hidden in CSS so there
+    // is no flash of the buttons before the first frame runs.
+    const viewportZoom = document.querySelector<HTMLElement>('.viewport-zoom');
+    const setZoomButtonsVisible = (visible: boolean) => {
+        viewportZoom?.classList.toggle('viewport-zoom--visible', visible);
+    };
+
     // Earth is framed from 3 of its radii; Mars is barely half the size, so matching
     // that framing means measuring the distance in *its* radii rather than reusing
     // the number.
@@ -1093,6 +1102,9 @@ export function initScene(onFirstFrame?: () => void) {
             focusAnimation = null;
             moonSurface.enter(site);
             updateSurfaceChrome(true, site);
+            // The surface branch returns before the per-frame visibility check runs,
+            // so it would otherwise stay stuck showing if it was up when we landed.
+            setZoomButtonsVisible(false);
         } else {
             if (!moonSurface.active) return;
             exitMoonSurface();
@@ -1126,56 +1138,6 @@ export function initScene(onFirstFrame?: () => void) {
                 // exclusive, so there is never a question of which one it means.
                 if (moonSurface.active) setMoonSurface(false);
                 else setFreeFlight(false);
-                break;
-            case '1':
-                focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
-                break;
-            case '2':
-                focusOnObject(moon, 3, 1500);
-                break;
-            case '3':
-                focusOnObject(iss, 0.5, 1500);
-                break;
-            case '4':
-                focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
-                break;
-            case '5':
-                focusOnObject(phobos, PHOBOS_VIEW_DISTANCE, 2500);
-                break;
-            case '6':
-                focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
-                break;
-            case '7':
-                setAnalemmaVisible(true);
-                focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
-                break;
-            case '8':
-                focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
-                break;
-            case '9':
-                focusOnObject(mercury, MERCURY_VIEW_DISTANCE, 2500);
-                break;
-            case '0':
-                focusOnObject(earth, 70, 2000);
-                break;
-            // The digit row ran out at Mercury, and the letters free flight uses
-            // (W/A/S/D/Q/E) rule out the obvious mnemonics for three of the four
-            // Galileans. So Jupiter gets a key and its moons are reached from the nav
-            // panel or by clicking them, which is how you would find them anyway once
-            // you are close enough for them to be more than dots.
-            case 'j':
-                focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
-                break;
-            // Saturn's obvious key is the one free flight uses to go backwards, and the
-            // two modes are already mutually exclusive, so it means whichever one you
-            // are in: "back" while flying, "Saturn" otherwise. That is a narrower rule
-            // than it sounds — the alternative was leaving the second most recognisable
-            // object in the sky reachable only by mouse, on the grounds that a letter
-            // was spoken for in a mode where nav shortcuts do not apply anyway.
-            case 's':
-                if (!freeFlight.enabled) {
-                    focusOnObject(saturn, SATURN_VIEW_DISTANCE, 3500);
-                }
                 break;
         }
     });
@@ -1718,8 +1680,9 @@ export function initScene(onFirstFrame?: () => void) {
             updateBodyMarker(marker, camera, viewportHeight);
         }
 
-        const screenPositions: Array<{ label: typeof labels[number]; x: number; y: number }> = [];
+        const screenPositions: Array<{ label: typeof labels[number]; x: number; y: number; forcedHidden: boolean; observing: boolean }> = [];
         const systemWideView = camera.position.distanceTo(sun.position) > EARTH_ORBIT_RADIUS * 8;
+        setZoomButtonsVisible(systemWideView && !freeFlight.enabled);
 
         for (const label of labels) {
             const position = label.body.getWorldPosition(scratchTarget);
@@ -1731,14 +1694,14 @@ export function initScene(onFirstFrame?: () => void) {
             const onScreen = projected.z >= -1 && projected.z <= 1;
             const x = (projected.x * 0.5 + 0.5) * renderer.domElement.clientWidth;
             const y = (-projected.y * 0.5 + 0.5) * renderer.domElement.clientHeight;
-            if (onScreen) {
-                screenPositions.push({ label, x, y });
-            }
-
             // Everything else here is a body you can always find; the analemma is an
             // overlay you might have switched off, and its chip shouldn't linger
             // once the curve it's labelling is gone.
             const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
+            if (onScreen) {
+                screenPositions.push({ label, x, y, forcedHidden, observing });
+            }
+
             const target = forcedHidden || observing || cameraDistance > label.hideBeyond ? 0 : 1;
             const current = parseFloat(label.element.style.opacity || '0');
             const next = current + (target - current) * 0.15;
@@ -1746,7 +1709,7 @@ export function initScene(onFirstFrame?: () => void) {
             label.object.visible = next > 0.02;
         }
 
-        for (const { label, x, y } of screenPositions) {
+        for (const { label, x, y, forcedHidden, observing } of screenPositions) {
             const index = labels.indexOf(label);
             const thisPosition = label.body.getWorldPosition(scratchTarget);
             const thisDistance = camera.position.distanceTo(thisPosition);
@@ -1763,9 +1726,8 @@ export function initScene(onFirstFrame?: () => void) {
                     break;
                 }
             }
-            const forcedHidden = label.body === analemmaAnchor && !analemmaVisible;
             const hiddenBySystem = systemWideView || thisDistance > label.hideBeyond;
-            const target = forcedHidden || overlap || hiddenBySystem ? 0 : 1;
+            const target = forcedHidden || observing || overlap || hiddenBySystem ? 0 : 1;
             const current = parseFloat(label.element.style.opacity || '0');
             const next = current + (target - current) * 0.15;
             label.element.style.opacity = next.toFixed(2);
