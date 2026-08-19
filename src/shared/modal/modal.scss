@@ -1,0 +1,139 @@
+@use '../../variables.scss' as *;
+
+// Above the nav panel and the two HUDs (1000) and the zoom buttons (1200), below the
+// splash (2000) — the splash covers a frozen main thread, and nothing should ever be
+// asking a question over it.
+.modal {
+    position: fixed;
+    inset: 0;
+    z-index: 1500;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+
+    // Dim rather than opaque: the question is about the thing behind it, and on the
+    // Moon that thing is the whole reason the dialog is worth the interruption.
+    background: rgba(4, 4, 6, 0.62);
+    backdrop-filter: blur(2px);
+
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.16s ease, visibility 0.16s;
+    // Closed, it must not sit over the canvas eating drags; open, swallowing them is
+    // exactly the point.
+    pointer-events: none;
+
+    &--open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+    }
+}
+
+.modal__dialog {
+    width: 100%;
+    max-width: 380px;
+    padding: 22px 24px 20px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    // The one place a real shadow is warranted: this is the only piece of chrome that
+    // is genuinely floating above the scene rather than bonded to an edge.
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    transform: translateY(10px) scale(0.985);
+    transition: transform 0.16s ease;
+
+    .modal--open & {
+        transform: none;
+    }
+}
+
+// Same eyebrow treatment as the HUD titles — mono, uppercase, hairline under it — so
+// the dialog reads as part of the same instrument panel and not as a browser alert.
+.modal__title {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-faint);
+    margin: 0 0 12px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.modal__message {
+    margin: 0 0 20px;
+    font-size: 13px;
+    line-height: 1.55;
+    color: var(--ink-dim);
+}
+
+.modal__actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.modal__button {
+    padding: 9px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline);
+    background: var(--panel-raised);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+    &:hover {
+        border-color: var(--hairline-bright);
+    }
+
+    &:active {
+        transform: scale(0.98);
+    }
+
+    // Keyboard focus has to be visible here in a way it does not elsewhere: this is
+    // the one control the user may be reaching for without having clicked anything.
+    &:focus-visible {
+        outline: 1px solid var(--signal);
+        outline-offset: 2px;
+    }
+
+    // Amber marks the active control everywhere else in the chrome, so it marks the
+    // one that acts here too. Deliberately *not* the focused default — see
+    // `modal-controller.ts` on where focus lands.
+    &--confirm {
+        border-color: var(--signal);
+        color: var(--signal);
+        background: var(--signal-dim);
+
+        &:hover {
+            border-color: var(--signal);
+            background: rgba(255, 138, 61, 0.26);
+        }
+    }
+}
+
+@media (max-width: 768px) {
+    .modal__dialog {
+        padding: 18px 18px 16px;
+    }
+
+    .modal__actions {
+        // Thumbs, and no room to put two buttons side by side without shrinking both
+        // below a comfortable target.
+        flex-direction: column-reverse;
+
+        .modal__button {
+            width: 100%;
+            padding: 12px 16px;
+        }
+    }
+}

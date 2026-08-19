@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
+import { Modal } from './shared/modal/modal';
 import { initScene } from './script';
 import { Analytics } from "@vercel/analytics/react";
 
@@ -43,6 +44,18 @@ export function App() {
       <NavPanel />
       <FlightHud />
       <SurfaceHud />
+      {/* Mounted once and driven from `script.ts` through `bindModal`, which looks it
+          up by this id. Standing on the Moon is the one mode that is easy to leave by
+          accident — Escape, L, and every nav target all lift off — and impossible to
+          undo, since re-entering rebuilds the terrain at the landing site rather than
+          where you had walked to. So each of those paths asks first. */}
+      <Modal
+        id="leave-surface-modal"
+        title="Leave the surface"
+        message="You are standing on the Moon. Lifting off ends the walk — coming back sets you down at the landing site again, not where you are now."
+        confirmLabel="Lift off"
+        cancelLabel="Stay"
+      />
       <Analytics />
     </>
   );

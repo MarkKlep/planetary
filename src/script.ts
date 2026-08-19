@@ -35,6 +35,7 @@ import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { createAdaptiveResolution, initialPixelRatio, quality } from './quality';
 import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
+import { bindModal } from './shared/modal/modal-controller';
 import {
     CALLISTO,
     DEIMOS,
@@ -986,6 +987,17 @@ export function initScene(onFirstFrame?: () => void) {
         duration = 2000,
         approachFrom?: Vector3
     ) {
+        // Asking to be taken anywhere at all is also asking to leave the Moon, so the
+        // confirmation goes here rather than at each caller: one guard covers the nav
+        // panel, the reset button and anything added later without any of them needing
+        // to know the surface mode exists. When nothing is landed it calls straight
+        // through, and the retry below runs after the surface is already over — so it
+        // reaches this point with `active` false and cannot ask twice.
+        if (moonSurface.active) {
+            confirmLeaveSurface(() => focusOnObject(target, distance, duration, approachFrom));
+            return;
+        }
+
         const isSystemView =
             target === sun &&
             !!approachFrom &&
@@ -1002,10 +1014,6 @@ export function initScene(onFirstFrame?: () => void) {
         // This has to happen *first*: leaving free flight re-parks the orbit pivot,
         // and the animation below captures that pivot as its starting point.
         setFreeFlight(false);
-        // And it is equally the opposite of standing on a surface. Any nav button or
-        // keyboard shortcut therefore lifts off on its own, without needing to know
-        // that the surface mode exists.
-        exitMoonSurface();
 
         const targetPosition = target.getWorldPosition(scratchA).clone();
 
@@ -1117,6 +1125,53 @@ export function initScene(onFirstFrame?: () => void) {
     const surfaceSiteSelect = document.getElementById('surface-site') as HTMLSelectElement | null;
     const toggleMoonSurfaceBtn = document.getElementById('toggle-moon-surface');
 
+    /**
+     * Leaving the Moon used to be one keystroke away from half the chrome — Escape, L,
+     * the Leave button, and every nav target, since asking to be taken anywhere lifts
+     * off on its own. That is fine as a deliberate gesture and hostile as an accidental
+     * one, because it is the only mode here that cannot be undone by repeating what
+     * undid it: landing again rebuilds the terrain and sets you down at the site, not
+     * where you had walked or driven to. So every one of those paths asks first — and
+     * only while landed, which is what keeps the dialog out of the way the rest of the
+     * time.
+     *
+     * The action is held rather than run because the answer arrives asynchronously, and
+     * the caller's intent ("take me to Saturn") has to survive the wait.
+     */
+    let pendingLeave: (() => void) | null = null;
+
+    const leaveModal = bindModal('leave-surface-modal', {
+        onConfirm() {
+            const leave = pendingLeave;
+            pendingLeave = null;
+            // Lift off *first*. Every held action re-enters through `focusOnObject`,
+            // whose own guard would otherwise find the surface still active and put the
+            // dialog straight back up.
+            exitMoonSurface();
+            leave?.();
+        },
+        onCancel() {
+            pendingLeave = null;
+            moonSurface.resume();
+        },
+    });
+
+    /**
+     * Run `leave` now if we are not on a surface, or ask first if we are.
+     */
+    function confirmLeaveSurface(leave: () => void) {
+        if (!moonSurface.active) {
+            leave();
+            return;
+        }
+        if (leaveModal.open) return;
+        pendingLeave = leave;
+        // The dialog takes the keyboard and the pointer, but the walker and the rover
+        // hold their own state — a key already held down would go on walking behind it.
+        moonSurface.suspend();
+        leaveModal.show();
+    }
+
     function updateSurfaceChrome(landed: boolean, site?: LandingSite) {
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
         // The CSS2D labels are a DOM overlay, not something the renderer draws, so
@@ -1170,10 +1225,11 @@ export function initScene(onFirstFrame?: () => void) {
             setZoomButtonsVisible(false);
         } else {
             if (!moonSurface.active) return;
-            exitMoonSurface();
             // Come back out looking at the body just left, rather than at wherever the
-            // camera happened to be parked when it was entered.
-            focusOnObject(moon, 3, 1200);
+            // camera happened to be parked when it was entered. The lift-off itself is
+            // done by the confirmation, so by the time this runs there is no surface
+            // left for `focusOnObject`'s own guard to catch.
+            confirmLeaveSurface(() => focusOnObject(moon, 3, 1200));
         }
     }
 
@@ -1346,94 +1402,102 @@ export function initScene(onFirstFrame?: () => void) {
         button.addEventListener('click', () => {
             const target = button.getAttribute('data-target');
 
-            // Remove active class from all buttons
-            navButtons.forEach(btn => btn.classList.remove('active'));
-            button.classList.add('active');
+            // Wrapped whole rather than left to `focusOnObject`'s own guard, so that
+            // the selection waits for the answer as well: moving the highlight to a
+            // body the camera may never be sent to would leave the panel claiming a
+            // destination the user had just declined.
+            confirmLeaveSurface(() => {
+                // Remove active class from all buttons
+                navButtons.forEach(btn => btn.classList.remove('active'));
+                button.classList.add('active');
 
-            switch (target) {
-                case 'earth':
-                    focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
-                    break;
-                case 'moon':
-                    focusOnObject(moon, 3, 1500);
-                    break;
-                case 'iss':
-                    focusOnObject(iss, 0.5, 1500);
-                    break;
-                case 'analemma':
-                    setAnalemmaVisible(true);
-                    focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
-                    break;
-                case 'mercury':
-                    focusOnObject(mercury, MERCURY_VIEW_DISTANCE, 2500);
-                    break;
-                case 'venus':
-                    focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
-                    break;
-                case 'mars':
-                    focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
-                    break;
-                case 'phobos':
-                    focusOnObject(phobos, PHOBOS_VIEW_DISTANCE, 2500);
-                    break;
-                case 'deimos':
-                    focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
-                    break;
-                case 'jupiter':
-                    focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
-                    break;
-                case 'io':
-                    focusOnObject(io, IO_VIEW_DISTANCE, 3000);
-                    break;
-                case 'europa':
-                    focusOnObject(europa, EUROPA_VIEW_DISTANCE, 3000);
-                    break;
-                case 'ganymede':
-                    focusOnObject(ganymede, GANYMEDE_VIEW_DISTANCE, 3000);
-                    break;
-                case 'callisto':
-                    focusOnObject(callisto, CALLISTO_VIEW_DISTANCE, 3000);
-                    break;
-                case 'saturn':
-                    focusOnObject(saturn, SATURN_VIEW_DISTANCE, 3500);
-                    break;
-                case 'mimas':
-                    focusOnObject(mimas, MIMAS_VIEW_DISTANCE, 3500);
-                    break;
-                case 'enceladus':
-                    focusOnObject(enceladus, ENCELADUS_VIEW_DISTANCE, 3500);
-                    break;
-                case 'tethys':
-                    focusOnObject(tethys, TETHYS_VIEW_DISTANCE, 3500);
-                    break;
-                case 'dione':
-                    focusOnObject(dione, DIONE_VIEW_DISTANCE, 3500);
-                    break;
-                case 'rhea':
-                    focusOnObject(rhea, RHEA_VIEW_DISTANCE, 3500);
-                    break;
-                case 'titan':
-                    focusOnObject(titan, TITAN_VIEW_DISTANCE, 3500);
-                    break;
-                case 'iapetus':
-                    focusOnObject(iapetus, IAPETUS_VIEW_DISTANCE, 3500);
-                    break;
-                case 'sun':
-                    focusOnObject(sun, SUN_RADIUS * 4, 2500);
-                    break;
-                case 'system':
-                    setOrbitsVisible(true);
-                    focusOnObject(sun, SYSTEM_VIEW_DISTANCE, 2500, SYSTEM_VIEW_DIRECTION.clone());
-                    break;
-            }
+                switch (target) {
+                    case 'earth':
+                        focusOnObject(earth, EARTH_VIEW_DISTANCE, 1500);
+                        break;
+                    case 'moon':
+                        focusOnObject(moon, 3, 1500);
+                        break;
+                    case 'iss':
+                        focusOnObject(iss, 0.5, 1500);
+                        break;
+                    case 'analemma':
+                        setAnalemmaVisible(true);
+                        focusOnObject(analemmaAnchor, ANALEMMA_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'mercury':
+                        focusOnObject(mercury, MERCURY_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'venus':
+                        focusOnObject(venus, VENUS_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'mars':
+                        focusOnObject(mars, MARS_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'phobos':
+                        focusOnObject(phobos, PHOBOS_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'deimos':
+                        focusOnObject(deimos, DEIMOS_VIEW_DISTANCE, 2500);
+                        break;
+                    case 'jupiter':
+                        focusOnObject(jupiter, JUPITER_VIEW_DISTANCE, 3000);
+                        break;
+                    case 'io':
+                        focusOnObject(io, IO_VIEW_DISTANCE, 3000);
+                        break;
+                    case 'europa':
+                        focusOnObject(europa, EUROPA_VIEW_DISTANCE, 3000);
+                        break;
+                    case 'ganymede':
+                        focusOnObject(ganymede, GANYMEDE_VIEW_DISTANCE, 3000);
+                        break;
+                    case 'callisto':
+                        focusOnObject(callisto, CALLISTO_VIEW_DISTANCE, 3000);
+                        break;
+                    case 'saturn':
+                        focusOnObject(saturn, SATURN_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'mimas':
+                        focusOnObject(mimas, MIMAS_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'enceladus':
+                        focusOnObject(enceladus, ENCELADUS_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'tethys':
+                        focusOnObject(tethys, TETHYS_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'dione':
+                        focusOnObject(dione, DIONE_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'rhea':
+                        focusOnObject(rhea, RHEA_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'titan':
+                        focusOnObject(titan, TITAN_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'iapetus':
+                        focusOnObject(iapetus, IAPETUS_VIEW_DISTANCE, 3500);
+                        break;
+                    case 'sun':
+                        focusOnObject(sun, SUN_RADIUS * 4, 2500);
+                        break;
+                    case 'system':
+                        setOrbitsVisible(true);
+                        focusOnObject(sun, SYSTEM_VIEW_DISTANCE, 2500, SYSTEM_VIEW_DIRECTION.clone());
+                        break;
+                }
+            });
         });
     });
 
     // Reset camera button
     const resetCameraBtn = document.getElementById('reset-camera');
     resetCameraBtn?.addEventListener('click', () => {
-        navButtons.forEach(btn => btn.classList.remove('active'));
-        focusOnObject(earth, 70, 2000);
+        confirmLeaveSurface(() => {
+            navButtons.forEach(btn => btn.classList.remove('active'));
+            focusOnObject(earth, 70, 2000);
+        });
     });
 
     // Time speed buttons

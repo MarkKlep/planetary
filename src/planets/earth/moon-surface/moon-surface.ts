@@ -197,6 +197,16 @@ export interface MoonSurface {
     toggleRover(): void;
     enter(site: LandingSite): void;
     exit(): void;
+    /**
+     * Hold still without leaving: the ground, the sky and the site all stay built and
+     * the mode stays active, but nothing responds to the keyboard or the mouse.
+     *
+     * For while a dialog is up over the scene. A question that has not been answered
+     * yet must not be answered by a rover that is still rolling.
+     */
+    suspend(): void;
+    /** Hand control back to whichever of the two was driving. */
+    resume(): void;
     /** Move to another site without leaving the surface. */
     landAt(site: LandingSite): void;
     update(realDeltaSeconds: number, context: MoonSurfaceContext): void;
@@ -273,6 +283,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     let shadowsConfigured = false;
     let zoomed = false;
     let driving = false;
+    let suspended = false;
     /** Aim the first look somewhere worth looking, once the sky is known. */
     let needsFacing = false;
 
@@ -293,6 +304,9 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     // them concerns *both*: Z is the same long lens whether you are standing or
     // driving, and R is the handover between them.
     function onKeyDown(event: KeyboardEvent): void {
+        // The two controllers check their own `enabled` flag; this handler is the
+        // mode's rather than either of theirs, so it has to check the mode's.
+        if (suspended) return;
         const tag = (event.target as HTMLElement)?.tagName;
         if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
         if (event.code === 'KeyZ') zoomed = !zoomed;
@@ -510,6 +524,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             walker.enable();
             fieldOfView = SURFACE_FOV;
             zoomed = false;
+            suspended = false;
             active = true;
         },
 
@@ -518,9 +533,33 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             if (active) walker.enable();
         },
 
+        suspend() {
+            if (!active || suspended) return;
+            suspended = true;
+            // Both, unconditionally: only one of the two was live anyway, and
+            // `disable()` is what clears the held keys, drops the velocity to zero and
+            // lets go of a look-around drag that was in progress.
+            walker.disable();
+            driver.disable();
+        },
+
+        resume() {
+            if (!active || !suspended) return;
+            suspended = false;
+            // `driving` is untouched by suspending, so you come back to the same seat,
+            // in the same place, facing the same way. Two things do reset, both from
+            // the controllers' own `enable()`: the rover comes back stopped rather than
+            // coasting — the parking brake, which is what the crews pulled at every
+            // stop and the right answer for a vehicle nobody was watching — and the
+            // driver's free-look re-centres over the bonnet.
+            if (driving) driver.enable();
+            else walker.enable();
+        },
+
         exit() {
             if (!active) return;
             active = false;
+            suspended = false;
             window.removeEventListener('keydown', onKeyDown);
             walker.disable();
             driver.disable();
