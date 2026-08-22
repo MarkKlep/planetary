@@ -89,3 +89,19 @@
         color: var(--ink-faint);
     }
 }
+
+// Same breakpoint and the same trade — the key legend is the part a returning pilot
+// needs least and the part least readable at 190px wide — as `.surface-hud` already
+// makes for its own read-out in the same corner.
+@media (max-width: 768px) {
+    .flight-hud {
+        right: 12px;
+        bottom: 12px;
+        width: 190px;
+        padding: 12px 14px;
+    }
+
+    .flight-hud__keys {
+        display: none;
+    }
+}

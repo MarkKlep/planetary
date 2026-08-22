@@ -146,6 +146,82 @@
     }
 }
 
+// The "you can also land here" flag — see `LandFlag` in nav-panel.tsx for why it is a
+// flag and not a dot, and why it is permanent rather than a one-time callout. Amber
+// because it marks something to act on, which is what amber means everywhere else in
+// this chrome; a steady glow rather than a pulse, the same treatment the live dot
+// beside "Solar system simulator" gets for the same reason — a standing fact about
+// this row, not a notification about it.
+.nav-flag {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    color: var(--signal);
+    // The glow is what makes it read at 12px against a near-black panel — the flat
+    // shape alone reads as a stray glyph.
+    filter: drop-shadow(0 0 4px rgba(255, 138, 61, 0.55));
+    // Auto, not none: the icon is decorative until you point at it, at which point
+    // it's the thing being hovered — the tooltip below depends on this element itself
+    // receiving the pointer rather than passing it through to the button underneath.
+    // A click still reaches the button regardless, since this is a normal inline
+    // child of it, not an overlay stacked on top.
+    cursor: default;
+
+    svg {
+        display: block;
+    }
+}
+
+// The message. `content: attr(data-tooltip)` reads the same string the flag's own
+// `aria-label` carries, so the two can never drift into describing the icon
+// differently. Centred under the flag rather than edge-anchored: both flags sit
+// mid-row (measured 107–137px into a ~287px content width), and a card anchored to
+// either edge of a 12px icon extends almost its entire own width in one direction —
+// enough to run past the *opposite* edge of a column this narrow. Centred, half the
+// card's width is all that has to fit on either side, which is what actually holds
+// at this panel's measured width, not just at the one flag position it was eyeballed
+// against.
+.nav-flag::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    top: calc(100% + 7px);
+    left: 50%;
+    z-index: 20;
+    width: max-content;
+    max-width: 150px;
+    padding: 7px 10px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--hairline-bright);
+    background: var(--panel-raised);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.5);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    line-height: 1.45;
+    white-space: normal;
+    text-transform: none;
+    letter-spacing: normal;
+    text-align: left;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateX(-50%) translateY(-3px);
+    transition: opacity 0.12s ease, transform 0.12s ease, visibility 0.12s;
+    pointer-events: none;
+}
+
+// Hover shows it from the icon itself; `:focus-visible` on the row's own button
+// shows the same card for a keyboard user tabbing through the panel, without making
+// the flag a second, purely-decorative stop in the tab order.
+.nav-flag:hover::after,
+.nav-btn:focus-visible .nav-flag::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+
 // Instrument-panel treatment. Keep this scoped to the panel: `.nav-btn` is also used
 // by the heatmap host, and the scene initialiser relies on its data attributes.
 .navigation-panel {
@@ -446,5 +522,40 @@
         .nav-header { padding-top: 2px; }
         .nav-title { font-size: 28px; }
         .nav-btn.nav-object-btn { min-height: 38px; }
+    }
+}
+
+// Hidden by default (`display: none` rather than only zero opacity) so it never eats
+// a stray tap on the docked desktop layout, where `NavPanel` renders the same element
+// present but inert. Declared ahead of the mobile media query below, not after — an
+// unconditional rule placed later would win the source-order tiebreak over the media
+// query's own `display: block` at equal specificity and hide it right back.
+.nav-panel-scrim {
+    display: none;
+}
+
+// The panel's own width/shadow override for this breakpoint lives in styles.scss,
+// right after the base `.navigation-panel` rule it overrides — `main.tsx` imports
+// `./App` (and so this file, transitively) before `./styles.scss`, so a rule of equal
+// specificity placed here would lose the cascade tiebreak to that later-injected base
+// rule despite the media query. The scrim has no such competing declaration, so it's
+// safe to define here, where the component that renders it lives.
+@media (max-width: 768px) {
+    .nav-panel-scrim {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 999;
+        background: rgba(4, 4, 6, 0.5);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition: opacity 0.25s ease, visibility 0.25s;
+
+        &--visible {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+        }
     }
 }

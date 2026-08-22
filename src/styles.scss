@@ -222,6 +222,22 @@ body {
     }
 }
 
+// Below this the panel stops being a docked pane and becomes a drawer over the
+// scene: fixed 288px is most of a phone's width, so it shrinks and floats rather
+// than spanning full height flush with an edge the rest of the layout no longer
+// respects, and gets a real shadow — the modal's own reasoning ("the one piece of
+// chrome genuinely floating above the scene") applies here for the same reason.
+// Kept in this file, after the base rule above, rather than in nav-panel.scss's own
+// mobile block: `main.tsx` imports `./App` (and so nav-panel.scss, transitively)
+// before `./styles.scss`, so a rule of equal specificity placed there would lose the
+// cascade tiebreak to this file's later-injected, unconditional `width: 288px`.
+@media (max-width: 768px) {
+    .navigation-panel {
+        width: min(85vw, 320px);
+        box-shadow: 4px 0 28px rgba(0, 0, 0, 0.45);
+    }
+}
+
 .nav-panel-toggle {
     position: absolute;
     top: 20px;

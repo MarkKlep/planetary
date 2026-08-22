@@ -4,6 +4,41 @@ import { BodyIcon } from './planet-icons';
 import './nav-panel.scss';
 
 /**
+ * The mark that says "this one you can also stand on, not just look at".
+ *
+ * Every other row here is a camera target — this is the one place that switches the
+ * app into a different mode entirely, and nothing about "Moon" sitting in a list next
+ * to "ISS" and "Analemma" says so. Permanent, not a one-time callout: the distinction
+ * ("landable" vs. "observe only") is a standing fact about this row, the same way the
+ * live dot beside "Solar system simulator" is a standing fact rather than an
+ * announcement — so, like that dot, this has no dismissal and no animation, just a
+ * steady glow.
+ *
+ * A flag rather than an abstract icon, because the thing it points at has a real one:
+ * `moon-surface/artefacts.ts` plants the actual Apollo 11 flag at Tranquility Base,
+ * lying flat where the ascent engine knocked it over.
+ *
+ * `aria-label` rather than `aria-hidden`: this sits inside the Moon's own button, so
+ * it extends that button's accessible name — a screen reader gets "Moon, click Land
+ * to walk the surface" instead of an unexplained icon.
+ *
+ * The hover card is a `data-tooltip` + CSS `::after`, not the native `title`
+ * attribute: `title` renders as the browser's own unstyled tooltip on its own ~1s
+ * delay, which would fight this chrome's instrument-panel look.
+ */
+function LandFlag() {
+  const message = 'Click Land to walk the surface';
+  return (
+    <span className="nav-flag" role="img" aria-label={message} data-tooltip={message}>
+      <svg viewBox="0 0 12 12" width="12" height="12" focusable="false">
+        <path d="M3 1.2v9.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
+        <path d="M3.75 1.7h6.1v4.05h-6.1z" fill="currentColor" />
+      </svg>
+    </span>
+  );
+}
+
+/**
  * A button sitting beside a row that switches something rather than flying to it.
  * `script.ts` owns the label and the state outright — same reasoning as free flight's
  * button: several paths (this button, a keyboard shortcut, a click in the scene) all
@@ -113,12 +148,31 @@ const PLANETS: Planet[] = [
   },
 ];
 
+// Matches the breakpoint the modal and surface HUD already use elsewhere in the
+// chrome. Below it the panel stops being a docked pane and becomes a drawer: it
+// starts closed so the 3D scene — the actual point of the app — is what a phone
+// visitor sees first, not 288px of instrument panel covering most of a ~375px screen.
+const MOBILE_QUERY = '(max-width: 768px)';
+
 export function NavPanel() {
   const [activeTarget, setActiveTarget] = useState<string | null>(null);
   const [activeSpeed, setActiveSpeed] = useState<number>(DEFAULT_TIME_SPEED);
   const [paused, setPaused] = useState(false);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+
+  // Delegated rather than wired onto every `data-target` button individually — this
+  // is the drawer's "select and it gets out of the way" behaviour, and it only makes
+  // sense on the mobile layout where opening the panel is a deliberate act that hid
+  // the scene to begin with. On desktop the panel is docked, not a drawer, so picking
+  // a target there must not fight the user's own collapse/expand choice. `closest`
+  // from the click target means this only fires for the fly-to buttons themselves —
+  // the expand chevrons and the Land/Show/Hide toggles beside them carry no
+  // `data-target` and are left alone, since those are meant to be used in sequence.
+  const handleObjectListClick = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (!(event.target as HTMLElement).closest('[data-target]')) return;
+    if (window.matchMedia(MOBILE_QUERY).matches) setIsCollapsed(true);
+  };
 
   const toggleExpanded = (id: string) => {
     setExpanded((previous) => {
@@ -135,6 +189,7 @@ export function NavPanel() {
   // The actual behaviour is wired up in script.ts, which listens on the data-*
   // attributes and ids below. These handlers only drive the button styling.
   return (
+    <>
     <nav className={`navigation-panel ${isCollapsed ? 'navigation-panel--collapsed' : ''}`}>
       <button
         type="button"
@@ -166,7 +221,7 @@ export function NavPanel() {
         </header>
         <div className="nav-section nav-section--objects">
           <h2 className="nav-section-title">Objects</h2>
-          <div className="nav-object-list">
+          <div className="nav-object-list" onClick={handleObjectListClick}>
             <button
               className={`nav-btn nav-object-btn ${activeTarget === 'sun' ? 'active' : ''}`}
               data-target="sun"
@@ -229,6 +284,12 @@ export function NavPanel() {
                           >
                             <span className="nav-object-symbol nav-object-symbol--small"><BodyIcon id={satellite.id} /></span>
                             <span>{satellite.label}</span>
+                            {/* Inline rather than a corner badge on the Land button
+                                beside it: `.nav-satellites__inner` clips to
+                                `overflow: hidden` for the accordion animation, so
+                                anything hung off that button's outer edge would get
+                                its corner cut. */}
+                            {satellite.id === 'moon' && <LandFlag />}
                           </button>
                           {/* Two rows carry one of these, and they are the two things
                               under Earth that aren't simply a body to fly to: the
@@ -382,5 +443,15 @@ export function NavPanel() {
         </div>
       </div>
     </nav>
+    {/* A tap-outside-to-close convenience, visible only at the mobile breakpoint (see
+        nav-panel.scss) — on desktop the panel is a docked pane, not a drawer, so this
+        stays inert and invisible there. Not a `<button>`: the toggle chevron already
+        gives keyboard/screen-reader users a real control for the same action. */}
+    <div
+      className={`nav-panel-scrim ${!isCollapsed ? 'nav-panel-scrim--visible' : ''}`}
+      onClick={() => setIsCollapsed(true)}
+      aria-hidden="true"
+    />
+    </>
   );
 }
