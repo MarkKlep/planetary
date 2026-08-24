@@ -606,6 +606,41 @@ export const CLOUD_ANGULAR_VELOCITY_SCALE = 1.15;
 export const ISS_ALTITUDE_KM = 408; // kilometers above Earth's surface
 export const ISS_ORBITAL_RADIUS = 1 + (ISS_ALTITUDE_KM / EARTH_RADIUS_KM); // relative to Earth radius (1 unit)
 export const ISS_UPDATE_INTERVAL = 1500; // milliseconds (1.5 seconds)
+/** Earth's gravitational parameter, km³/s². Every ISS figure below falls out of it. */
+export const EARTH_MU_KM3_S2 = 398600.4418;
+export const ISS_ORBITAL_RADIUS_KM = EARTH_RADIUS_KM + ISS_ALTITUDE_KM;
+/**
+ * √(µ/r) — 7.668 km/s, against the 7.66 usually quoted. Derived rather than
+ * transcribed, and the period below with it, so the number in the read-out and the rate
+ * the station is actually flown round its orbit at cannot drift apart.
+ */
+export const ISS_ORBITAL_SPEED_KM_S = Math.sqrt(EARTH_MU_KM3_S2 / ISS_ORBITAL_RADIUS_KM);
+/** 2π√(r³/µ) — 5,554 s, i.e. 92.6 min against the real 92.68 and 15.55 orbits a day. */
+export const ISS_ORBITAL_PERIOD_S =
+    2 * Math.PI * Math.sqrt(ISS_ORBITAL_RADIUS_KM ** 3 / EARTH_MU_KM3_S2);
+/**
+ * The one orbital element that cannot be recovered from a single position fix, and the
+ * one that never changes: 51.64° was chosen in the 1990s so that Baikonur, at 45.6°N,
+ * could reach the station at all. It is why the ground track never crosses a latitude
+ * higher than this, and why the orbit plane is fully determined by the inclination plus
+ * wherever the station happens to be — see `orbitNormal()` in `iss.ts`.
+ */
+export const ISS_INCLINATION_DEG = 51.64;
+/** Truss tip to truss tip, metres — the longest dimension of the real station. */
+export const ISS_TRUSS_LENGTH_M = 108.5;
+/**
+ * How wide the station is drawn, in scene units.
+ *
+ * The one deliberate lie in the model, and it is a large one: 109 m at true scale is
+ * 1.7e-5 units, which is a thousandth of a pixel from anywhere you could see Earth from
+ * and smaller than the depth buffer can separate. So the station is drawn ~5,000×
+ * oversized, at roughly a twelfth of Earth's radius, and *everything inside it* is then
+ * built from the real dimensions in metres and scaled by the single factor below. That
+ * keeps every proportion honest even though the overall size is not — which is the same
+ * bargain `body-marker.ts` makes for the planets, one step further along.
+ */
+export const ISS_MODEL_SPAN = 0.085;
+export const ISS_MODEL_SCALE = ISS_MODEL_SPAN / ISS_TRUSS_LENGTH_M;
 
 /**
  * Simulated seconds per real second. A day and a year are 365x apart, so no single

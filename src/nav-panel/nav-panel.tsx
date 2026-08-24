@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import { BodyIcon } from './planet-icons';
 import './nav-panel.scss';
@@ -57,6 +57,18 @@ interface Satellite {
   id: string;
   label: string;
   toggle?: Toggle;
+  /**
+   * Rows that live in this satellite's *own* dropdown, collapsed behind its own
+   * expand chevron — the same pattern a `Planet` gets, one level deeper.
+   *
+   * Not rendered as an always-visible row beside the satellite's own button: a bare
+   * "Show" sitting next to a row labelled "ISS" reads as showing the ISS, the same trap
+   * Saturn's "Titan haze" row was pulled out to avoid, and an always-open sub-row would
+   * also permanently cost Earth's own dropdown a row of height for something most
+   * visits to Earth have no reason to touch. Tucking it behind its own chevron keeps it
+   * reachable without either problem.
+   */
+  nested?: Array<Toggle & { label: string }>;
 }
 
 interface Planet {
@@ -97,7 +109,17 @@ const PLANETS: Planet[] = [
       // could be — at true scale an astronaut's eye is 2.7e-7 of a scene unit off the
       // ground, so it gets its own scene, in metres.
       { id: 'moon', label: 'Moon', toggle: { toggleId: 'toggle-moon-surface', initialLabel: 'Land', startsOff: true } },
-      { id: 'iss', label: 'ISS' },
+      // The one satellite with a dropdown of its own: the orbit the station is flying
+      // and the ground track under that. Both are diagram rather than scenery, so they
+      // start off, and they live behind ISS's own chevron rather than as a row that
+      // is always open — see `Satellite.nested`.
+      {
+        id: 'iss',
+        label: 'ISS',
+        nested: [
+          { label: 'Trajectory', toggleId: 'toggle-iss-trajectory', initialLabel: 'Show', startsOff: true },
+        ],
+      },
       { id: 'analemma', label: 'Analemma', toggle: { toggleId: 'toggle-analemma', initialLabel: 'Show', startsOff: true } },
     ],
   },
@@ -275,8 +297,17 @@ export function NavPanel() {
                       and hiding it is CSS-only. */}
                   <div className={`nav-satellites ${isExpanded ? 'nav-satellites--open' : ''}`}>
                     <div className="nav-satellites__inner">
-                      {planet.satellites.map((satellite) => (
-                        <div className="nav-satellite-row" key={satellite.id}>
+                      {planet.satellites.map((satellite) => {
+                        const isNestedExpandable = (satellite.nested?.length ?? 0) > 0;
+                        // Shares the same `expanded` state and `toggleExpanded` a
+                        // planet's own chevron uses — satellite ids never collide with
+                        // planet ids, so one Set safely tracks both levels.
+                        const isSatelliteExpanded = expanded.has(satellite.id);
+                        return (
+                        // A fragment rather than a single row, because one satellite can
+                        // own two elements: itself, and its own collapsible dropdown.
+                        <Fragment key={satellite.id}>
+                        <div className="nav-satellite-row">
                           <button
                             className={`nav-btn nav-btn--satellite ${activeTarget === satellite.id ? 'active' : ''}`}
                             data-target={satellite.id}
@@ -306,8 +337,63 @@ export function NavPanel() {
                               {satellite.toggle.initialLabel}
                             </button>
                           )}
-                        </div>
-                      ))}
+                          {/* ISS is the one satellite so far with a dropdown of its
+                              own — see `Satellite.nested`. A smaller chevron than a
+                              planet's own, since it sits in an already-indented row
+                              next to a narrower button. */}
+                          {isNestedExpandable && (
+                            <button
+                              type="button"
+                              className={`nav-expand-btn nav-expand-btn--compact ${isSatelliteExpanded ? 'nav-expand-btn--open' : ''}`}
+                              aria-expanded={isSatelliteExpanded}
+                              aria-label={`${isSatelliteExpanded ? 'Hide' : 'Show'} more of ${satellite.label}`}
+                              onClick={() => toggleExpanded(satellite.id)}
+                            >
+                              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+                                <path
+                                  d="M2 4l4 4 4-4"
+                                  stroke="currentColor"
+                                  strokeWidth="1.6"
+                                  fill="none"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </button>
+                          )}
+                          </div>
+                          {/* Always mounted, same rule as the outer satellite lists:
+                              script.ts looks the toggle button up by id once, at scene
+                              init, so it has to exist even while collapsed. Showing
+                              and hiding it is CSS-only. */}
+                          {isNestedExpandable && (
+                            <div className={`nav-satellites nav-satellites--nested ${isSatelliteExpanded ? 'nav-satellites--open' : ''}`}>
+                              <div className="nav-satellites__inner">
+                                {satellite.nested!.map((item) => (
+                                  <div className="nav-satellite-row" key={item.toggleId}>
+                                    {/* Not a `data-target` button: there is nothing
+                                        here to fly to, so it carries no click handler
+                                        and no active state — same as the Orbits and
+                                        Titan haze rows. */}
+                                    <span className="nav-btn nav-btn--satellite nav-btn--static">
+                                      {item.label}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      className={`nav-btn nav-btn--compact nav-visibility-btn ${item.startsOff ? 'nav-visibility-btn--off' : ''
+                                        }`}
+                                      id={item.toggleId}
+                                    >
+                                      {item.initialLabel}
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </Fragment>
+                        );
+                      })}
                       {planet.toggle && (
                         <div className="nav-satellite-row">
                           {/* Not a `data-target` button: there is nothing to fly to.

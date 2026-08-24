@@ -39,6 +39,12 @@
     }
 }
 
+// A satellite's own chevron — ISS's, so far — sits in an already-indented row next to
+// a narrower, shorter button than a planet's, so the planet's 40px would overwhelm it.
+.nav-expand-btn--compact {
+    width: 26px;
+}
+
 // A grid row animates where `height: auto` cannot, and unlike a fixed max-height it
 // never clips a taller satellite list or leaves a visible pause on a shorter one:
 // the track itself grows from 0fr to 1fr of the content's own height.
@@ -63,6 +69,14 @@
     // content size in the first place.
     min-height: 0;
     padding-top: 6px;
+}
+
+// A satellite's own dropdown (ISS's, so far) nests one level deeper than the planet
+// list it sits inside. `.nav-satellite-row` below already indents 18px for that outer
+// level; doubling it here is what makes "Trajectory" read as belonging to ISS rather
+// than sitting beside it at the same rank Moon and Analemma are at.
+.nav-satellites--nested .nav-satellite-row {
+    margin-left: 36px;
 }
 
 // The indentation lives here rather than on the button itself, so a row with a

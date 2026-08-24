@@ -1,0 +1,152 @@
+@use '../variables.scss' as *;
+
+/**
+ * The station read-out, in the same corner and the same frame as the flight and surface
+ * HUDs — the three are mutually exclusive by construction (free flight and the lunar
+ * surface both give up the camera's focus target), so they can share the spot.
+ *
+ * Wider than `.flight-hud` by 40px for one reason: two of the rows carry a second,
+ * quieter figure underneath the first, and at 232px the "27,600 km/h" wrapped.
+ */
+.iss-hud {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    width: 272px;
+    padding: 16px 18px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    // The canvas underneath is being dragged to orbit the camera, so the panel must
+    // never swallow the pointer.
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+
+    &--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+}
+
+.iss-hud__title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+}
+
+.iss-hud__subtitle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin-top: 3px;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.iss-hud__readout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    align-items: baseline;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.iss-hud__label {
+    font-size: 12px;
+    color: var(--ink-dim);
+}
+
+.iss-hud__value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--telemetry);
+    text-align: right;
+    // Tabular figures stop the latitude jittering sideways as its digits change — it
+    // is rewritten every frame.
+    font-variant-numeric: tabular-nums;
+}
+
+/** The second, quieter figure under a value: the same quantity in another unit. */
+.iss-hud__aside {
+    display: block;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+    margin-top: 1px;
+}
+
+.iss-hud__status {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.iss-hud__status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+}
+
+/**
+ * State rather than measurement, so this is the one place in the panel that is not
+ * telemetry cyan — it follows the chrome's own rule and takes the amber the nav panel
+ * marks active things with, dimming to plain ink when the state is the quiet one
+ * (in shadow, or flying on the model rather than on a fix).
+ */
+.iss-hud__state {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--signal);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+    }
+
+    &--quiet {
+        color: var(--ink-faint);
+    }
+}
+
+// Same breakpoint and the same trade the other two HUDs make in this corner: at 190px
+// the two-unit asides are the first thing that stops being readable, and the constants
+// are the part a returning visitor needs least.
+@media (max-width: 768px) {
+    .iss-hud {
+        right: 12px;
+        bottom: 12px;
+        width: 196px;
+        padding: 12px 14px;
+    }
+
+    .iss-hud__aside {
+        display: none;
+    }
+}

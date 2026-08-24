@@ -6,7 +6,8 @@ import { clouds } from './planets/earth/clouds';
 import { atmosphere, atmosphereSunDirection } from './planets/earth/atmosphere';
 import { sun, sunLight, updateSun } from './sun';
 import { backgroundTexture } from './background/background';
-import { iss, updateISSPosition, issCurrentPos, issTargetPos, issLastUpdateTime } from './iss';
+import { iss, issTelemetry, updateISS, updateISSPosition } from './iss';
+import { issGroundTrack, issOrbitPath, updateISSTrajectory } from './iss-trajectory';
 import { moon, moonTidalRotation } from './planets/earth/moon';
 import { ANALEMMA_RADIUS, analemmaAnchor, analemmaLine } from './planets/earth/analemma';
 import { mars } from './planets/mars/mars';
@@ -74,6 +75,7 @@ import {
     VENUS_AXIS_ORIENTATION,
 } from './orbits';
 import {
+    ISS_MODEL_SPAN,
     ISS_UPDATE_INTERVAL,
     CALLISTO_ORBIT_RADIUS,
     CALLISTO_RADIUS,
@@ -263,6 +265,11 @@ export function initScene(onFirstFrame?: () => void) {
     earthTilt.add(earth);
     earthTilt.add(clouds);
     earthTilt.add(iss);
+    // The station's orbit hangs off the *tilt*, beside the station itself, because the
+    // plane it flies in is fixed in space and does not turn with the ground — the Earth
+    // rotates inside it sixteen times for every one of its own days. The ground track
+    // below is the same orbit in the other frame and so goes one node further in.
+    earthTilt.add(issOrbitPath);
     // Children of `earth` itself, not of `earthTilt`: they need to inherit the
     // mesh's own per-frame spin, since the loop's shape was built in that spin's
     // *un-rotated* local frame and relies on the scene graph to carry it into world
@@ -270,6 +277,9 @@ export function initScene(onFirstFrame?: () => void) {
     // curve hold still relative to the ground point instead of sliding around it.
     earth.add(analemmaLine);
     earth.add(analemmaAnchor);
+    // ...and the ground track for the same reason again: it is drawn in the surface's
+    // own frame, so the graph's existing spin is what carries it round.
+    earth.add(issGroundTrack);
     moonOrbitPlane.add(moon);
     earthSystem.add(earthTilt);
     earthSystem.add(atmosphere);
@@ -702,6 +712,12 @@ export function initScene(onFirstFrame?: () => void) {
     // Earth is framed from 3 of its radii — named because the opening fly-in has to
     // land on exactly the framing the Earth nav button gives you.
     const EARTH_VIEW_DISTANCE = 3;
+    // The one framing measured off a *model* rather than a body. The station is drawn
+    // at `ISS_MODEL_SPAN` across (see the constant for why it is not at true scale), so
+    // this is about one and a half spans back — close enough that the truss fills the
+    // frame and the arrays articulate visibly, while Earth still fills the background,
+    // which is the only reason to be up there.
+    const ISS_VIEW_DISTANCE = ISS_MODEL_SPAN * 1.5;
 
     /**
      * "What am I nearest, and by how much?" — recomputed every frame.
@@ -878,6 +894,30 @@ export function initScene(onFirstFrame?: () => void) {
     // visibility flags, the JS state, and the button's own label in sync from a
     // single call rather than trying to hand-set each one to match.
     setAnalemmaVisible(false);
+
+    // The same shape again, for the station's own orbit. Two curves rather than one,
+    // switched together because they are the same orbit in two frames and either alone
+    // misleads: the ring says nothing about where it passes over, and the ground track
+    // says nothing about the plane being fixed while the planet turns inside it.
+    let issTrajectoryVisible = true;
+    const toggleISSTrajectoryBtn = document.getElementById('toggle-iss-trajectory');
+
+    function setISSTrajectoryVisible(visible: boolean) {
+        issTrajectoryVisible = visible;
+        issOrbitPath.visible = visible;
+        issGroundTrack.visible = visible;
+        toggleISSTrajectoryBtn?.classList.toggle('nav-visibility-btn--off', !visible);
+        if (toggleISSTrajectoryBtn) {
+            toggleISSTrajectoryBtn.textContent = visible ? 'Hide' : 'Show';
+        }
+    }
+
+    toggleISSTrajectoryBtn?.addEventListener('click', () =>
+        setISSTrajectoryVisible(!issTrajectoryVisible)
+    );
+    // Off on a first visit, like the analemma and the orbit lines: this is a diagram
+    // over the scene rather than a thing in it.
+    setISSTrajectoryVisible(false);
 
     // Same shape as the analemma toggle above, and for the same reason: the orbit
     // paths are diagram, not scenery, so their visibility is state this file owns and
@@ -1270,6 +1310,12 @@ export function initScene(onFirstFrame?: () => void) {
     const clickTargets: Array<{ hit: Object3D; focus: Object3D; distance: number }> = [
         { hit: earth, focus: earth, distance: 3 },
         { hit: moon, focus: moon, distance: 3 },
+        // The station is in front of the globe from any angle you can see it at, and
+        // `pickTarget` takes the nearest intersection, so this needs no special ordering
+        // to beat Earth to a click. It does need to be here at all: it is the one thing
+        // in the scene with a read-out of its own, and clicking what you can see is how
+        // anyone will expect to get to it.
+        { hit: iss, focus: iss, distance: ISS_VIEW_DISTANCE },
         { hit: sun, focus: sun, distance: SUN_RADIUS * 4 },
         // Two entries, because which one the ray actually lands on depends on whether
         // the deck is switched on — and they are siblings, so neither walks up to the
@@ -1419,7 +1465,7 @@ export function initScene(onFirstFrame?: () => void) {
                         focusOnObject(moon, 3, 1500);
                         break;
                     case 'iss':
-                        focusOnObject(iss, 0.5, 1500);
+                        focusOnObject(iss, ISS_VIEW_DISTANCE, 1500);
                         break;
                     case 'analemma':
                         setAnalemmaVisible(true);
@@ -1630,6 +1676,63 @@ export function initScene(onFirstFrame?: () => void) {
         }
     }
 
+    /**
+     * The station's read-out.
+     *
+     * Shown while the camera is following the ISS and nothing else has taken the view —
+     * both of the other modes give up the focus target on their way in, so the three
+     * panels sharing that corner cannot collide.
+     *
+     * Every write is guarded on the text having actually changed. Four of the eight
+     * fields here move, and at 10 Hz most of those are the same string as last time:
+     * latitude past two decimals is the only one that changes every tick, and setting
+     * `textContent` to the string already there still invalidates layout.
+     */
+    const issHud = document.getElementById('iss-hud');
+    const issLatitudeValue = document.getElementById('iss-latitude');
+    const issLongitudeValue = document.getElementById('iss-longitude');
+    const issSunlightValue = document.getElementById('iss-sunlight');
+    const issFeedValue = document.getElementById('iss-feed');
+    let issHudRefreshDue = 0;
+
+    /** Signed degrees to the hemisphere-and-magnitude form a navigator would read. */
+    function formatCoordinate(degrees: number, negative: string, positive: string): string {
+        return `${Math.abs(degrees).toFixed(2)}° ${degrees < 0 ? negative : positive}`;
+    }
+
+    function setText(element: HTMLElement | null, text: string) {
+        if (element && element.textContent !== text) element.textContent = text;
+    }
+
+    function updateIssHud(nowMs: number) {
+        const shown = followTarget === iss && !freeFlight.enabled && !moonSurface.active;
+        issHud?.classList.toggle('iss-hud--visible', shown);
+        if (!shown || nowMs < issHudRefreshDue) return;
+        issHudRefreshDue = nowMs + 100;
+
+        setText(issLatitudeValue, formatCoordinate(issTelemetry.latitude, 'S', 'N'));
+        setText(issLongitudeValue, formatCoordinate(issTelemetry.longitude, 'W', 'E'));
+
+        setText(issSunlightValue, issTelemetry.sunlit ? 'Sunlit' : 'In shadow');
+        issSunlightValue?.classList.toggle('iss-hud__state--quiet', !issTelemetry.sunlit);
+
+        // What the position on screen actually is. "Live" is a measurement; the other
+        // three are the orbital model, which is a different claim and should not be
+        // dressed up as the first one — hence the dimmed state for all of them.
+        const source = issTelemetry.source;
+        setText(
+            issFeedValue,
+            source === 'live'
+                ? 'Live feed'
+                : source === 'offline'
+                  ? 'No feed · modelled'
+                  : source === 'waiting'
+                    ? 'Acquiring…'
+                    : 'Modelled'
+        );
+        issFeedValue?.classList.toggle('iss-hud__state--quiet', source !== 'live');
+    }
+
     let surfaceHudRefreshDue = 0;
 
     function updateSurfaceHud(nowMs: number) {
@@ -1748,6 +1851,10 @@ export function initScene(onFirstFrame?: () => void) {
         // Ahead of the surface-mode branch below, since the clock reads the same
         // whichever render path the rest of the frame takes.
         updateNavClock(frameMs, now);
+        // ...and this one has to be ahead of it for the opposite reason: landing is
+        // reachable by keyboard from anywhere, including from the station, and the
+        // branch below returns before anything else could take the panel down.
+        updateIssHud(frameMs);
 
         // --- Orbits and rotations ---
         earthOrbitPosition(now, earthSystem.position);
@@ -1842,8 +1949,10 @@ export function initScene(onFirstFrame?: () => void) {
 
         // Sunlight direction, now genuinely geometric: each planet sits somewhere on
         // its orbit and the Sun is at the origin, so this is simply the way back.
-        const earthWorldPosition = earthSystem.getWorldPosition(scratchA);
-        const sunDirection = scratchB.copy(earthWorldPosition).negate().normalize();
+        const sunDirection = scratchB
+            .copy(earthSystem.getWorldPosition(scratchA))
+            .negate()
+            .normalize();
 
         atmosphereSunDirection.copy(sunDirection);
         // The Earth shader compares the sun against a view-space normal, so the
@@ -1883,13 +1992,12 @@ export function initScene(onFirstFrame?: () => void) {
         ringCameraPositionLocal.copy(camera.position);
         saturnRings.worldToLocal(ringCameraPositionLocal);
 
-        // Smooth interpolation between current and target position
-        const elapsedTime = Date.now() - issLastUpdateTime;
-        const progress = Math.min(elapsedTime / ISS_UPDATE_INTERVAL, 1);
-        iss.position.lerpVectors(issCurrentPos, issTargetPos, progress);
-        // Keep the station belly-down. Earth's centre is its parent's origin, and
-        // lookAt wants world space.
-        iss.lookAt(earthWorldPosition);
+        // The station, flown round its own orbit as a function of the same clock
+        // everything else here reads — position, flight attitude, and the two joints
+        // that track the Sun. See `iss.ts`; the live feed re-anchors that orbit rather
+        // than being interpolated between directly.
+        updateISS(now, spin, sunDirection);
+        updateISSTrajectory(spin);
 
         const viewportHeight = renderer.domElement.clientHeight || window.innerHeight;
         for (const marker of markers) {
