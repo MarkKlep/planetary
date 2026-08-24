@@ -12,6 +12,9 @@
     "dev:heatmap:only": "concurrently -n heatmap,heatmap-api -c magenta,yellow \"npm run dev:heatmap\" \"npm run dev:heatmap:server\"",
     "dev:mf": "concurrently -n planetary,heatmap -c cyan,magenta \"npm run dev:planetary\" \"npm run dev:heatmap\"",
     "dev:mf:full": "concurrently -n planetary,heatmap,heatmap-api -c cyan,magenta,yellow \"npm run dev:planetary\" \"npm run dev:heatmap\" \"npm run dev:heatmap:server\"",
+    "setup:chat": "npm --prefix backend install",
+    "dev:chat:server": "cross-env PORT=3003 npm --prefix backend run dev",
+    "dev:chat": "concurrently -n planetary,chat-api -c cyan,green \"npm run dev:planetary\" \"npm run dev:chat:server\"",
     "build": "vite build",
     "preview": "vite preview",
     "test": "echo \"Error: no test specified\" && exit 1"

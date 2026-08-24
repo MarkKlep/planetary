@@ -3,6 +3,7 @@ import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
 import { IssHud } from './iss-hud/iss-hud';
+import { ChatWidget } from './chat-widget/chat-widget';
 import { Modal } from './shared/modal/modal';
 import { initScene } from './script';
 import { Analytics } from "@vercel/analytics/react";
@@ -50,6 +51,7 @@ export function App() {
           both give up the camera's focus target, and this panel is shown only while
           that target is the station. */}
       <IssHud />
+      <ChatWidget />
       {/* Mounted once and driven from `script.ts` through `bindModal`, which looks it
           up by this id. Standing on the Moon is the one mode that is easy to leave by
           accident — Escape, L, and every nav target all lift off — and impossible to

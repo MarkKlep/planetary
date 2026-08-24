@@ -1,0 +1,255 @@
+@use '../variables.scss' as *;
+
+// Top-right is the one corner nothing else in the chrome occupies: the nav panel
+// docks the full left edge, and the zoom controls / flight / ISS / surface HUDs all
+// already share the bottom-right corner by design.
+.chat-toggle {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    z-index: 1300;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline);
+    background: var(--panel);
+    color: var(--ink);
+    font-size: 20px;
+    line-height: 1;
+    cursor: pointer;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.24);
+    transition: border-color 0.2s ease, color 0.2s ease, transform 0.15s ease;
+
+    &:hover {
+        border-color: var(--signal);
+        color: var(--signal);
+        transform: translateY(-1px);
+    }
+}
+
+.chat-panel {
+    position: fixed;
+    top: 78px;
+    right: 20px;
+    z-index: 1300;
+    width: 320px;
+    height: 420px;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+    pointer-events: none;
+
+    &--open {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        pointer-events: auto;
+    }
+}
+
+.chat-panel__header {
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.chat-panel__title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+}
+
+.chat-panel__messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.chat-panel__empty {
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.5;
+}
+
+.chat-panel__suggestions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+
+    button {
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-sm);
+        background: transparent;
+        color: var(--ink-dim);
+        font-family: var(--font-body);
+        font-size: 11px;
+        padding: 5px 9px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease;
+
+        &:hover {
+            border-color: var(--signal);
+            color: var(--signal);
+        }
+    }
+}
+
+/**
+ * One turn: any scene actions that ran, then the text. The wrapper is the flex child
+ * now, so it owns the left/right alignment the bubble used to set on itself.
+ */
+.chat-turn {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    max-width: 88%;
+
+    &--user {
+        align-self: flex-end;
+        align-items: flex-end;
+    }
+
+    &--assistant,
+    &--tool {
+        align-self: flex-start;
+        align-items: flex-start;
+    }
+}
+
+/**
+ * What the assistant actually did to the scene. Amber, following the chrome's own rule
+ * that amber is state and control while cyan is measurement — this is the assistant
+ * taking an action, which is the same class of thing as a nav button lighting up.
+ */
+.chat-action {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--signal);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+
+    &::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+    }
+}
+
+.chat-panel__error {
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--signal);
+    padding: 8px 10px;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    background: var(--signal-dim);
+}
+
+.chat-message {
+    font-size: 13px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    padding: 8px 10px;
+    border-radius: var(--radius-sm);
+
+    &--user {
+        background: var(--signal-dim);
+        color: var(--ink);
+    }
+
+    &--assistant {
+        background: var(--panel-raised);
+        color: var(--ink);
+    }
+
+    &--system {
+        display: none;
+    }
+}
+
+.chat-panel__input {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    border-top: 1px solid var(--hairline);
+
+    textarea {
+        flex: 1;
+        resize: none;
+        background: var(--panel-raised);
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-sm);
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: 13px;
+        padding: 8px 10px;
+        max-height: 96px;
+
+        &:focus {
+            outline: none;
+            border-color: var(--signal);
+        }
+
+        &:disabled {
+            opacity: 0.5;
+        }
+    }
+
+    button {
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-sm);
+        background: var(--panel-raised);
+        color: var(--ink);
+        font-family: var(--font-body);
+        font-size: 12px;
+        padding: 0 14px;
+        cursor: pointer;
+        transition: border-color 0.2s ease, color 0.2s ease;
+
+        &:hover:not(:disabled) {
+            border-color: var(--signal);
+            color: var(--signal);
+        }
+
+        &:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+    }
+}
+
+@media (max-width: 768px) {
+    .chat-toggle {
+        top: 12px;
+        right: 12px;
+    }
+
+    .chat-panel {
+        top: 68px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+        height: 60vh;
+    }
+}

@@ -36,6 +36,7 @@ import { createBodyMarker, updateBodyMarker } from './body-marker';
 import { createAdaptiveResolution, initialPixelRatio, quality } from './quality';
 import { orbitPaths } from './orbit-paths';
 import { createFreeFlight } from './free-flight';
+import { sceneState, setFocusedObject } from './scene-bridge';
 import { bindModal } from './shared/modal/modal-controller';
 import {
     CALLISTO,
@@ -1050,6 +1051,10 @@ export function initScene(onFirstFrame?: () => void) {
             setOrbitsVisible(false);
         }
 
+        // Recorded here rather than at the 24 nav `case` arms, so a click in the scene
+        // and a keyboard shortcut are logged the same way a nav button is.
+        setFocusedObject(target, isSystemView);
+
         // Asking to be taken somewhere is the opposite of flying yourself there.
         // This has to happen *first*: leaving free flight re-parks the orbit pivot,
         // and the animation below captures that pivot as its starting point.
@@ -1120,6 +1125,8 @@ export function initScene(onFirstFrame?: () => void) {
             followTarget = nearestBody.object;
             followInitialised = false;
         }
+
+        sceneState.mode = enabled ? 'free-flight' : 'orbit';
 
         flightHud?.classList.toggle('flight-hud--visible', enabled);
         toggleFreeFlightBtn?.classList.toggle('active', enabled);
@@ -1213,6 +1220,13 @@ export function initScene(onFirstFrame?: () => void) {
     }
 
     function updateSurfaceChrome(landed: boolean, site?: LandingSite) {
+        // The one funnel all three paths reach — landing, leaving, and changing site
+        // from the dropdown — so the assistant's view of where it is standing cannot
+        // miss one of them.
+        sceneState.mode = landed ? 'surface' : 'orbit';
+        if (site) sceneState.surfaceSite = landed ? site.id : null;
+        if (!landed) sceneState.surfaceSite = null;
+
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
         // The CSS2D labels are a DOM overlay, not something the renderer draws, so
         // skipping `labelRenderer.render()` while landed leaves them frozen on screen
