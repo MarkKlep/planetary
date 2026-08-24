@@ -12,7 +12,16 @@ export interface ChatMessage {
 // Vite's own env convention (`import.meta.env.VITE_*`), not the CRA-style
 // `process.env.REACT_APP_*` the heatmap sub-app uses — the two apps are built by
 // different tools and don't share an env mechanism.
-const CHAT_API_URL = import.meta.env.VITE_CHAT_API_URL ?? 'http://localhost:3003';
+//
+// The fallback has to differ by build, because the two situations are not the same
+// mistake. In development the backend is a sibling process on a known port. In a
+// production build there is no such port — baking `localhost:3003` in would ship every
+// visitor a request to *their own* machine, which fails in a way that looks like the
+// server is down rather than like it was never configured. An empty base makes the call
+// same-origin instead, so `VITE_CHAT_API_URL` is only needed when the API is deployed
+// somewhere else (and it usually is).
+const CHAT_API_URL =
+    import.meta.env.VITE_CHAT_API_URL ?? (import.meta.env.DEV ? 'http://localhost:3003' : '');
 
 /**
  * How many times the model may call a tool and be asked again within one send.
@@ -63,7 +72,11 @@ async function postChat(messages: ChatMessage[], sceneContext: string): Promise<
             body: JSON.stringify({ messages, sceneContext }),
         });
     } catch {
-        throw new Error("Couldn't reach the chat backend — is it running (npm run dev:chat:server)?");
+        throw new Error(
+            import.meta.env.DEV
+                ? "Couldn't reach the chat backend — is it running (npm run dev:chat:server)?"
+                : "Couldn't reach the chat backend."
+        );
     }
 
     if (!response.ok || !response.body) {
