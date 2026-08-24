@@ -2004,7 +2004,10 @@ export function initScene(onFirstFrame?: () => void) {
             updateBodyMarker(marker, camera, viewportHeight);
         }
 
-        const systemWideView = camera.position.distanceTo(sun.position) > EARTH_ORBIT_RADIUS * 8;
+        // Distance to the *focus pivot*, not to the Sun: Saturn's own orbit is past the
+        // old 8 AU cutoff, so measuring from the Sun read "parked next to Saturn" as the
+        // whole-system view and left the zoom buttons and every label on screen.
+        const systemWideView = camera.position.distanceTo(controls.target) > EARTH_ORBIT_RADIUS * 8;
         setZoomButtonsVisible(systemWideView && !freeFlight.enabled);
 
         // Every label's world position, distance and screen point, read exactly once.
