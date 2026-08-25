@@ -4,9 +4,8 @@
   "description": "Chat backend for Planetary: proxies Ollama and streams NDJSON.",
   "private": true,
   "type": "module",
-  "main": "src/app.ts",
   "engines": {
-    "node": ">=20"
+    "node": "22.x"
   },
   "scripts": {
     "dev": "tsx watch src/server.ts",

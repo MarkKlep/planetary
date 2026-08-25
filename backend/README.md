@@ -9,13 +9,21 @@ history back.
 
 | File | What it is |
 | --- | --- |
-| `src/app.ts` | The Express app, and all of the actual handling. Never binds a port. |
-| `src/server.ts` | Local development only: imports the app and calls `listen()`. |
-| `api/index.ts` | The Vercel function: re-exports the same app as its default export. |
+| `api/index.ts` | The Express app and all of the handling, exported as the function's default. Never binds a port. |
+| `src/server.ts` | Local development only: imports that app and calls `listen()`. |
 
 The split exists because a Vercel function is *handed* a request rather than listening for
 one. Keeping `listen()` in a file that only `npm run dev` loads is what lets one app serve
 both.
+
+**Nothing under `api/` may import across directories.** Vercel builds `api/**` by
+transpiling each file on its own rather than bundling, so a relative specifier has to
+survive to runtime exactly as written — and under `"type": "module"` TypeScript wants that
+spelled `../src/app.js`, which is a file no build ever emits. The deployment builds
+cleanly and then dies on first invocation with `FUNCTION_INVOCATION_FAILED`. That is why
+the app lives in `api/index.ts` and the dev server imports *it*, rather than the more
+natural arrangement: the dev server only runs under tsx, which resolves the specifier back
+to the source.
 
 ## Environment
 
@@ -44,6 +52,10 @@ Create the project with **Root Directory = `backend`**, then set `OLLAMA_HOST` (
 `OLLAMA_API_KEY` if the host needs one) in the project's environment variables. Nothing
 needs building: `vercel.json` rewrites every unmatched path to the one function, and
 `public/index.html` is served at `/`.
+
+When something goes wrong, `vercel logs <deployment-url>` names it — a function that
+crashes returns only an opaque `FUNCTION_INVOCATION_FAILED` to the browser, and the
+runtime log has the actual stack.
 
 ### The part that is not a configuration problem
 
