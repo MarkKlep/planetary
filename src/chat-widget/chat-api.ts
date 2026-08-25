@@ -63,6 +63,24 @@ function runTool(name: string, args: Record<string, unknown>, handlers: StreamHa
     return `The camera is now flying to ${BODY_LABELS[body]}.`;
 }
 
+/**
+ * Is the assistant actually reachable right now?
+ *
+ * The model runs on a developer's own machine, tunnelled in — there is no guarantee it is
+ * on. This is what lets the widget say so up front instead of a user typing a question
+ * into what looks like a normal chat and getting a network error back.
+ */
+export async function checkHealth(): Promise<boolean> {
+    try {
+        const response = await fetch(`${CHAT_API_URL}/api/health`);
+        if (!response.ok) return false;
+        const data = await response.json();
+        return Boolean(data?.ok);
+    } catch {
+        return false;
+    }
+}
+
 async function postChat(messages: ChatMessage[], sceneContext: string): Promise<Response> {
     let response: Response;
     try {

@@ -1,5 +1,5 @@
-import { useRef, useState } from 'react';
-import { streamChat, type ChatMessage } from './chat-api';
+import { useEffect, useRef, useState } from 'react';
+import { checkHealth, streamChat, type ChatMessage } from './chat-api';
 import { buildSceneContext } from './scene-context';
 import './chat-widget.scss';
 
@@ -37,6 +37,25 @@ export function ChatWidget() {
      * it go on making them.
      */
     const conversation = useRef<ChatMessage[]>([]);
+
+    /**
+     * The model runs on a developer's own machine, tunnelled in — it is online only when
+     * that machine is. Checked fresh each time the panel opens rather than continuously,
+     * since "was it up a minute ago" is not what a user opening the panel wants to know.
+     */
+    const [serverStatus, setServerStatus] = useState<'checking' | 'online' | 'offline'>('checking');
+
+    useEffect(() => {
+        if (!isOpen) return;
+        let cancelled = false;
+        setServerStatus('checking');
+        void checkHealth().then((ok) => {
+            if (!cancelled) setServerStatus(ok ? 'online' : 'offline');
+        });
+        return () => {
+            cancelled = true;
+        };
+    }, [isOpen]);
 
     const send = async (text: string) => {
         if (!text.trim() || isStreaming) return;
@@ -116,6 +135,14 @@ export function ChatWidget() {
                     <span className="chat-panel__title">Assistant</span>
                 </div>
 
+                <div className={`chat-panel__status chat-panel__status--${serverStatus}`}>
+                    {serverStatus === 'checking' && 'Checking connection…'}
+                    {serverStatus === 'online' &&
+                        "Online — this assistant runs on the developer's own machine and is only available while it's on."}
+                    {serverStatus === 'offline' &&
+                        "Offline — the developer's machine isn't running the assistant right now."}
+                </div>
+
                 <div className="chat-panel__messages">
                     {messages.length === 0 && (
                         <div className="chat-panel__empty">
@@ -155,14 +182,14 @@ export function ChatWidget() {
                         value={input}
                         onChange={(event) => setInput(event.target.value)}
                         onKeyDown={handleKeyDown}
-                        placeholder="Ask, or say where to go…"
+                        placeholder={serverStatus === 'offline' ? 'Assistant is offline…' : 'Ask, or say where to go…'}
                         rows={1}
-                        disabled={isStreaming}
+                        disabled={isStreaming || serverStatus === 'offline'}
                     />
                     <button
                         type="button"
                         onClick={() => void send(input)}
-                        disabled={isStreaming || !input.trim()}
+                        disabled={isStreaming || !input.trim() || serverStatus === 'offline'}
                     >
                         Send
                     </button>

@@ -124,6 +124,16 @@ Rules:
  * nothing when the call arrives properly — which is the usual case.
  */
 
+/**
+ * What a visitor is told when the model cannot be reached.
+ *
+ * Deliberately says what is true and what to do, and nothing else: the model runs on a
+ * developer's own machine over a tunnel, so "offline" is a normal state rather than a
+ * fault, and no stack trace or host name would help the person reading it.
+ */
+const UNREACHABLE_MESSAGE =
+    "The assistant is offline. It runs on the developer's own machine, so it is only available while that machine is on — please try again later.";
+
 /** Enough characters to tell prose from JSON, and few enough not to stall the stream. */
 const PROSE_PROBE_CHARS = 24;
 
@@ -168,20 +178,18 @@ async function health(_req: express.Request, res: express.Response) {
     try {
         const { models } = await ollama.list();
         const names = models.map((model) => model.name);
+        // `host` is deliberately not in the response. This endpoint is public and the
+        // widget polls it on every open, so returning it would publish the tunnel address
+        // — an unauthenticated way into the machine running the model — to anyone who
+        // loads the page. The one bit the browser needs is `ok`.
         res.json({
             ok: names.includes(MODEL),
-            host: OLLAMA_HOST,
             model: MODEL,
             modelInstalled: names.includes(MODEL),
-            models: names,
         });
     } catch (error) {
-        res.status(502).json({
-            ok: false,
-            host: OLLAMA_HOST,
-            model: MODEL,
-            error: error instanceof Error ? error.message : String(error),
-        });
+        console.error('Ollama health check failed:', OLLAMA_HOST, error);
+        res.status(502).json({ ok: false, model: MODEL, error: UNREACHABLE_MESSAGE });
     }
 }
 
@@ -275,12 +283,15 @@ async function chat(req: express.Request, res: express.Response) {
         res.end();
     } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        // The detail goes to the log, never to the browser. It names `OLLAMA_HOST`, which
+        // is a tunnel into someone's own machine — printing it in the chat hands every
+        // visitor the address of the model server, and tells them nothing they can act on.
+        console.error('Ollama request failed:', OLLAMA_HOST, message);
         if (res.headersSent) {
-            console.error('Ollama stream failed mid-response:', message);
-            res.write(`${JSON.stringify({ type: 'error', message })}\n`);
+            res.write(`${JSON.stringify({ type: 'error', message: UNREACHABLE_MESSAGE })}\n`);
             res.end();
         } else {
-            res.status(502).json({ error: `Could not reach Ollama at ${OLLAMA_HOST}: ${message}` });
+            res.status(502).json({ error: UNREACHABLE_MESSAGE });
         }
     }
 }

@@ -70,6 +70,43 @@
     letter-spacing: 0.01em;
 }
 
+/**
+ * The dependency users can't see: the model runs on the developer's own machine.
+ * Amber for the same reason `.chat-action` is — this is state, not measurement — but only
+ * the offline reading actually alarms; online reads as a plain status line.
+ */
+.chat-panel__status {
+    padding: 6px 16px;
+    border-bottom: 1px solid var(--hairline);
+    font-family: var(--font-mono);
+    font-size: 10px;
+    line-height: 1.4;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+
+    &::before {
+        content: '';
+        width: 5px;
+        height: 5px;
+        margin-top: 4px;
+        border-radius: 50%;
+        background: currentColor;
+        flex: none;
+    }
+
+    &--checking,
+    &--online {
+        color: var(--ink-faint);
+    }
+
+    &--offline {
+        color: var(--signal);
+    }
+}
+
 .chat-panel__messages {
     flex: 1;
     overflow-y: auto;
