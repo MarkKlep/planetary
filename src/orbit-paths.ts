@@ -7,6 +7,7 @@ import {
 } from 'three';
 import {
     earthOrbitPosition,
+    neptuneOrbitPosition,
     jupiterOrbitPosition,
     marsOrbitPosition,
     mercuryOrbitPosition,
@@ -19,6 +20,7 @@ import {
     JUPITER_ORBITAL_PERIOD_DAYS,
     MARS_ORBITAL_PERIOD_DAYS,
     MERCURY_ORBITAL_PERIOD_DAYS,
+    NEPTUNE_ORBITAL_PERIOD_DAYS,
     SATURN_ORBITAL_PERIOD_DAYS,
     URANUS_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
@@ -172,6 +174,18 @@ export const uranusOrbitPath = traceOrbit(
     0x9fd6e3
 );
 
+// The eighth line, and the last. It is also the first one that does *not* need the
+// camera pulled back twice as far: 30.07 AU against Uranus's 19.19 is a step of 1.57,
+// the smallest since Mars to Jupiter, so the two ice giants sit as a pair with a gap
+// inside them rather than continuing the doubling. That is the shape of the real thing —
+// the spacing is only roughly geometric, and this is where it stops being even that.
+export const neptuneOrbitPath = traceOrbit(
+    neptuneOrbitPosition,
+    NEPTUNE_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0x8ab6e8
+);
+
 export const orbitPaths = [
     mercuryOrbitPath,
     venusOrbitPath,
@@ -180,4 +194,5 @@ export const orbitPaths = [
     jupiterOrbitPath,
     saturnOrbitPath,
     uranusOrbitPath,
+    neptuneOrbitPath,
 ];

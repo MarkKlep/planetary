@@ -14,6 +14,7 @@ import { saturn } from './planets/saturn/saturn';
 import { dione, enceladus, iapetus, mimas, rhea, tethys } from './planets/saturn/moons';
 import { titan } from './planets/saturn/titan';
 import { uranus } from './planets/uranus/uranus';
+import { neptune } from './planets/neptune/neptune';
 
 /**
  * The scene's own view of where the camera is and what it is on, exposed for readers
@@ -32,7 +33,7 @@ import { uranus } from './planets/uranus/uranus';
  * "what am I looking at?".
  */
 
-/** The 25 focus targets, matching the nav panel's `data-target` vocabulary exactly. */
+/** The 26 focus targets, matching the nav panel's `data-target` vocabulary exactly. */
 export type BodyId =
     | 'sun'
     | 'mercury'
@@ -58,6 +59,7 @@ export type BodyId =
     | 'titan'
     | 'iapetus'
     | 'uranus'
+    | 'neptune'
     | 'system';
 
 export const BODY_IDS: BodyId[] = [
@@ -65,7 +67,7 @@ export const BODY_IDS: BodyId[] = [
     'mars', 'phobos', 'deimos',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'saturn', 'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
-    'uranus',
+    'uranus', 'neptune',
     'system',
 ];
 
@@ -95,6 +97,7 @@ export const BODY_LABELS: Record<BodyId, string> = {
     titan: 'Titan',
     iapetus: 'Iapetus',
     uranus: 'Uranus',
+    neptune: 'Neptune',
     system: 'the whole solar system',
 };
 
@@ -112,7 +115,7 @@ export const sceneState = {
  * Built here rather than passed in because the meshes are module-scope singletons in
  * their own files, so this module can import them directly — which is what keeps the
  * edit to `script.ts` down to one call inside `focusOnObject` rather than a line at
- * each of the 25 `case` arms.
+ * each of the 26 `case` arms.
  */
 const idByObject = new Map<Object3D, BodyId>([
     [sun, 'sun'],
@@ -139,6 +142,7 @@ const idByObject = new Map<Object3D, BodyId>([
     [titan, 'titan'],
     [iapetus, 'iapetus'],
     [uranus, 'uranus'],
+    [neptune, 'neptune'],
 ]);
 
 /**

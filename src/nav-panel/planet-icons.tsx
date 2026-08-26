@@ -33,7 +33,7 @@ const SPHERE_IDS = new Set([
     'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
-    'uranus',
+    'uranus', 'neptune',
 ]);
 
 export function BodyIcon({ id }: BodyIconProps) {
@@ -350,6 +350,34 @@ function BodyShape({ id }: BodyIconProps) {
             <ellipse cx={6.2} cy={CENTER} rx="2.6" ry="9" fill="#c3e6ea" opacity="0.55" />
             <ellipse cx={11.4} cy={CENTER} rx="1.7" ry="9" fill="#8dc6d0" opacity="0.4" />
             <ellipse cx={14.6} cy={CENTER} rx="1.3" ry="9" fill="#c3e6ea" opacity="0.35" />
+          </g>
+        </>
+      );
+    case 'neptune':
+      // Uranus's icon with the contrast turned up, which is the honest relationship
+      // between the two: same size, same composition, and one of them has weather. So
+      // this gets a deeper blue, a dark equatorial band, and the bright methane cirrus
+      // streaks that are the one thing on Neptune anybody photographs — drawn as short
+      // strokes at mid-latitude, not as full-width bands, because that is what they are.
+      //
+      // No Great Dark Spot. It has not existed since 1994, and drawing it would date the
+      // icon to a five-year window thirty years ago — the same call `neptune.ts` makes
+      // about the map, for the same reason.
+      return (
+        <>
+          <defs>
+            <clipPath id="planet-icon-neptune-disc">
+              <circle cx={CENTER} cy={CENTER} r={RADIUS} />
+            </clipPath>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#5b8fd4" />
+          <g clipPath="url(#planet-icon-neptune-disc)">
+            <rect x="1.6" y="8.9" width="16.8" height="2.4" fill="#3f6fb4" opacity="0.75" />
+            <rect x="1.6" y="5.4" width="16.8" height="1.3" fill="#79a8e0" opacity="0.5" />
+            <rect x="1.6" y="13.4" width="16.8" height="1.4" fill="#79a8e0" opacity="0.5" />
+            <rect x="5.0" y="5.6" width="4.6" height="0.9" rx="0.45" fill="#e8f1fb" opacity="0.85" />
+            <rect x="8.4" y="13.6" width="5.2" height="1.0" rx="0.5" fill="#e8f1fb" opacity="0.8" />
+            <rect x="11.8" y="4.0" width="3.0" height="0.8" rx="0.4" fill="#dceaf8" opacity="0.6" />
           </g>
         </>
       );

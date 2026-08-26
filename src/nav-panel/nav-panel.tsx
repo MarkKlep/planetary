@@ -178,6 +178,14 @@ const PLANETS: Planet[] = [
     label: 'Uranus',
     satellites: [],
   },
+  // The last row, and the last planet — plain button, no chevron, for Uranus's reason
+  // exactly: Triton and the ring arcs are worth having and are not modelled yet, and an
+  // empty dropdown would say there is nothing there rather than nothing yet.
+  {
+    id: 'neptune',
+    label: 'Neptune',
+    satellites: [],
+  },
 ];
 
 // Matches the breakpoint the modal and surface HUD already use elsewhere in the

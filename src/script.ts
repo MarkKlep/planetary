@@ -30,6 +30,7 @@ import { dione, enceladus, iapetus, mimas, rhea, tethys } from './planets/saturn
 import { titan } from './planets/saturn/titan';
 import { titanHaze } from './planets/saturn/haze';
 import { uranus } from './planets/uranus/uranus';
+import { neptune } from './planets/neptune/neptune';
 import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, getTimeSpeed, isPaused, setPaused, setTimeSpeed } from './simulation';
@@ -71,6 +72,9 @@ import {
     uranusOrbitPosition,
     uranusSpinAngle,
     URANUS_AXIS_ORIENTATION,
+    neptuneOrbitPosition,
+    neptuneSpinAngle,
+    NEPTUNE_AXIS_ORIENTATION,
     mercuryOrbitPosition,
     mercurySpinAngle,
     MERCURY_AXIS_ORIENTATION,
@@ -122,6 +126,8 @@ import {
     TITAN_HAZE_RADIUS,
     TITAN_ORBIT_RADIUS,
     TITAN_RADIUS,
+    NEPTUNE_EQUATORIAL_RADIUS,
+    NEPTUNE_RADIUS,
     URANUS_EQUATORIAL_RADIUS,
     URANUS_RADIUS,
     VENUS_RADIUS,
@@ -206,14 +212,14 @@ export function initScene(onFirstFrame?: () => void) {
     const scene = new Scene();
 
     // The far plane has to clear the camera's own pull-back plus the width of the
-    // system, and every outermost body moves it: 400,000 was Jupiter's, 800,000 was
-    // Saturn's, and Uranus needs this. The sum it has to cover is the furthest the user
-    // can pull back (`controls.maxDistance`, 40 AU = 939,000 units) plus the far side of
-    // the outermost orbit beyond the Sun (20.1 AU = 472,000) — 1,411,000, so 800,000
-    // would have clipped the whole far half of Uranus's line. Depth precision is set by
-    // the *near* plane, not this — resolution goes as z^2/(near * 2^24) — so doubling it
-    // again costs nothing at all.
-    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 1600000);
+    // system, and every outermost body has moved it: 400,000 was Jupiter's, 800,000
+    // Saturn's, 1,600,000 Uranus's, and this is Neptune's. The sum it has to cover is
+    // the furthest the user can pull back (`controls.maxDistance`, 60 AU = 1,409,000
+    // units) plus the far side of the outermost orbit beyond the Sun (30.33 AU =
+    // 712,000) — 2,121,000. Depth precision is set by the *near* plane, not this —
+    // resolution goes as z^2/(near * 2^24) — so this has never cost anything and still
+    // does not. With Neptune the set of planets is complete, so it stops here.
+    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 2400000);
 
     // Scene graph. The Sun is at the world origin; each planet hangs off a single
     // moving node so its orbit only has to be applied in one place.
@@ -261,9 +267,12 @@ export function initScene(onFirstFrame?: () => void) {
     //   │       ├── titan          <- and Titan alone carries a second shell
     //   │       ├── titanHaze
     //   │       └── iapetus
-    //   └── uranusSystem           <- 19.2 AU, twice Saturn's again
-    //       └── uranusAxis         <- the same node once more, and it comes out 97.77°
-    //           └── uranus            over — a planet lying on its side, unmentioned
+    //   ├── uranusSystem           <- 19.2 AU, twice Saturn's again
+    //   │   └── uranusAxis         <- the same node once more, and it comes out 97.77°
+    //   │       └── uranus            over — a planet lying on its side, unmentioned
+    //   └── neptuneSystem          <- 30.1 AU, and the last of them
+    //       └── neptuneAxis        <- 28.32°, the largest ordinary tilt here, from the
+    //           └── neptune           one published pole that moves — held at J2000
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
     // The tilt is applied here, above the spin, and is never touched again. That is
@@ -409,6 +418,23 @@ export function initScene(onFirstFrame?: () => void) {
     uranusAxis.add(uranus);
     uranusSystem.add(uranusAxis);
 
+    // And the eighth, which completes the set. Nothing new is required for it either —
+    // system node, axis node, planet inside — but it is the one axis here built from a
+    // pole the IAU does *not* publish as a constant: Neptune's carries periodic terms on
+    // a 688-year cycle. The node takes them evaluated at J2000 and then holds still like
+    // every other one, which costs 0.037° of sub-Earth longitude across 2000-2030, a
+    // tenth of the precession offset the whole scene already carries. See `orbits.ts`.
+    //
+    // The lean comes out at 28.32° — the largest of any planet in this scene, and after
+    // Uranus's 97.77° a thoroughly ordinary one. Neptune has seasons of exactly Earth's
+    // shape, lasting 41 years each.
+    const neptuneSystem = new Object3D();
+    const neptuneAxis = new Object3D();
+    neptuneAxis.quaternion.copy(NEPTUNE_AXIS_ORIENTATION);
+
+    neptuneAxis.add(neptune);
+    neptuneSystem.add(neptuneAxis);
+
     scene.add(mercurySystem);
     scene.add(venusSystem);
     scene.add(earthSystem);
@@ -416,6 +442,7 @@ export function initScene(onFirstFrame?: () => void) {
     scene.add(jupiterSystem);
     scene.add(saturnSystem);
     scene.add(uranusSystem);
+    scene.add(neptuneSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
@@ -520,6 +547,7 @@ export function initScene(onFirstFrame?: () => void) {
         // that sets the silhouette — and on Uranus the flattening is usually across the
         // disc rather than up and down it, the axis being nearly in the orbit plane.
         { ...createLabel('Uranus', uranusSystem, URANUS_EQUATORIAL_RADIUS * 1.25), body: uranusSystem, radius: URANUS_RADIUS, hideBeyond: Infinity },
+        { ...createLabel('Neptune', neptuneSystem, NEPTUNE_EQUATORIAL_RADIUS * 1.25), body: neptuneSystem, radius: NEPTUNE_RADIUS, hideBeyond: Infinity },
         // A local Earth-surface feature, not a findable body — meaningful only once
         // you're already close, so this gets a short `hideBeyond` like the ISS's
         // framing rather than the "visible across the whole system" bodies above.
@@ -627,6 +655,12 @@ export function initScene(onFirstFrame?: () => void) {
         // had a disc. Every brighter dot here was known to prehistory; this is the first
         // planet anybody ever *found*, and it is faint enough to say so.
         createBodyMarker(0x9fd6e3, URANUS_RADIUS),
+        // Dimmer again, and it should be: Neptune is magnitude 7.8 at opposition, well
+        // below anything an eye can reach, and it is the only planet here that has never
+        // been seen without a telescope. Le Verrier worked out where it had to be from
+        // Uranus's own misbehaviour and Galle found it within an hour of looking, in
+        // 1846 — the one body in this scene that was calculated before it was observed.
+        createBodyMarker(0x8ab6e8, NEPTUNE_RADIUS, 4),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -650,17 +684,20 @@ export function initScene(onFirstFrame?: () => void) {
     titan.add(markers[19].sprite);
     iapetus.add(markers[20].sprite);
     uranusSystem.add(markers[21].sprite);
+    neptuneSystem.add(markers[22].sprite);
 
     // Start a little closer than the full-system wide shot so the planets stay readable
     // without being hidden by a wall of labels. The zoom controls let the user move out
     // again to inspect the entire system when desired.
-    // Doubled with Uranus, holding the same fraction of the outermost aphelion it has
-    // always held (9/10.07 for Saturn, 18/20.10 for Uranus) — so the wide shot stays the
+    // Holding the same fraction of the outermost aphelion it always has — 9/10.07 for
+    // Saturn, 18/20.10 for Uranus, 27/30.33 for Neptune — so the wide shot stays the
     // composition it was rather than becoming a different kind of picture. The corners
     // still crop the outermost line, deliberately; framing it whole is what the zoom is
-    // for. CLAUDE.md predicted this number would keep doubling, and it has: the spacing
-    // is geometric and the inner system is going to keep shrinking toward a point.
-    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 18;
+    // for. Note this step is only 1.5x rather than the 2x the last three were: Neptune
+    // is the one orbit that does not sit half again outside its neighbour, so this is
+    // where the geometric spacing stops. It is also the last time this moves — with
+    // Neptune there are no more planets.
+    const SYSTEM_VIEW_DISTANCE = EARTH_ORBIT_RADIUS * 27;
     const SYSTEM_VIEW_DIRECTION = new Vector3(0.3, 0.78, 0.55).normalize();
     // Longer than any nav fly-to: this one crosses 2.6 AU to end up 3 Earth-radii out,
     // and the nav buttons' 1.5–2.5s over that range reads as a jump rather than a move.
@@ -690,11 +727,10 @@ export function initScene(onFirstFrame?: () => void) {
     // hundred Deimos-radii away and leave it a speck. The floor now comes from the
     // smallest body in the scene, which is also what the dynamic near plane assumes.
     controls.minDistance = DEIMOS_RADIUS;
-    // Framing Uranus's orbit needs roughly 20.10 AU/tan(fov/2) ~ 26.2 AU, so this
-    // leaves comfortable headroom past that. It was 22 AU when Saturn was the outermost
-    // body, which would now stop the user short of ever seeing Uranus's orbit whole —
-    // the same way 12 AU stopped short of Saturn's before that.
-    controls.maxDistance = EARTH_ORBIT_RADIUS * 40;
+    // Framing Neptune's orbit needs roughly 30.33 AU/tan(fov/2) ~ 39.5 AU, so this
+    // leaves comfortable headroom past that. It was 40 AU when Uranus was the outermost
+    // body, which would have stopped the user just short of ever seeing the whole thing.
+    controls.maxDistance = EARTH_ORBIT_RADIUS * 60;
     controls.enablePan = true;
 
     const setZoomFromButtons = (direction: 'in' | 'out') => {
@@ -760,6 +796,7 @@ export function initScene(onFirstFrame?: () => void) {
     // Jupiter's framing, measured in Uranus's own equatorial radii for the same reason:
     // that is the radius the limb is drawn at, and framing on the mean would crop it.
     const URANUS_VIEW_DISTANCE = URANUS_EQUATORIAL_RADIUS * 3.2;
+    const NEPTUNE_VIEW_DISTANCE = NEPTUNE_EQUATORIAL_RADIUS * 3.2;
     // The loop itself already reaches ANALEMMA_RADIUS (1.4) out from Earth's centre,
     // so framing it "3 radii out" the way Earth is would put the camera practically
     // inside the curve. Measuring from its own radius instead keeps the whole
@@ -813,6 +850,7 @@ export function initScene(onFirstFrame?: () => void) {
         { name: 'Titan', object: titan, radius: TITAN_HAZE_RADIUS },
         { name: 'Iapetus', object: iapetus, radius: IAPETUS_RADIUS },
         { name: 'Uranus', object: uranusSystem, radius: URANUS_RADIUS },
+        { name: 'Neptune', object: neptuneSystem, radius: NEPTUNE_RADIUS },
     ];
     let nearestBody = flightBodies[1];
     let nearestClearance = 1;
@@ -863,22 +901,23 @@ export function initScene(onFirstFrame?: () => void) {
      * is the only thing that should.
      */
     /**
-     * The ceiling moves with every outermost body, and it is worth saying why that is
-     * not a fudge.
+     * The ceiling moved with every outermost body, and it is worth saying why that was
+     * not a fudge — and why this is the last time.
      *
      * This number is `d²` at the furthest body in the scene, because that is exactly
      * what cancels the light's own 1/d² falloff. It was 32 when Jupiter's 5.2 AU needed
-     * 27, then 110 when Saturn's aphelion needed 101; Uranus's aphelion is 20.10 AU and
-     * needs 404. Leaving it at 110 would not have been a conservative choice — it would
-     * have rendered Uranus nearly four times darker than the model says it is, which is
-     * precisely the artefact `updateExposure` exists to remove.
+     * 27, then 110 for Saturn's aphelion, then 405 for Uranus's; Neptune's is 30.33 AU
+     * and needs 920. Leaving it at 405 would not have been a conservative choice — it
+     * would have rendered Neptune less than half as bright as the model says it is,
+     * which is precisely the artefact `updateExposure` exists to remove.
      *
-     * Sunlight at Uranus is about 370 lux. That is a well-lit room, or the sky twenty
-     * minutes after sunset — dim, and nothing at all like dark. An eye out there would
+     * Sunlight at Neptune is about 140 lux, against 345 at Uranus and 127,000 here. That
+     * is a dim corridor, or the sky some way into twilight — and an eye out there would
      * be adapted to it and would simply see a planet, which is exactly what this makes
-     * the camera do. **Anything added further out needs this raised again.**
+     * the camera do. Nothing further out is coming: Neptune is the last planet, so this
+     * is the value the constant settles at.
      */
-    const MAX_EXPOSURE = 405;
+    const MAX_EXPOSURE = 920;
     /** Seconds to cover most of an exposure change. Slow enough to read as an eye
      *  adjusting rather than a light switch, quick enough to settle inside a fly-to. */
     const EXPOSURE_ADAPT_SECONDS = 0.7;
@@ -1424,6 +1463,7 @@ export function initScene(onFirstFrame?: () => void) {
         { hit: titan, focus: titan, distance: TITAN_VIEW_DISTANCE },
         { hit: iapetus, focus: iapetus, distance: IAPETUS_VIEW_DISTANCE },
         { hit: uranus, focus: uranus, distance: URANUS_VIEW_DISTANCE },
+        { hit: neptune, focus: neptune, distance: NEPTUNE_VIEW_DISTANCE },
     ];
 
     // Hoisted: `pickTarget` runs on every hover event, and rebuilding this array per
@@ -1603,6 +1643,9 @@ export function initScene(onFirstFrame?: () => void) {
                         break;
                     case 'uranus':
                         focusOnObject(uranus, URANUS_VIEW_DISTANCE, 4000);
+                        break;
+                    case 'neptune':
+                        focusOnObject(neptune, NEPTUNE_VIEW_DISTANCE, 4000);
                         break;
                     case 'sun':
                         focusOnObject(sun, SUN_RADIUS * 4, 2500);
@@ -2001,6 +2044,12 @@ export function initScene(onFirstFrame?: () => void) {
         // marks it out as retrograde, and the same one thing that marks Venus out. The
         // rate constant carries the sign and nothing here looks at it.
         uranus.rotation.y = uranusSpinAngle(now);
+
+        neptuneOrbitPosition(now, neptuneSystem.position);
+        // 541.14°/day, i.e. 15h 58m — the third fastest spin here, on the planet with by
+        // far the fastest winds. See the constant: this is not the 16.11 h every fact
+        // sheet prints, and the difference is a real one between two rotation systems.
+        neptune.rotation.y = neptuneSpinAngle(now);
 
         // Position and facing together — both moons are tidally locked, so the
         // direction back to Mars that places them is also the direction that aims

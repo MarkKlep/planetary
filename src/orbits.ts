@@ -32,6 +32,10 @@ import {
     SATURN_PRIME_MERIDIAN_DEG,
     SATURN_ROTATION_DEG_PER_DAY,
     TETHYS_ORBIT_RADIUS,
+    NEPTUNE_POLE_DEC_DEG,
+    NEPTUNE_POLE_RA_DEG,
+    NEPTUNE_PRIME_MERIDIAN_DEG,
+    NEPTUNE_ROTATION_DEG_PER_DAY,
     TITAN_ORBIT_RADIUS,
     URANUS_POLE_DEC_DEG,
     URANUS_POLE_RA_DEG,
@@ -228,19 +232,24 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 // Uranus is the control that confirms the diagnosis, and it is worth reading next to
 // Saturn's:
 //
-//                            Saturn                 Uranus
-//   heliocentric position    0.097° RMS (max 0.155) 0.018° RMS (max 0.032°, 1.62e6 km)
-//   perihelion / aphelion    9.023 / 10.049 AU      18.283 / 20.096 AU
-//     Horizons               9.031 / 10.066         18.284 / 20.099
-//   sidereal period          10755.7 d              30687.40 d  (Horizons 30685.4)
-//   obliquity to its orbit   26.73°                 97.770°     (published 97.77)
-//   sidereal rotation        10h 39m                17.240 h    (published 17.24)
+//                            Saturn                 Uranus                 Neptune
+//   heliocentric position    0.097° RMS (max 0.155) 0.018° (max 0.032°)    0.011° (max 0.017°)
+//   perihelion / aphelion    9.023 / 10.049 AU      18.283 / 20.096        29.811 / 30.328
+//     Horizons               9.031 / 10.066         18.284 / 20.099        29.806 / 30.332
+//   sidereal period          10755.7 d              30687.4 d              60189.7 d (60189)
+//   obliquity to its orbit   26.73°                 97.770° (pub. 97.77)   28.318° (28.32)
+//   sidereal rotation        10h 39m                17.240 h (17.24)       15.966 h — see below
 //
 // If the residual grew with distance, Uranus at twice Saturn's range would be worse
-// again. It is five times *better* — back down near the inner planets' figures — because
-// Uranus is not in the 5:2 commensurability Jupiter and Saturn share, and so nothing is
-// pumping an 883-year term into its longitude for Standish's single fit to average away.
-// Three bodies, one unmodelled resonance, and only the two bodies in it are affected.
+// again, and Neptune at three times worse still. Both are several times *better* — back
+// down near the inner planets' figures — because neither is in the 5:2 commensurability
+// Jupiter and Saturn share, so nothing is pumping an 883-year term into their longitudes
+// for Standish's single fit to average away. Four bodies, one unmodelled resonance, and
+// only the two bodies actually in it are affected. Don't chase the other two toward these.
+//
+// Neptune's rotation figure is not a typo and not the number the fact sheets print: the
+// IAU replaced Voyager's 16.11 h magnetic period with Karkoschka's 15.966 h optical one
+// in 2015. See `NEPTUNE_ROTATION_DEG_PER_DAY`, which carries the whole story.
 //
 // Mercury additionally lands its 3:2 spin-orbit resonance without being told about
 // it: three rotations come to 175.938 days against two orbits' 175.939, from a
@@ -446,6 +455,33 @@ const URANUS_ELEMENTS: OrbitalElements = {
 };
 
 /**
+ * Neptune's, from the same table, and the last orbit this scene will get.
+ *
+ * The doubling finally stops — 30.07 AU against Uranus's 19.19 is 1.57, the smallest
+ * step since Mars to Jupiter, and the two ice giants are neighbours in a way none of the
+ * other pairs are. Everything else about them is a near-match too: 3.87 units of radius
+ * against 3.98, 17.1 Earth masses against 14.5, the same hydrogen and helium over the
+ * same water-ammonia-methane mantle. They are the same planet built twice.
+ *
+ * The eccentricity of 0.0086 is the second roundest orbit of any planet, behind only
+ * Venus's 0.0068. Over 30.07 AU it is still worth 0.52 AU — some 12,100 scene units,
+ * half the radius of Earth's entire orbit — between perihelion and aphelion.
+ *
+ * Checked against Horizons over 2000-2030, 997 samples: **0.011° RMS, max 0.017°** —
+ * the best of the outer planets and on a par with the inner ones, which is the second
+ * confirmation of the point Uranus makes. Jupiter's 0.044° and Saturn's 0.097° are the
+ * great inequality those two share with each other; the two bodies outside it are fine.
+ */
+const NEPTUNE_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [30.06992276, 0.00026291],
+    eccentricity: [0.00859048, 0.00005105],
+    inclination: [1.77004347, 0.00035372],
+    meanLongitude: [-55.12002969, 218.45945325],
+    perihelionLongitude: [44.96476227, -0.32241464],
+    ascendingNode: [131.78422574, -0.00508664],
+};
+
+/**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
  *
  * There is no closed form, so this is Newton–Raphson. It converges in three or four
@@ -551,6 +587,9 @@ export const saturnOrbitPosition = (date: Date, target = new Vector3()): Vector3
 
 export const uranusOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
     keplerianPosition(URANUS_ELEMENTS, date, target);
+
+export const neptuneOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(NEPTUNE_ELEMENTS, date, target);
 
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
@@ -677,6 +716,24 @@ export const URANUS_AXIS_ORIENTATION = axisOrientationFromPole(
 );
 
 /**
+ * Neptune's, and the one axis node here built from a pole that is not actually constant.
+ *
+ * The IAU's published pole for Neptune carries periodic terms — see the constants, which
+ * give the full model and the 688-year cycle behind it. This node takes that model
+ * evaluated at J2000 and then does what every other one does: sits still. The cost was
+ * measured, not waved through, and it is 0.037° of sub-Earth longitude across 2000-2030,
+ * a tenth of the precession offset the whole scene already carries.
+ *
+ * The lean is 28.32°, the largest of any planet here bar none — a shade over Saturn's
+ * 26.73° and Earth's 23.44°. So after Uranus lying on its side, the outermost planet
+ * turns out to have seasons of an entirely familiar shape, only 41 years long each.
+ */
+export const NEPTUNE_AXIS_ORIENTATION = axisOrientationFromPole(
+    NEPTUNE_POLE_RA_DEG,
+    NEPTUNE_POLE_DEC_DEG
+);
+
+/**
  * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
  *
  * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
@@ -749,6 +806,21 @@ export const saturnSpinAngle = (date: Date): number =>
  */
 export const uranusSpinAngle = (date: Date): number =>
     primeMeridianAngle(URANUS_PRIME_MERIDIAN_DEG, URANUS_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Neptune's — and the one prime meridian in this project that is **not** System III.
+ *
+ * Jupiter's, Saturn's and Uranus's are all magnetic rotations, because a gas giant has
+ * no surface to time and the visible cloud decks shear past one another. Neptune's
+ * shears worse than any of them: it has the fastest winds in the solar system, near
+ * 580 m/s, and its equator laps its mid-latitudes so hard that no cloud feature was
+ * expected to survive long enough to time anything by. Two did. See the constant — the
+ * rate here is Karkoschka's optical period, 15.966 h, which the IAU adopted in 2015 in
+ * place of Voyager's 16.11 h radio period, and which is why the number below does not
+ * match the one every fact sheet prints.
+ */
+export const neptuneSpinAngle = (date: Date): number =>
+    primeMeridianAngle(NEPTUNE_PRIME_MERIDIAN_DEG, NEPTUNE_ROTATION_DEG_PER_DAY, date);
 
 /**
  * Venus's cloud deck, which does not turn with the planet.

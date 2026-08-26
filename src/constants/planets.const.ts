@@ -686,6 +686,89 @@ export const URANUS_ORBITAL_PERIOD_DAYS = 30685.4;
  */
 export const URANUS_GEOMETRIC_ALBEDO = 0.51;
 
+// Neptune constants
+//
+// The eighth planet, the last one, and the only one that was **found with a pencil**.
+// Uranus kept failing to be where it was predicted to be, so Le Verrier and Adams each
+// worked backwards from the discrepancy to a body that could be causing it; Galle
+// pointed a telescope where Le Verrier said and had it inside an hour, within a degree
+// of the prediction, on 23 September 1846. Every planet before it was seen and then
+// explained. This one was explained and then seen.
+//
+// It is also Uranus's twin in every bulk property and its opposite in every visible
+// one, which is the useful thing about having both here — see `neptune/neptune.ts`.
+export const NEPTUNE_EQUATORIAL_RADIUS_KM = 24766;
+/** 1.7% shorter than the equatorial one. */
+export const NEPTUNE_POLAR_RADIUS_KM = 24342;
+/** Volumetric mean, 24624 km — the figure the mass and density are quoted against. */
+export const NEPTUNE_RADIUS_KM = 24624;
+/** ~3.87 units. Slightly *smaller* than Uranus and 18% more massive. */
+export const NEPTUNE_RADIUS = NEPTUNE_RADIUS_KM / EARTH_RADIUS_KM;
+export const NEPTUNE_EQUATORIAL_RADIUS = NEPTUNE_EQUATORIAL_RADIUS_KM / EARTH_RADIUS_KM;
+/** Oblateness, 0.0171 — the smallest of the four giants, and still five times Earth's. */
+export const NEPTUNE_FLATTENING =
+    (NEPTUNE_EQUATORIAL_RADIUS_KM - NEPTUNE_POLAR_RADIUS_KM) / NEPTUNE_EQUATORIAL_RADIUS_KM;
+/**
+ * IAU rotational elements — and the first pole in this project that **moves**.
+ *
+ * Every other body here gets two constants and a fixed axis node. Neptune's published
+ * pole carries periodic terms:
+ *
+ *   N  = 357.85 + 52.316 T          (T in Julian centuries — a 688-year cycle)
+ *   α₀ = 299.36 + 0.70 sin N
+ *   δ₀ = 43.46 − 0.51 cos N
+ *
+ * The figures below are that model evaluated **at J2000**, which is the frame every axis
+ * quaternion in this scene is built in, and they are then held fixed like all the
+ * others. What that costs was measured rather than assumed: over 2000-2030 Horizons'
+ * own pole moves 0.19° in right ascension and 0.014° in declination, and carried through
+ * the whole rotation model that comes to **0.037°** of sub-Earth longitude — a tenth of
+ * the constant 0.373° frame offset the scene already carries for precession, and far
+ * under a pixel on anything you can see. Adding a per-frame pole for it would mean
+ * rebuilding an axis quaternion every frame to chase an angle that moves half a degree
+ * a century, which is exactly the trade the Mercury libration note rejects.
+ *
+ * The obliquity comes out at 28.32°, a shade over Earth's 23.44° and Saturn's 26.73° —
+ * so Neptune has ordinary seasons, of a sort. They last 41 years each.
+ */
+export const NEPTUNE_POLE_RA_DEG = 299.33373;
+export const NEPTUNE_POLE_DEC_DEG = 42.95036;
+/** W₀ = 249.978 plus the −0.48 sin N term at J2000, for the reason above. */
+export const NEPTUNE_PRIME_MERIDIAN_DEG = 249.996;
+/**
+ * 15.966 hours, **not the 16.11 the fact sheets quote**, and the difference is real
+ * rather than a transcription slip. Do not "correct" it.
+ *
+ * 16.11 h is System III, the rotation of the magnetic field, measured by Voyager 2's
+ * radio experiment over five days in August 1989 — the same kind of number Jupiter's and
+ * Saturn's prime meridians are built on, and the one Horizons still prints under
+ * "Sid. rot. period". It is not what the IAU uses for Neptune any more. Karkoschka
+ * (2011) tracked two features — the South Polar Feature and the South Polar Wave — that
+ * turned out to be extraordinarily stable over two decades where everything else on the
+ * planet shears apart within days, and got 15.9663 h; the IAU adopted it in 2015, which
+ * is why Horizons labels Neptune's cartographic system "System II, optically observed
+ * features" while Jupiter's, Saturn's and Uranus's are all System III.
+ *
+ * Verified end to end rather than transcribed. Fed Horizons' own Earth-Neptune vectors,
+ * this rate and the fixed pole above reproduce Horizons' sub-Earth longitude to a mean
+ * of 0.006° with 0.037° of spread over 2000-2030 — which is also, incidentally, the
+ * tightest check any body in this project passes.
+ */
+export const NEPTUNE_ROTATION_DEG_PER_DAY = 541.1397757;
+/** 15h 57m 59s. */
+export const NEPTUNE_SIDEREAL_DAY = (360 / NEPTUNE_ROTATION_DEG_PER_DAY) * 86400;
+export const NEPTUNE_ORBITAL_PERIOD_DAYS = 60189;
+/**
+ * Geometric albedo, used the same way Uranus's is: this map is generated, so the number
+ * has to be supplied rather than carried by imagery. 0.41 → 0.615 diffuse.
+ *
+ * Neptune is genuinely darker than Uranus (0.51), and the two are worth stating together
+ * because it is the one place their famous colour difference shows up as a measurement.
+ * Neptune's haze layer is thinner, so more light goes down into the methane and does not
+ * come back — which makes it both bluer and dimmer at once.
+ */
+export const NEPTUNE_GEOMETRIC_ALBEDO = 0.41;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

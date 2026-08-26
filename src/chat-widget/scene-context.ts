@@ -6,6 +6,7 @@ import {
     earthOrbitPosition,
     jupiterOrbitPosition,
     marsOrbitPosition,
+    neptuneOrbitPosition,
     mercuryOrbitPosition,
     moonEclipticLongitude,
     saturnOrbitPosition,
@@ -37,6 +38,7 @@ const PLANETS: Array<[string, (date: Date, target?: Vector3) => Vector3]> = [
     ['Jupiter', jupiterOrbitPosition],
     ['Saturn', saturnOrbitPosition],
     ['Uranus', uranusOrbitPosition],
+    ['Neptune', neptuneOrbitPosition],
 ];
 
 const TWO_PI = Math.PI * 2;
