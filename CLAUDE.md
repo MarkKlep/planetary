@@ -52,6 +52,7 @@ Scene objects are each defined in their own module and imported into `script.ts`
 - `src/planets/saturn/rings.ts` — the one structure in the project that is genuinely **one-dimensional**, and the reason it is generated rather than textured is not a shortage of photographs. The rings have no longitude structure to map (particles on independent circular orbits shear anything azimuthal out within hours), so the subject *is* a radial profile: measured boundary radii and Cassini occultation optical depths, 8,192 samples wide and one tall. And a photograph would be actively wrong, because the rings' appearance is a function of where the Sun and the observer are: the shader carries **both single-scattering branches**, so from the sunlit side the B ring is the brightest thing in the system and from the unlit side it goes nearly black while the C ring and the Cassini Division become the brightest — with nothing switching it over. See the file for the rest, and the section below for the two traps.
 - `src/planets/saturn/moons.ts` — Mimas, Enceladus, Tethys, Dione, Rhea and Iapetus. Real mosaics and real albedos, like the Galileans, but the brightest family anywhere: five of the six are over 0.95 geometric and Enceladus is 1.375, above the top of the scale, because it repaves itself and everything near it with fresh frost from the E ring. Its albedo table is computed in **linear** light rather than the sRGB-encoded means `jupiter/moons.ts` compares — see below.
 - `src/planets/saturn/titan.ts`, `haze.ts` — the second body here made of two visible shells, and an exact parallel to Venus: the map is 938 nm near-infrared because Titan's smog is opaque in visible light, so `titan.ts` is the ground and `haze.ts` is what Titan actually *looks* like. Toggleable from the nav panel, on by default, for the same reason Venus's deck is.
+- `src/planets/uranus/uranus.ts` — the third gas giant, and **the only planet here with no map at all**, which is a fact about Uranus rather than about what has been photographed. Voyager 2 went past in January 1986 at 81,500 km with the cameras that had just returned the Great Red Spot and came back with a blank — at 76 K the methane freezes out far below the visible level, and Uranus is the one giant radiating essentially no internal heat, so there is nothing driving weather up through it. So the surface is *generated*, on `venus/clouds.ts`'s argument exactly: pasting one of the paintings in circulation would draw contrast no eye has ever seen. Its albedo is therefore authored rather than carried by a map (0.51 geometric → 0.765 diffuse), and unlike Venus's the tint is far from white, so it is applied in **linear** light and encoded on the way into the bytes — see the linear-light note below, which this is the sharpest case of anywhere in the project. Built like Jupiter and Saturn otherwise: oblateness on the polar axis, no height map, no atmosphere shell (its limb *darkens* hardest of the three, methane lengthening the slant path at the edge). **Its five major moons and its rings are not modelled** — see the note at the end of this section.
 - `src/planets/jupiter/moons.ts` — Io, Europa, Ganymede and Callisto: the exact inverse of the Martian moons. Those are generated because there is nothing to wrap a map onto; these are worlds (Ganymede is wider than Mercury) with real Voyager/Galileo mosaics, so they go back to sphere-plus-texture. They share `satelliteState` with Phobos and Deimos unchanged, which is not a coincidence worth glossing over — all six are tidally locked, and the IAU puts a synchronous satellite's prime meridian at its sub-planetary point, so "longitude 0 faces the planet" is at once the texture convention `geo.ts` uses and the physical state. Their albedos span 0.22 to 0.67, the widest range of any family here, and Europa's ×1.5 conversion runs *past* 1.0 — the Lambert model genuinely runs out of room for the most reflective large surface in the solar system. The tints hold the true ratios instead; see the table there.
 - `src/planets/venus/venus.ts`, `clouds.ts`, `atmosphere.ts` — the one body here made of **two** visible shells rather than a surface with a veil over it. `venus.ts` is the ground Magellan mapped through the clouds by radar, so its map is *backscatter, not colour* — it ships greyscale and the hue comes from a material tint taken from the Venera landers. `clouds.ts` is what Venus actually looks like: an opaque, generated deck that hides the surface completely (no `transparent`, no `depthWrite: false` — it is a solid surface to the renderer). It is generated because in visible light there is nothing to map; the famous dark markings are ultraviolet. The deck is toggleable from the nav panel, which is the only way to see the surface at all. Its albedo runs through the same geometric→hemispherical conversion as the Martian moons, at the opposite extreme — 0.975, which looks wrong and isn't.
 - `src/noise.ts` — seeded value noise / fBm sampled from a **3D direction** rather than uv, which is what keeps it seam-free at the 180° meridian and unpinched at the poles. Shared by the Martian moons' relief and Venus's cloud deck.
@@ -107,18 +108,21 @@ scene
 │       ├── europa            4:2:1 without anything in the source saying so
 │       ├── ganymede
 │       └── callisto
-└── saturnSystem            9.5 AU, and 1.83× Jupiter's again
-    └── saturnAxis          26.7° — the biggest lean here, and the only visible one
-        ├── saturn          because the *rings* lie in the plane this node defines
-        ├── saturnRings     so the 29½-year opening and closing is not animated
-        ├── mimas           all seven likewise in Saturn's equatorial plane
-        ├── enceladus
-        ├── tethys
-        ├── dione
-        ├── rhea
-        ├── titan           and Titan alone carries a second shell
-        ├── titanHaze
-        └── iapetus
+├── saturnSystem            9.5 AU, and 1.83× Jupiter's again
+│   └── saturnAxis          26.7° — the biggest lean here, and the only visible one
+│       ├── saturn          because the *rings* lie in the plane this node defines
+│       ├── saturnRings     so the 29½-year opening and closing is not animated
+│       ├── mimas           all seven likewise in Saturn's equatorial plane
+│       ├── enceladus
+│       ├── tethys
+│       ├── dione
+│       ├── rhea
+│       ├── titan           and Titan alone carries a second shell
+│       ├── titanHaze
+│       └── iapetus
+└── uranusSystem            19.2 AU, and 2.01× Saturn's again
+    └── uranusAxis          97.77° over — a planet lying past its own side
+        └── uranus          and the figure appears nowhere in the source
 ```
 
 Saturn is where the shape stops being an argument and becomes infrastructure: a planet
@@ -130,6 +134,22 @@ plane's 29½-year cycle of opening to 27°, closing, and vanishing edge-on (most
 March 2025) falls out of the same "set the pole once and never touch it" mechanism that
 produces Earth's seasons. Nothing animates it, and Saturn's 26.73° obliquity is stated
 nowhere in the project.
+
+Uranus is where the shape stops needing an argument at all. It is the most bizarrely
+oriented body in the solar system — tipped **97.77°**, past its own side, rolling along
+its orbit rather than spinning upright in it — and it is three nodes and a mesh. The
+obliquity is stated nowhere: it is the angle between the IAU pole and the orbit normal
+the elements imply, and it comes out obtuse because the rotation rate is *negative*, the
+same one sign that makes Venus retrograde. Nothing branches on it.
+
+What falls out is the most extreme season anywhere, and it is pure geometry. The axis
+holds a fixed direction in space while the planet goes round, so each pole spends about
+42 years in continuous daylight and 42 in continuous night, with the Sun crossing the
+equator between. Checked rather than assumed: the sub-solar latitude swings ±82.23°
+(which is 180° − 97.77°) and the model's equinoxes land at 2007.9 and 2050.1 against the
+real December 2007 and 2049. Wind the clock to "10 d/s" and you can watch the terminator
+go from a ring around the sub-solar pole to a line through the middle of the disc and
+back — the same mechanism as Earth's seasons and Saturn's rings opening, at its limit.
 
 Venus is the proof that the shape generalises: it is the strangest rotator in the
 solar system — retrograde, 243 days, axis 177° over — and *none* of that is
@@ -180,6 +200,8 @@ Jupiter is the one body whose heliocentric residual is genuinely worse than its 
 
 Saturn confirms that diagnosis from the other side of the resonance, which is the useful thing about it. Its heliocentric residual is 0.097° RMS (max 0.155°, perihelion/aphelion 9.023/10.049 AU against Horizons' 9.031/10.066) — 2.2× Jupiter's, which is close to the ratio the great inequality's amplitudes predict, since the same term is roughly 0.82° in Saturn's longitude against 0.33° in Jupiter's. Two bodies, one unmodelled term, residuals in the right proportion. It is not a transcription error either, and both stay under the constant 0.373° frame offset the whole scene already carries.
 
+**Uranus closes that argument, and is the reason not to read the Jupiter/Saturn gap as the fit degrading with distance.** It sits at twice Saturn's range and its residual is 0.018° RMS (max 0.032°, 1.62 million km; perihelion/aphelion 18.283/20.096 AU against Horizons' 18.284/20.099) — five times *better* than Saturn's and back down near the inner planets'. If distance were the cause it would be worse again; it is not, because Uranus is not in the 5:2 commensurability the other two share, so nothing is pumping an 883-year term into its longitude for Standish's single fit to average away. Three bodies, one unmodelled resonance, and only the two bodies actually in it are affected. Don't "fix" Jupiter's and Saturn's numbers toward this one.
+
 **The Saturnian resonances fall out the same way Jupiter's Laplace resonance does, with one exception that is worth knowing about.** Enceladus goes round twice for each of Dione's orbits, and being held eccentric by it is the entire power source for the south-polar jets. The condition is `2·n_Dione − n_Enceladus − ϖ̇_Enceladus = +6.3×10⁻⁵ °/day`, which is 2.4×10⁻⁷ of Enceladus's own mean motion, from three quantities fitted out of separate ephemeris queries. Note that it only closes when the apsidal precession is carried: the raw period ratio is 1.99743, which looks like a near miss and is exact.
 
 The exception is **Mimas–Tethys**, and it is the only place in the project where a resonance had to be put in by hand. The 4:2 argument closes fine on the fitted rates, but the argument *librates* rather than holding still, which swings Mimas tens of degrees back and forth along its own orbit over decades. A precessing ellipse has nowhere to put that: leaving it out costs 6.7° RMS, thirty times the worst residual of any other moon and easily visible. So `SatelliteElements` gained three optional fields (`librationAmplitudeDeg`, `librationPeriodDays`, `librationPhaseDeg`) adding a sinusoid to the mean longitude. Two moons carry one — Mimas at 33.1°, and Tethys, the other half of the same resonance, at 2.6°, a ratio close to the two masses'. Nothing else in the project sets them and the branch is skipped when the amplitude is undefined. **The fitted period is not the resonance's true libration period** and must not be quoted as one: a 30-year arc covers under half a cycle of a ~70-year libration, so what comes out is the effective single tone that best reproduces JPL's ephemeris over the checked window. Pinning it to the published 70.6 years instead makes Mimas nine times worse.
@@ -224,9 +246,18 @@ Adding Saturn moved **four**, on the same logic, and the fourth is the one that 
 - The camera's **far plane** 400,000 → 800,000 units. This had never mattered before. Framing Saturn's orbit puts the camera 328,700 units out while the far side of that orbit is another 236,400 beyond the Sun, so 400,000 clipped the whole far half of the outermost orbit line. It still costs nothing — depth resolution goes as `z²/(near·2²⁴)` and is set by the near plane.
 - `MAX_EXPOSURE` 32 → 110, in `updateExposure`. **This is not a taste value and it is not a safety limit**: the number is `d²` at the furthest body, because that is exactly what cancels the light's own 1/d² falloff. Jupiter's 5.2 AU needs 27, so 32 sufficed; Saturn's aphelion needs 101. Leaving it at 32 renders Saturn three times darker than the model says it is, which is precisely the artefact the whole exposure mechanism exists to remove. Anything added further out needs it raised again.
 
-The spacing is roughly geometric — each orbit about half again the last — so the system view distance is going to keep doubling and the inner system is going to keep shrinking toward a point. That is what the solar system is actually like, and no linear framing ever shows two neighbours well at once.
+Adding Uranus moved the same four again, which is now the established cost of an outer body — check all four before assuming one of them does not apply:
+
+- `SYSTEM_VIEW_DISTANCE` 9 AU → 18. Note this is the value the code actually carries, which is deliberately *closer* than the full framing (13.1 AU for Saturn, 26.2 for Uranus) so the inner system stays readable and the corners crop the outermost line. Doubling it holds the same fraction of the outermost aphelion it has always held — 9/10.07, then 18/20.10 — so the wide shot stays the composition it was rather than becoming a different kind of picture.
+- `controls.maxDistance` 22 AU → 40 (framing Uranus's orbit whole needs 20.10 / 0.767 ≈ 26.2).
+- The camera's **far plane** 800,000 → 1,600,000 units. The sum it has to clear is the furthest the user can now pull back (40 AU = 939,000) plus the far side of the outermost orbit beyond the Sun (20.1 AU = 472,000). Still free — depth resolution is set by the near plane.
+- `MAX_EXPOSURE` 110 → 405, Uranus's aphelion being 20.10 AU and 20.10² = 404. At 110 Uranus renders nearly four times darker than the model says it is. Sunlight there is about 370 lux — a well-lit room, or twenty minutes after sunset. Dim, and nothing like dark.
+
+The spacing is roughly geometric — each orbit about half again the last, and the last two ratios are 1.83 and 2.01 with no sign of a bend — so the system view distance is going to keep doubling and the inner system is going to keep shrinking toward a point. That is what the solar system is actually like, and no linear framing ever shows two neighbours well at once.
 
 Three Saturn-specific things get framed off the **rings** rather than the globe, and all three would be wrong the other way: the camera's `SATURN_VIEW_DISTANCE` (framing on a few planet radii runs the rings off both edges), the label height, and the marker's size — the ring system is 2.33 equatorial radii across, so Saturn's disc stops being sub-pixel a good deal later than the planet alone would. The one thing measured off the **equatorial radius** instead is its entry in `flightBodies`, because that figure sets the flight speed and the near plane and wants the distance to the nearest thing you could hit. The rings are a plane you fly straight through; taking the clearance from their outer edge would have you crawling while still 140,000 km from the planet.
+
+**Uranus's moons and rings are absent on purpose, and the two absences are not the same kind.** The five major moons — Miranda, Ariel, Umbriel, Titania, Oberon — are real worlds and would go in exactly like the Galileans and the Saturnians, sphere plus mosaic plus a `satelliteState` entry; the only thing stopping them is that Voyager 2 arrived at solstice and mapped one hemisphere each, so there is no equirectangular map for any of them that is not half invention. The rings are a different question: thirteen of them, discovered by *stellar occultation* in 1977 rather than by looking, made of particles as dark as charcoal at an albedo near 0.03, and the widest of them (ε) runs 20–96 km against Saturn's 73,000 km of ring system. They are the same call the project already makes about Saturn's E and Phoebe rings — drawing them would be drawing something nobody has ever seen with an eye. Neither is a to-do left lying around; the nav panel gives Uranus a plain button with no chevron for the same reason, since an empty dropdown would claim the wrong one of those two things.
 
 Because bodies move, the camera **follows**: `focusOnObject()` stores the target object plus an offset and re-derives its endpoint every frame (a snapshot would miss, since the body moves during the fly-to), and `followTarget` then translates the camera by the body's per-frame delta so the user's orbit angle survives. Anything comparing positions must use `getWorldPosition()` — `.position` is now a local coordinate for everything under `earthSystem`. The star dome is pinned to the camera each frame, otherwise travelling 1500 units along the orbit flies you out of your own starfield.
 
@@ -307,6 +338,8 @@ Two further notes. The profile texture stores `sqrt(τ/τ_max)` rather than `τ/
 Live in `public/textures/` (NASA, public domain — with one CC BY 4.0 exception, `saturn_color.jpg`; see `CREDITS.md` there). They must stay under `public/` — Vite only copies `public/` into `dist/`, so assets elsewhere in the project root work in dev but silently 404 in a production build. Colour maps need `texture.colorSpace = SRGBColorSpace`; height maps and masks must **not** get it, as they carry data rather than colour.
 
 **Never write a `/textures/...` path directly — go through `texturePath('earth_day.jpg')` from `src/textures.ts`.** Beside the originals sit two reduced sets, `half/` and `quarter/`, written by `scripts/generate-texture-variants.sh`, and `texturePath` picks the directory from the quality tier. This is not cosmetic: a JPEG's compression is gone once it is decoded, every map reaches the GPU as RGBA8, mipmaps add a third, and the full set is roughly **800 MB of texture memory** — which on a phone sharing 3–4 GB with the rest of the device is the difference between running and being killed by the OS. It applies just as much to the two places that read a map as *data* rather than as a texture (`site-samples.ts`, Earth's height and land-mask maps): not for correctness, but because the browser cache is keyed on the URL, so a module reaching past `texturePath` downloads and decodes a second copy at four times the size. Re-run the script after adding a texture.
+
+**Generated maps must be tinted in linear light too, and Uranus is the sharpest case.** `uranus/uranus.ts` builds its own map and so has to write bytes, and its tint is nothing like white — 0.62/0.93/1.00, because methane eats the red end. Written straight into the sRGB byte buffer those ratios would arrive at the shader as roughly 0.81/0.97/1.00 and the planet would come out grey-blue instead of cyan, so the module applies the tint in linear light and encodes on the way out. The same file also normalises the field against its **peak** rather than its mean and folds the ratio back into `material.color`: the mean is what an albedo actually is, but leaving it at the mean puts everything above it past 1.0 in whichever channel the tint has at full strength, and the first thing to clip flat is the polar cap — the one feature on Uranus anyone has ever seen without stretching the image first.
 
 **Albedo tints derived by comparison must be computed in linear light, not from sRGB-encoded map means.** `material.color` is decoded from sRGB on the way in and so is the map, so the multiply happens in linear space. `jupiter/moons.ts` compares sRGB means, which is very nearly harmless there because every tint it produces is above 0.79 and the two spaces agree closely near white — but it does not generalise. `saturn/moons.ts` spans down to Titan's 0.099, and 0.099 read as sRGB is 0.011 of linear light: a factor of nine, which renders the only mapped surface in the outer solar system as a black disc. It is written the correct way and says so; don't "align" it with Jupiter's table.
 

@@ -595,6 +595,97 @@ export const TITAN_GEOMETRIC_ALBEDO = 0.22;
 /** The *bright* hemisphere only. The leading side is 0.05, and the map carries it. */
 export const IAPETUS_GEOMETRIC_ALBEDO = 0.6;
 
+// Uranus constants
+//
+// The third gas giant, the seventh planet, and the first one nobody knew was there.
+// Mercury through Saturn have been watched since prehistory; Uranus sits at magnitude
+// 5.6 at opposition, which is naked-eye only in the sense that it is technically above
+// the threshold, and it had been catalogued as a star at least twenty times before
+// Herschel noticed in 1781 that it had a disc. That is what doubled the known radius of
+// the solar system in a single evening, and it is why its marker here is a small dim
+// dot rather than one of the generous ones Venus and Jupiter get.
+export const URANUS_EQUATORIAL_RADIUS_KM = 25559;
+/** 2.3% shorter than the equatorial one. */
+export const URANUS_POLAR_RADIUS_KM = 24973;
+/** Volumetric mean, 25362 km — the figure the mass and density are quoted against. */
+export const URANUS_RADIUS_KM = 25362;
+/** ~3.98 units. Four Earths across, and 14.5 Earths in mass. */
+export const URANUS_RADIUS = URANUS_RADIUS_KM / EARTH_RADIUS_KM;
+export const URANUS_EQUATORIAL_RADIUS = URANUS_EQUATORIAL_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * Oblateness, (a−b)/a = 0.0229 — a third of Jupiter's and a quarter of Saturn's, and
+ * the marginal case of the three.
+ *
+ * Uranus turns in 17.24 hours, only two thirds slower than Jupiter, but on a body
+ * two fifths the width, so the equator is thrown at 2.6 km/s rather than 12.6. At 2.3%
+ * it is well past Earth's 0.0034 — which is drawn round here and rightly — and it is
+ * about a dozen pixels on the disc as `URANUS_VIEW_DISTANCE` frames it. It is applied,
+ * on the same one line `jupiter.ts` and `saturn.ts` use, mostly because on a planet
+ * with nothing on its face the silhouette is the only thing there is to look at.
+ */
+export const URANUS_FLATTENING =
+    (URANUS_EQUATORIAL_RADIUS_KM - URANUS_POLAR_RADIUS_KM) / URANUS_EQUATORIAL_RADIUS_KM;
+/**
+ * IAU rotational elements, and the pair that produce the strangest thing about Uranus
+ * without either of them mentioning it.
+ *
+ * The obliquity is **97.77°** — the planet is tipped past its side and rolls along its
+ * orbit rather than spinning upright in it. Nothing here says so. What is here is a
+ * pole direction and, below, a rotation rate that happens to be negative, exactly as
+ * Venus's is; the 97.77° is the angle between the orbit normal and the direction the
+ * planet actually turns, and it falls out of those two the way Earth's 23.44° and
+ * Saturn's 26.73° fall out of theirs. Checked against JPL Horizons: 97.770°.
+ *
+ * Note the declination is *negative* while the pole still sits 7.7° **north** of the
+ * ecliptic — those are consistent, not contradictory. The IAU picks whichever pole
+ * lies north of the invariable plane regardless of which way the body turns, so for a
+ * retrograde rotator the angular velocity points down the pole rather than up it, and
+ * the obliquity comes out obtuse. Venus is the same arrangement carried further:
+ * pole 2.6° from the orbit normal, spin negative, obliquity 177.36°.
+ *
+ * The consequence is the most extreme seasons in the solar system, and they are
+ * geometry rather than weather. For a quarter of the 84-year orbit each pole points
+ * very nearly at the Sun, so it gets 42 years of continuous daylight while the other
+ * gets 42 years of night, and at the equinoxes — 2007, next in 2049 — the Sun crosses
+ * the equator and the whole planet runs 17-hour days. The scene produces all of it from
+ * the fixed-pole node, the same mechanism behind Earth's seasons and Saturn's rings
+ * opening and closing.
+ */
+export const URANUS_POLE_RA_DEG = 257.311;
+export const URANUS_POLE_DEC_DEG = -15.175;
+export const URANUS_PRIME_MERIDIAN_DEG = 203.81;
+/**
+ * Negative, and that single sign is the whole of what makes Uranus retrograde here —
+ * no branch, no special case, exactly as with Venus.
+ *
+ * System III again, the magnetic rotation, for the reason Jupiter's and Saturn's are:
+ * a gas giant has no surface to time. Uranus's field is a better clock than Saturn's,
+ * being tilted 59° from the spin axis and offset a third of a radius from the centre,
+ * so it gives a strong signal — but it was measured over five days of Voyager 2 flyby
+ * in January 1986 and has not been measured since, which is why the quoted uncertainty
+ * on 17.24 h is still ±0.01 and there is no prospect of narrowing it without going back.
+ */
+export const URANUS_ROTATION_DEG_PER_DAY = -501.1600928;
+/** 17h 14m 24s. `Math.abs` for the same reason Venus's needs it: this is a duration. */
+export const URANUS_SIDEREAL_DAY = (360 / Math.abs(URANUS_ROTATION_DEG_PER_DAY)) * 86400;
+export const URANUS_ORBITAL_PERIOD_DAYS = 30685.4;
+/**
+ * Geometric albedo, and unlike Jupiter's and Saturn's this one is used rather than
+ * merely recorded.
+ *
+ * Those two carry real visible-light mosaics that already hold their own brightness.
+ * There is no such map of Uranus — see `uranus/uranus.ts` — so the surface here is
+ * generated, and the albedo has to be authored the way the Martian moons' and Venus's
+ * deck are: taken from the measurement and converted, since a geometric albedo is
+ * brightness at full phase against a perfect diffusing disc and a diffuse material
+ * wants hemispherical reflectance.
+ *
+ * Published values run 0.488 (Karkoschka's spectrophotometry) to 0.51 (Horizons, and
+ * the NASA fact sheet). The spread is wider than most of the choices made downstream
+ * of it, which is worth knowing before anyone tunes against the third decimal.
+ */
+export const URANUS_GEOMETRIC_ALBEDO = 0.51;
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

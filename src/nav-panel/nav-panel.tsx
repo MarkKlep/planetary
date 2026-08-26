@@ -168,6 +168,16 @@ const PLANETS: Planet[] = [
     // reads as hiding Titan. This one gets to say what it takes off.
     toggle: { label: 'Titan haze', toggleId: 'toggle-titan-haze' },
   },
+  // Back to a plain full-width button with no chevron, which Mercury is the only other
+  // entry to get — and for the opposite reason. Mercury has nothing to expand because
+  // there is nothing there; Uranus has five moons worth flying to and a set of rings,
+  // and they are simply not modelled yet. An empty dropdown would say the wrong one of
+  // those two things, so it does not get one until there is something to put in it.
+  {
+    id: 'uranus',
+    label: 'Uranus',
+    satellites: [],
+  },
 ];
 
 // Matches the breakpoint the modal and surface HUD already use elsewhere in the

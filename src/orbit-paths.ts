@@ -11,6 +11,7 @@ import {
     marsOrbitPosition,
     mercuryOrbitPosition,
     saturnOrbitPosition,
+    uranusOrbitPosition,
     venusOrbitPosition,
 } from './orbits';
 import {
@@ -19,6 +20,7 @@ import {
     MARS_ORBITAL_PERIOD_DAYS,
     MERCURY_ORBITAL_PERIOD_DAYS,
     SATURN_ORBITAL_PERIOD_DAYS,
+    URANUS_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
 } from './constants/planets.const';
 
@@ -155,6 +157,21 @@ export const saturnOrbitPath = traceOrbit(
     0xe8d5a8
 );
 
+// The sixth line, and the one that settles what the previous two were arguing about.
+// Jupiter's reduced the inner four to a knot; Saturn's was drawn around that; this is
+// drawn around Saturn's at 2.01 times its radius, and the ratios so far run 1.87, 1.52,
+// 1.83, 2.01 — no bend, no sign of stopping. Whatever gets added next will need roughly
+// double again, which is the honest thing for the picture to be saying.
+//
+// Coloured off the marker, which is a pale cyan for the reason the planet is: methane
+// absorbs the red end and hands back everything below 600 nm.
+export const uranusOrbitPath = traceOrbit(
+    uranusOrbitPosition,
+    URANUS_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0x9fd6e3
+);
+
 export const orbitPaths = [
     mercuryOrbitPath,
     venusOrbitPath,
@@ -162,4 +179,5 @@ export const orbitPaths = [
     marsOrbitPath,
     jupiterOrbitPath,
     saturnOrbitPath,
+    uranusOrbitPath,
 ];

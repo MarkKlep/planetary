@@ -33,6 +33,7 @@ const SPHERE_IDS = new Set([
     'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
+    'uranus',
 ]);
 
 export function BodyIcon({ id }: BodyIconProps) {
@@ -321,6 +322,34 @@ function BodyShape({ id }: BodyIconProps) {
               fill="none" stroke="#e8d5a8" strokeWidth="1.5"
               transform="rotate(-14 10 10)"
             />
+          </g>
+        </>
+      );
+    case 'uranus':
+      // The hardest one here to draw, because the honest answer is "a plain disc" —
+      // Voyager 2 flew past at 81,500 km and came back with a featureless ball, and
+      // `uranus/uranus.ts` generates the map rather than pretending otherwise. So the
+      // icon does what the planet does: colour first, and almost nothing else.
+      //
+      // The one structural thing it can say is the tilt, which is the whole story of
+      // Uranus. The bands are zonal like Jupiter's, but the axis is 97.77° over, so at
+      // most of the orbit they wrap the pole facing you rather than crossing the disc —
+      // concentric rather than horizontal. Drawn near-vertical, which is what they look
+      // like partway between solstice and equinox, and the brighter polar cap sits at
+      // the end of them, where Hubble has been watching the northern one thicken since
+      // the mid-2000s. Deliberately faint: the real contrast is a couple of percent.
+      return (
+        <>
+          <defs>
+            <clipPath id="planet-icon-uranus-disc">
+              <circle cx={CENTER} cy={CENTER} r={RADIUS} />
+            </clipPath>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#a6d8de" />
+          <g clipPath="url(#planet-icon-uranus-disc)">
+            <ellipse cx={6.2} cy={CENTER} rx="2.6" ry="9" fill="#c3e6ea" opacity="0.55" />
+            <ellipse cx={11.4} cy={CENTER} rx="1.7" ry="9" fill="#8dc6d0" opacity="0.4" />
+            <ellipse cx={14.6} cy={CENTER} rx="1.3" ry="9" fill="#c3e6ea" opacity="0.35" />
           </g>
         </>
       );

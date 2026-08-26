@@ -68,6 +68,7 @@ const BODY_IDS = [
     'mars', 'phobos', 'deimos',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'saturn', 'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
+    'uranus',
     'system',
 ];
 

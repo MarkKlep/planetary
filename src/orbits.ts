@@ -33,6 +33,10 @@ import {
     SATURN_ROTATION_DEG_PER_DAY,
     TETHYS_ORBIT_RADIUS,
     TITAN_ORBIT_RADIUS,
+    URANUS_POLE_DEC_DEG,
+    URANUS_POLE_RA_DEG,
+    URANUS_PRIME_MERIDIAN_DEG,
+    URANUS_ROTATION_DEG_PER_DAY,
     VENUS_CLOUD_DEG_PER_DAY,
     VENUS_POLE_DEC_DEG,
     VENUS_POLE_RA_DEG,
@@ -221,6 +225,23 @@ export function moonOrbitPosition(date: Date, target = new Vector3()): Vector3 {
 // scene already carries (see below), so chasing it further would be false precision of
 // exactly the kind the Mercury libration note rejects.
 //
+// Uranus is the control that confirms the diagnosis, and it is worth reading next to
+// Saturn's:
+//
+//                            Saturn                 Uranus
+//   heliocentric position    0.097° RMS (max 0.155) 0.018° RMS (max 0.032°, 1.62e6 km)
+//   perihelion / aphelion    9.023 / 10.049 AU      18.283 / 20.096 AU
+//     Horizons               9.031 / 10.066         18.284 / 20.099
+//   sidereal period          10755.7 d              30687.40 d  (Horizons 30685.4)
+//   obliquity to its orbit   26.73°                 97.770°     (published 97.77)
+//   sidereal rotation        10h 39m                17.240 h    (published 17.24)
+//
+// If the residual grew with distance, Uranus at twice Saturn's range would be worse
+// again. It is five times *better* — back down near the inner planets' figures — because
+// Uranus is not in the 5:2 commensurability Jupiter and Saturn share, and so nothing is
+// pumping an 883-year term into its longitude for Standish's single fit to average away.
+// Three bodies, one unmodelled resonance, and only the two bodies in it are affected.
+//
 // Mercury additionally lands its 3:2 spin-orbit resonance without being told about
 // it: three rotations come to 175.938 days against two orbits' 175.939, from a
 // rotation rate and an orbital period that were taken from two unrelated sources.
@@ -393,6 +414,38 @@ const SATURN_ELEMENTS: OrbitalElements = {
 };
 
 /**
+ * Uranus's, from the same table, and the orbit that stops the doubling being a curve
+ * and makes it a fact.
+ *
+ * Every previous arrival has enclosed its predecessor with room to spare — Jupiter put
+ * the inner four inside a third of its radius, Saturn did the same to Jupiter. Uranus is
+ * 2.01 times Saturn's again, so *the entire scene as it stood* now fits inside half of
+ * this one orbit. That is the sixth term of a sequence with no bend in it, and it is why
+ * `SYSTEM_VIEW_DISTANCE` doubled rather than being nudged.
+ *
+ * The eccentricity of 0.0473 is the smallest of the four outer bodies here, and still
+ * the largest swing in absolute terms in the scene: perihelion 18.28 AU, aphelion 20.10,
+ * a range of 1.81 AU — 42,600 scene units, nearly twice the radius of Earth's whole
+ * orbit. That is what an eccentricity of five percent buys you this far out.
+ *
+ * Checked against Horizons over 2000-2030, 997 samples, and the residuals sit where the
+ * others predict they should: 0.018° RMS, worse than the inner planets' 0.006° and
+ * better than Jupiter's 0.044° and Saturn's 0.097°. Those two are pulled out by the
+ * great inequality they share with each other (see the header above); Uranus is not in
+ * that resonance, so it falls back toward the table's own accuracy rather than
+ * continuing the trend outward. It is the control that shows the Jupiter/Saturn gap is
+ * a real physical term and not the fit degrading with distance.
+ */
+const URANUS_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [19.18916464, -0.00196176],
+    eccentricity: [0.04725744, -0.00004397],
+    inclination: [0.77263783, -0.00242939],
+    meanLongitude: [313.23810451, 428.48202785],
+    perihelionLongitude: [170.95427630, 0.40805281],
+    ascendingNode: [74.01692503, 0.04240589],
+};
+
+/**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
  *
  * There is no closed form, so this is Newton–Raphson. It converges in three or four
@@ -496,6 +549,9 @@ export const jupiterOrbitPosition = (date: Date, target = new Vector3()): Vector
 export const saturnOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
     keplerianPosition(SATURN_ELEMENTS, date, target);
 
+export const uranusOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(URANUS_ELEMENTS, date, target);
+
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
  * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
@@ -595,6 +651,32 @@ export const SATURN_AXIS_ORIENTATION = axisOrientationFromPole(
 );
 
 /**
+ * Uranus's, and the node that does the most work of any of them for the least code.
+ *
+ * It is built from a pole direction exactly like the other five and it is set once and
+ * never touched exactly like the other five, and out of that comes a planet lying 97.77°
+ * over — the one genuinely bizarre orientation in the solar system, tipped past its own
+ * side so that it rolls along its orbit. There is no obliquity term anywhere here, no
+ * branch for it, and no mention of the figure outside a comment.
+ *
+ * What it buys is worth watching for rather than reading about. Because the axis holds
+ * a fixed direction in space while the planet goes round, each pole spends about 42
+ * years pointed at the Sun and 42 in the dark, and at the equinox the Sun swings back
+ * across the equator — 2007 last time, 2049 next. Wind the clock to "10 d/s" and you can
+ * watch the terminator go from a ring around the sub-solar pole to a line through the
+ * middle of the disc and back, which is the same mechanism producing Earth's seasons
+ * and Saturn's rings opening, taken to its limit.
+ *
+ * The declination below is negative and the pole nonetheless sits 7.7° *north* of the
+ * ecliptic; see the constant, which explains why that is the IAU being consistent
+ * rather than a transcription error.
+ */
+export const URANUS_AXIS_ORIENTATION = axisOrientationFromPole(
+    URANUS_POLE_RA_DEG,
+    URANUS_POLE_DEC_DEG
+);
+
+/**
  * A body's rotation inside its axis pivot: the IAU prime-meridian angle W.
  *
  * `degreesPerDay` is signed, and Venus's is negative. That is the only thing marking
@@ -648,6 +730,25 @@ export const jupiterSpinAngle = (date: Date): number =>
  */
 export const saturnSpinAngle = (date: Date): number =>
     primeMeridianAngle(SATURN_PRIME_MERIDIAN_DEG, SATURN_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Uranus's, in System III, and the one rotation model here that rests on a single
+ * five-day measurement from forty years ago — Voyager 2's flyby in January 1986 is the
+ * only time anything has been close enough to read the field, and nothing is going back.
+ *
+ * The rate is negative, which is the whole of what makes Uranus turn backwards in this
+ * scene. It is the same one line Venus runs through, and neither needed a special case;
+ * `primeMeridianAngle` has never known which way any of these bodies goes.
+ *
+ * Verified end to end rather than transcribed: fed Horizons' own Earth-Uranus vectors,
+ * this model reproduces Horizons' sub-Earth longitude to a mean of 0.011° with 0.017° of
+ * spread over 2000-2030, once two things the scene deliberately does not model are taken
+ * out — the ~2.7 hours of light time (55° of Uranus's rotation, and nothing here
+ * corrects for it) and the ~69 s between the UTC the simulation runs on and the TDB the
+ * elements are defined in (0.40°, against Mars's 0.28° noted above).
+ */
+export const uranusSpinAngle = (date: Date): number =>
+    primeMeridianAngle(URANUS_PRIME_MERIDIAN_DEG, URANUS_ROTATION_DEG_PER_DAY, date);
 
 /**
  * Venus's cloud deck, which does not turn with the planet.
