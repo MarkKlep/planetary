@@ -1,9 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
 import { IssHud } from './iss-hud/iss-hud';
 import { ChatWidget } from './chat-widget/chat-widget';
+import { MoonHint } from './moon-hint/moon-hint';
 import { Modal } from './shared/modal/modal';
 import { initScene } from './script';
 import { Analytics } from "@vercel/analytics/react";
@@ -11,6 +12,12 @@ import { Analytics } from "@vercel/analytics/react";
 const SPLASH_FADE_MS = 400;
 
 export function App() {
+  // Gates the landing hint, which must not be on screen while the splash still is:
+  // it announces something to go and click, and the panel it points at is behind a
+  // full-screen cover until this flips. Same signal the splash's own fade uses, for
+  // the same reason — see the comment on `onFirstFrame` below.
+  const [sceneReady, setSceneReady] = useState(false);
+
   useEffect(() => {
     // Deferred one task so the browser can paint this commit before initScene
     // takes the thread for ~1s building geometry and compiling shaders. The
@@ -30,6 +37,7 @@ export function App() {
           splash.classList.add('splash--done');
           window.setTimeout(() => splash.remove(), SPLASH_FADE_MS);
         }
+        setSceneReady(true);
       });
     }, 0);
 
@@ -52,6 +60,10 @@ export function App() {
           that target is the station. */}
       <IssHud />
       <ChatWidget />
+      {/* Mounted only once the scene has actually drawn, and it decides for itself
+          whether it has anything to say — a visitor who has already been told renders
+          nothing at all. See moon-hint.tsx. */}
+      {sceneReady && <MoonHint />}
       {/* Mounted once and driven from `script.ts` through `bindModal`, which looks it
           up by this id. Standing on the Moon is the one mode that is easy to leave by
           accident — Escape, L, and every nav target all lift off — and impossible to

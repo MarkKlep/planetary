@@ -293,6 +293,13 @@ export function NavPanel() {
                         className={`nav-expand-btn ${isExpanded ? 'nav-expand-btn--open' : ''}`}
                         aria-expanded={isExpanded}
                         aria-label={`${isExpanded ? 'Hide' : 'Show'} more of ${planet.label}`}
+                        // The same DOM bridge the fly-to buttons use, for something
+                        // outside the panel that needs to point *at* a specific
+                        // chevron: `moon-hint.scss` beacons Earth's while its card is
+                        // up. An attribute rather than an id because every planet has
+                        // one of these, and the id would then have to be invented per
+                        // planet for the sake of one selector.
+                        data-expand={planet.id}
                         onClick={() => toggleExpanded(planet.id)}
                       >
                         <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">

@@ -1,0 +1,259 @@
+@use '../variables.scss' as *;
+
+// Above the zoom controls (1200) so it can never be half-covered by them, and below
+// the chat panel (1300) and the modal (1500) — both of those are things the user has
+// deliberately opened, and neither should have to argue with an invitation.
+//
+// Bottom-left is the one free corner and also the right one: it sits beside the panel
+// the card is talking about, off the same edge, rather than shouting from the
+// opposite side of the screen. The 308px clears the docked panel's 288px by the same
+// 20px gutter everything else in the chrome uses.
+.moon-hint {
+    position: fixed;
+    left: 308px;
+    bottom: 24px;
+    z-index: 1250;
+
+    display: flex;
+    align-items: flex-start;
+    gap: 13px;
+    width: 340px;
+    padding: 15px 16px 14px;
+
+    border-radius: var(--radius-md);
+    border: 1px solid var(--hairline);
+    // A hair brighter than `--panel`, and a real shadow: unlike the nav panel this is
+    // not bonded to an edge, so it takes the modal's treatment — the one piece of
+    // chrome genuinely floating above the scene.
+    background: var(--panel-raised);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(10px);
+
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    animation: moon-hint-in 0.34s cubic-bezier(0.16, 0.84, 0.44, 1) both;
+}
+
+.moon-hint--leaving {
+    animation: moon-hint-out 0.24s ease both;
+}
+
+// Rising as it fades in, from the edge it is anchored to. Nothing in this chrome
+// slides in from off-screen; the panel and the HUDs are simply there.
+@keyframes moon-hint-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: none;
+    }
+}
+
+@keyframes moon-hint-out {
+    from {
+        opacity: 1;
+        transform: none;
+    }
+
+    to {
+        opacity: 0;
+        transform: translateY(6px);
+    }
+}
+
+.moon-hint__mark {
+    flex-shrink: 0;
+    margin-top: 1px;
+    line-height: 0;
+}
+
+.moon-hint__disc {
+    fill: #b9b6ae;
+}
+
+.moon-hint__crater {
+    fill: #8e8b84;
+}
+
+// Amber, and the same shape `LandFlag` draws in the panel — this is the mark the
+// card is telling you to go and find, so it may as well be the mark you find.
+.moon-hint__flag {
+    fill: var(--signal);
+    stroke: var(--signal);
+}
+
+.moon-hint__body {
+    flex: 1;
+    min-width: 0;
+}
+
+// The section-title treatment used by every HUD and the modal: mono, uppercase,
+// tracked out. Amber rather than `--ink-faint`, because unlike those this eyebrow is
+// labelling something to act on.
+.moon-hint__eyebrow {
+    margin: 0 0 5px;
+    font-family: var(--font-mono);
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--signal);
+}
+
+.moon-hint__text {
+    margin: 0;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--ink-dim);
+
+    // The two words printed on the two controls, lifted out of the sentence so the
+    // instruction survives being skimmed. Full-strength ink rather than amber: amber
+    // means "this control is live" everywhere else here, and these are references to
+    // controls, not controls.
+    strong {
+        color: var(--ink);
+        font-weight: 600;
+    }
+}
+
+.moon-hint__shortcut {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 9px 0 0;
+    padding-top: 9px;
+    border-top: 1px solid var(--hairline);
+    font-size: 11px;
+    color: var(--ink-faint);
+
+    kbd {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 19px;
+        padding: 2px 5px;
+        border: 1px solid var(--hairline-bright);
+        border-radius: 3px;
+        background: var(--panel);
+        font-family: var(--font-mono);
+        font-size: 10px;
+        // Amber like the key legends in the flight and surface HUDs, which is where
+        // a returning user has already learnt what that colour means on a key.
+        color: var(--signal);
+    }
+}
+
+.moon-hint__close {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    // A 26px hit area around an 11px glyph — the glyph is the smallest thing in the
+    // chrome and this is the only control on the card the user might want in a hurry.
+    width: 26px;
+    height: 26px;
+    margin: -3px -4px 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-faint);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+
+    &:hover {
+        color: var(--ink);
+        background: var(--panel);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--signal);
+        outline-offset: 1px;
+    }
+}
+
+// The other half of the card: a beacon that walks the route the card describes, so
+// the instruction and the control it is currently talking about are never more than a
+// glance apart. Live only while the card is up — `moon-hint.tsx` adds and removes the
+// class with the same effect that starts and cancels the chime.
+//
+// Three stages, and every one of them is read off a class the nav panel already
+// maintains for its own reasons, so nothing here needs to be told where the user has
+// got to: exactly one of these matches at a time, and each stops matching the moment
+// its own button has been used.
+//
+// All three selectors outrank every base rule for these buttons on specificity alone
+// (0,3,0 and up, against the panel's own 0,1,0 and 0,2,0), so unlike the other
+// cross-file overrides in this project these do not depend on which stylesheet Vite
+// happens to inject first.
+body.moon-hint-live {
+
+    // 1. The panel's own toggle, but only while the panel is shut — which is the
+    //    mobile default and the one step the card's text deliberately does not
+    //    mention. On a desktop this never matches, and beaconing it there would be
+    //    pointing at the control that *hides* everything the card is asking for.
+    .navigation-panel--collapsed .nav-panel-toggle,
+    // 2. Earth's chevron, until its dropdown is open. `--open` is the panel's own
+    //    class for that, set by the same state that runs the accordion.
+    .nav-expand-btn[data-expand='earth']:not(.nav-expand-btn--open),
+    // 3. Land itself, once the dropdown holding it is open. Until then it is inside a
+    //    collapsed grid row and there is nothing on screen to light up.
+    .nav-satellites--open #toggle-moon-surface {
+        border-color: var(--signal);
+        color: var(--signal);
+        animation: moon-hint-beacon 1.9s ease-in-out infinite;
+    }
+}
+
+// A ring breathing outward, not a flash: the target is a 40px button in a dark panel,
+// and anything that changes its fill fights the amber "this one is selected" tick
+// that the same panel uses two rows away.
+@keyframes moon-hint-beacon {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(255, 138, 61, 0.32);
+    }
+
+    55% {
+        box-shadow: 0 0 0 5px rgba(255, 138, 61, 0);
+    }
+}
+
+// The card still appears and the beacon still marks its target — a hint that silently
+// does not show is worse than one that does not move. Only the motion goes, replaced
+// by the ring the animation was breathing out, held still.
+@media (prefers-reduced-motion: reduce) {
+
+    .moon-hint,
+    .moon-hint--leaving {
+        animation-duration: 0.01ms;
+    }
+
+    body.moon-hint-live {
+
+        .navigation-panel--collapsed .nav-panel-toggle,
+        .nav-expand-btn[data-expand='earth']:not(.nav-expand-btn--open),
+        .nav-satellites--open #toggle-moon-surface {
+            animation: none;
+            box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.18);
+        }
+    }
+}
+
+// The panel is a drawer here rather than a docked pane, so there is no 288px column
+// to sit beside — the card takes the width and moves to the bottom edge, where it is
+// clear of both the panel toggle (top-left, the thing it is pointing at) and the chat
+// button (top-right).
+@media (max-width: 768px) {
+    .moon-hint {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        width: auto;
+    }
+}
