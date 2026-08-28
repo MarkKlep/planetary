@@ -1,6 +1,7 @@
 import { Fragment, useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import { BodyIcon } from './planet-icons';
+import { RangeTick, rangeLabel } from './range-rail';
 import './nav-panel.scss';
 
 /**
@@ -260,7 +261,15 @@ export function NavPanel() {
           </div>
         </header>
         <div className="nav-section nav-section--objects">
-          <h2 className="nav-section-title">Objects</h2>
+          {/* The unit for the range column, labelled once at its head rather than
+              eight times down it. Sits in the section title because the title is the
+              only full-width element that lines up with the rows below, and it is
+              held over the column by the same custom properties the rows lay their
+              own chevron and rail out with — so the two cannot drift apart. */}
+          <h2 className="nav-section-title nav-section-title--ranged">
+            Objects
+            <span className="nav-range-legend" aria-hidden="true">AU</span>
+          </h2>
           <div className="nav-object-list" onClick={handleObjectListClick}>
             <button
               className={`nav-btn nav-object-btn ${activeTarget === 'sun' ? 'active' : ''}`}
@@ -269,23 +278,38 @@ export function NavPanel() {
             >
               <span className="nav-object-symbol"><BodyIcon id="sun" /></span>
               <span>Sun</span>
+              <RangeTick id="sun" />
             </button>
-            {PLANETS.map((planet) => {
+            {PLANETS.map((planet, index) => {
               const isExpanded = expanded.has(planet.id);
               // Nothing to reveal means no chevron — an expander that opens an empty
               // drawer is worse than no expander. `.nav-planet-btn` is `flex: 1`, so
               // the button simply takes the whole row and still lines up.
               const isExpandable = planet.satellites.length > 0 || planet.toggle !== undefined;
               return (
-                <div className="nav-planet" key={planet.id}>
+                // A hairline above the first planet, and another above the system
+                // view at the end. The list mixes three kinds of thing — a star, the
+                // eight planets, and a place to look from — and it read as ten
+                // identical rows because nothing said so. Rules rather than more
+                // eyebrow headings: they cost a few pixels instead of a row each, and
+                // hairline-divided rectangles are already this chrome's vocabulary.
+                <div
+                  className={`nav-planet ${index === 0 ? 'nav-planet--starts-group' : ''}`}
+                  key={planet.id}
+                >
                   <div className="nav-planet-row">
                     <button
                       className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === planet.id ? 'active' : ''}`}
                       data-target={planet.id}
+                      // The rail's tick is two pixels of decoration to a screen
+                      // reader, so it is hidden and the figure it stands for is
+                      // spoken here instead. See `rangeLabel`.
+                      aria-label={rangeLabel(planet.id, planet.label)}
                       onClick={() => setActiveTarget(planet.id)}
                     >
                       <span className="nav-object-symbol"><BodyIcon id={planet.id} /></span>
                       <span>{planet.label}</span>
+                      <RangeTick id={planet.id} />
                     </button>
                     {isExpandable && (
                       <button
@@ -446,7 +470,7 @@ export function NavPanel() {
                 </div>
               );
             })}
-            <div className="nav-planet">
+            <div className="nav-planet nav-planet--starts-group">
               <div className="nav-planet-row">
                 <button
                   className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === 'system' ? 'active' : ''}`}
@@ -455,6 +479,10 @@ export function NavPanel() {
                 >
                   <span className="nav-object-symbol"><BodyIcon id="system" /></span>
                   <span>Solar system</span>
+                  {/* Renders nothing, and the nothing is the point: this is a place
+                      to look from rather than a body at a distance from the Sun. Left
+                      in so the row says that deliberately rather than by omission. */}
+                  <RangeTick id="system" />
                 </button>
                 <button
                   type="button"

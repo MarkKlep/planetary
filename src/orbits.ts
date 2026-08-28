@@ -592,6 +592,35 @@ export const neptuneOrbitPosition = (date: Date, target = new Vector3()): Vector
     keplerianPosition(NEPTUNE_ELEMENTS, date, target);
 
 /**
+ * Each planet's semi-major axis in AU, keyed by the ids the nav panel uses.
+ *
+ * Derived from the element sets above rather than typed out again, and that is the whole
+ * reason this exists as an export instead of a table in `planets.const.ts`. The nav
+ * panel draws a distance scale from these numbers while `keplerianPosition` flies the
+ * planets by the same ones, so the scale cannot come to disagree with the scene — there
+ * is one value per planet and both readers take it from the same place.
+ *
+ * Only the J2000 value is used, not the per-century drift beside it. Over the range this
+ * app is ever pointed at, the largest of those drifts moves Saturn by 0.0013 AU, which is
+ * a hundredth of a pixel on any scale a panel 288px wide could draw.
+ *
+ * Earth's 1 is exact rather than the measured 1.00000011, because `earthOrbitPosition`
+ * has no elements to read: it comes off an almanac series that puts Earth on a perfect
+ * circle of exactly one AU, so 1 is what this model actually does. See the note on the
+ * two known systematic residuals above.
+ */
+export const SEMI_MAJOR_AXIS_AU: Readonly<Record<string, number>> = {
+    mercury: MERCURY_ELEMENTS.semiMajorAxis[0],
+    venus: VENUS_ELEMENTS.semiMajorAxis[0],
+    earth: 1,
+    mars: MARS_ELEMENTS.semiMajorAxis[0],
+    jupiter: JUPITER_ELEMENTS.semiMajorAxis[0],
+    saturn: SATURN_ELEMENTS.semiMajorAxis[0],
+    uranus: URANUS_ELEMENTS.semiMajorAxis[0],
+    neptune: NEPTUNE_ELEMENTS.semiMajorAxis[0],
+};
+
+/**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the
  * counterpart of Earth's `earthTilt` node, and used the same way: set once and never
  * touched, so the axis holds its direction in space through the whole orbit.

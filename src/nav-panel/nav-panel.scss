@@ -108,6 +108,25 @@
     }
 }
 
+/**
+ * A selected satellite, and the rule that was missing.
+ *
+ * `.navigation-panel .nav-btn.nav-btn--satellite` below is specificity (0,3,0) and beats
+ * the global `.nav-btn.active` (0,2,0) on `border-color`, `background` *and* `color` — so
+ * an active Moon or Titan kept only the left-edge tick from the base rule and stayed at
+ * `--ink-dim`. A selected planet was loud and a selected moon was nearly invisible.
+ *
+ * Restated here at (0,4,0) so it wins, and deliberately *quieter* than the planet's: a
+ * 2px tick against a planet row's 3px, because a satellite row is already an indented,
+ * smaller thing and marking it as loudly would flatten the hierarchy it sits in.
+ */
+.navigation-panel .nav-btn.nav-btn--satellite.active {
+    border-color: var(--signal);
+    background: var(--signal-dim);
+    box-shadow: inset 2px 0 0 var(--signal);
+    color: var(--ink);
+}
+
 // A row label that borrows the satellite button's shape without being a control:
 // there is nothing to fly to, so it must not offer a pointer, a hover lift, or a
 // press. Doubled with `.nav-btn` for the same cascade reason as the toggle below —
@@ -243,6 +262,26 @@
     // gradient. The one thing that still radiates is the signal colour, sparingly.
     background: var(--void);
 
+    // The object row's right-hand columns, as properties rather than as literals in
+    // four places. The `AU` legend in the section title has to sit over the range
+    // column, and the section title is a full-width heading that shares no layout with
+    // the rows — so the only thing keeping the two aligned is that both are laid out
+    // from these. Change one here and the legend follows the column.
+    // 58 rather than the 46 it started at, and the number is set by the closest pair
+    // rather than by taste. Earth and Mars are 0.068 of the track apart — the tightest
+    // gap in the set — so at 46px their two 2px marks were left with 1.1px of daylight
+    // between them and read as one thick tick. At 58 they clear each other by 2px. The
+    // label column can afford it: the longest row that carries a rail is "Mercury".
+    --nav-range-w: 58px;
+    --nav-chevron-w: 34px;
+    --nav-row-gap: 3px;
+    --nav-btn-pad-x: 11px;
+    // The object button's own border. Transparent until the row is hovered or active,
+    // but it still insets the content box — which is a whole pixel the `AU` legend in
+    // the section heading does not have, because an `h2` has no border. Named so the
+    // legend can subtract exactly what the rows lose rather than carrying a bare 1px.
+    --nav-btn-border: 1px;
+
     .nav-panel-content {
         display: flex;
         flex-direction: column;
@@ -334,16 +373,30 @@
     }
 
     .nav-planet-row {
-        gap: 3px;
+        gap: var(--nav-row-gap);
+    }
+
+    // A star, then eight planets, then a place to look from. Three kinds of thing that
+    // had been reading as ten identical rows. A hairline and a few pixels rather than
+    // two more eyebrow headings, which would have cost a row of height each — and an
+    // instrument panel is built from hairline-divided rectangles anyway.
+    .nav-planet--starts-group {
+        margin-top: 4px;
+        padding-top: 7px;
+        border-top: 1px solid var(--hairline);
     }
 
     .nav-btn.nav-object-btn {
         display: flex;
         align-items: center;
         gap: 11px;
-        min-height: 42px;
-        padding: 9px 11px;
-        border: 1px solid transparent;
+        // 38 rather than 42. Ten of these plus a header, three more sections and a
+        // 100vh panel overflowed a laptop; the short-viewport override below had
+        // already established that 38 reads fine, so it becomes the base and that
+        // override goes further down instead.
+        min-height: 38px;
+        padding: 7px var(--nav-btn-pad-x);
+        border: var(--nav-btn-border) solid transparent;
         border-radius: var(--radius-sm);
         background: transparent;
         color: var(--ink);
@@ -392,9 +445,103 @@
         height: 16px;
     }
 
+    // --- the range rail ---------------------------------------------------
+    //
+    // Before anything else: the rail is the first thing in this panel anchored to the
+    // *right* edge of its row, and that is what makes the next rule necessary.
+    //
+    // A row with nothing to expand gets no chevron, and `.nav-planet-btn` is `flex: 1`,
+    // so its button takes the whole row instead. That lined up perfectly well while
+    // every part of a row was left-aligned — but it puts the right edge of those
+    // buttons 37px further out than the rest, so Sun, Mercury, Uranus and Neptune hung
+    // their rail off the end of the column while the five with dropdowns sat correctly
+    // under the `AU` legend.
+    //
+    // Read off the layout rather than passed down as a flag with the row, because the
+    // row already knows: the chevron is either in it or it is not. A prop would be one
+    // more thing to keep in step by hand the first time a body gains or loses a
+    // dropdown — which is exactly what Uranus and Neptune are waiting to do.
+    .nav-planet-row > .nav-planet-btn:only-child .nav-range,
+    .nav-object-list > .nav-btn.nav-object-btn .nav-range {
+        margin-right: calc(var(--nav-chevron-w) + var(--nav-row-gap));
+    }
+
+    // How far out each body orbits, as a mark on a shared axis. See range-rail.tsx for
+    // why the tick moves instead of the row spacing, and why it is cyan.
+    //
+    // `margin-left: auto` rather than a fixed label width: planet names run from four
+    // characters to twelve, and pinning the column would either clip "Solar system" or
+    // leave a hole after "Mars". The rail simply takes the right-hand end of the row.
+    .nav-range {
+        position: relative;
+        flex-shrink: 0;
+        width: var(--nav-range-w);
+        height: 11px;
+        margin-left: auto;
+
+        // The axis. Drawn on the element rather than as a child so the empty column on
+        // the system view can suppress it by suppressing one pseudo-element.
+        &::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 1px;
+            background: var(--hairline);
+        }
+    }
+
+    // A 2px bar, not a dot: the rest of this chrome is drawn from sharp rectangles, and
+    // a gauge marker is what this is. `translateX(-50%)` centres it on its own value,
+    // so the ends of the track read as the stated range rather than half a mark short.
+    .nav-range__mark {
+        position: absolute;
+        top: 50%;
+        width: 2px;
+        height: 9px;
+        transform: translate(-50%, -50%);
+        background: var(--telemetry);
+    }
+
+    // The Sun. Not a data point — a log axis has no zero to put it at — but the origin
+    // every other mark on this column is measured from, so it is drawn in the colour
+    // that stands for the light it casts and carries no track behind it.
+    .nav-range--origin {
+        &::before { display: none; }
+
+        .nav-range__mark {
+            left: 0;
+            background: var(--signal);
+        }
+    }
+
+    // Held over the column by the same properties the rows lay it out with. The extra
+    // right margin is the chevron column and the button's own padding, which sit
+    // between the rail and the edge of the list.
+    .nav-section-title--ranged {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+    }
+
+    .nav-range-legend {
+        flex-shrink: 0;
+        width: var(--nav-range-w);
+        margin-right: calc(
+            var(--nav-chevron-w) + var(--nav-row-gap) + var(--nav-btn-pad-x) +
+            var(--nav-btn-border)
+        );
+        text-align: center;
+        font-family: var(--font-mono);
+        font-size: 9px;
+        letter-spacing: 0.14em;
+        color: var(--ink-faint);
+    }
+
     .nav-expand-btn {
-        width: 34px;
-        min-height: 42px;
+        width: var(--nav-chevron-w);
+        min-height: 38px;
         border: 1px solid transparent;
         border-radius: var(--radius-sm);
         background: transparent;
@@ -535,7 +682,41 @@
 
         .nav-header { padding-top: 2px; }
         .nav-title { font-size: 28px; }
-        .nav-btn.nav-object-btn { min-height: 38px; }
+        // The base is 38 now, so this has to go further than it used to for the list
+        // to still clear a short window with three sections stacked under it.
+        .nav-btn.nav-object-btn { min-height: 34px; }
+        .nav-expand-btn { min-height: 34px; }
+        .nav-planet--starts-group { margin-top: 3px; padding-top: 5px; }
+    }
+}
+
+// Not at the 768px drawer breakpoint, which is the counter-intuitive part: the panel is
+// `min(85vw, 320px)` there, so on an ordinary phone it is *wider* than the docked 288px
+// and the rail has more room, not less. It is only the genuinely narrow viewports — a
+// 320px-wide device, where 85vw is 272px — that squeeze the label, so that is where the
+// rail gives width back rather than at every phone.
+@media (max-width: 380px) {
+    .navigation-panel {
+        --nav-range-w: 44px;
+    }
+}
+
+/**
+ * Reduced motion.
+ *
+ * Every other surface in this chrome honours it — `moon-hint.scss` and
+ * `rover-hint.scss` both have a block — and the panel did not, so the accordion, the
+ * scrim and the chevron all animated regardless. The panel's own slide is not here: its
+ * `transition` is declared in `styles.scss`, which is injected *after* this file, so an
+ * equal-specificity rule here would lose the source-order tiebreak. It is turned off
+ * beside its own declaration instead.
+ */
+@media (prefers-reduced-motion: reduce) {
+    .nav-satellites,
+    .nav-panel-scrim,
+    .nav-expand-btn svg,
+    .nav-flag::after {
+        transition: none;
     }
 }
 

@@ -220,6 +220,14 @@ body {
     &--collapsed {
         transform: translateX(-100%);
     }
+
+    // Turned off here rather than in `nav-panel.scss`'s own reduced-motion block,
+    // because the `transition` above lives in this file and this file is injected
+    // last — an equal-specificity rule over there would lose the source-order
+    // tiebreak, the same trap the mobile width override documents below.
+    @media (prefers-reduced-motion: reduce) {
+        transition: none;
+    }
 }
 
 // Below this the panel stops being a docked pane and becomes a drawer over the
