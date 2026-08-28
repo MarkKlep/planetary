@@ -5,6 +5,7 @@ import {
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
 import type { Dust } from './dust';
+import type { Obstacles } from './colliders';
 import type { Tracks } from './tracks';
 
 /**
@@ -67,6 +68,26 @@ const FOOTFALL_SPACING = BOB_WAVELENGTH / 2;
  * well apart, which is why Apollo trails read as two parallel tracks rather than one.
  */
 const STANCE_HALF_WIDTH_M = 0.13;
+/**
+ * The observer in plan, for the one thing the height field cannot express.
+ *
+ * Generous, and deliberately so: a crewman in an A7L with a PLSS on his back is the best
+ * part of a metre deep, and the geometry he can walk into is drawn from tubes a few
+ * centimetres across. Being stopped a hand's width early beside a landing leg is
+ * invisible; passing through it is not.
+ */
+const BODY_RADIUS_M = 0.42;
+/**
+ * How far up you simply step, and it is the number that decides what counts as an
+ * obstacle at all.
+ *
+ * At knee height it clears everything on the ground that is *part of the ground* — a
+ * 16 cm footpad, a 9 cm geophone, a ribbon cable, a fallen flag — and clears nothing that
+ * is standing up. Being brought to a halt by a cable on a surface where the same push
+ * jumps you 79 cm would be far more wrong than walking over it, which is what actually
+ * happened out there.
+ */
+const STEP_HEIGHT_M = 0.45;
 
 export interface Walker {
     /** Eye position in the local scene frame, metres. */
@@ -94,7 +115,8 @@ export function createWalker(
     camera: PerspectiveCamera,
     domElement: HTMLElement,
     dust: Dust,
-    tracks: Tracks
+    tracks: Tracks,
+    obstacles: Obstacles
 ): Walker {
     const held = new Set<string>();
     // 'YXZ' is what keeps this roll-free: yaw about the world up, pitch about the
@@ -117,6 +139,8 @@ export function createWalker(
     /** Which foot goes down next. Flipped per footfall, so the trail is two lines. */
     let footSide = 1;
     const contact = new Vector3();
+    /** Which way the last collision pushed. See the note in `update`. */
+    const push = new Vector3();
 
     function standingHeight(): number {
         return ground(position.x, position.z) + MOON_EYE_HEIGHT_M;
@@ -239,6 +263,12 @@ export function createWalker(
         placeAt(x, z) {
             position.set(x, 0, z);
             position.y = standingHeight();
+            // Stepping off the rover aims at a spot beside it without knowing what is
+            // there; a boulder or a landing leg in that spot would otherwise put the
+            // observer inside it, which is the one place the resolver cannot push out of
+            // in a direction that means anything.
+            obstacles.resolve(position, BODY_RADIUS_M, position.y - MOON_EYE_HEIGHT_M, STEP_HEIGHT_M, push);
+            position.y = standingHeight();
             velocity.set(0, 0, 0);
             verticalSpeed = 0;
             airborne = false;
@@ -291,6 +321,31 @@ export function createWalker(
 
             position.x += velocity.x * deltaSeconds;
             position.z += velocity.z * deltaSeconds;
+
+            // Out of anything solid, and then out of the *velocity* as well.
+            //
+            // The push alone is not enough: held against the side of the lander, a walker
+            // still leaning on W accumulates speed into it every frame, gets shoved back
+            // out every frame, and judders. Removing the component of the velocity that
+            // is going into the obstacle turns that into sliding along it, which is both
+            // what happens and what the hand expects — and it is the whole reason
+            // `resolve` hands back a direction rather than a yes or no.
+            if (
+                obstacles.resolve(
+                    position,
+                    BODY_RADIUS_M,
+                    position.y - MOON_EYE_HEIGHT_M,
+                    STEP_HEIGHT_M,
+                    push
+                )
+            ) {
+                const into = velocity.x * push.x + velocity.z * push.z;
+                if (into < 0) {
+                    velocity.x -= push.x * into;
+                    velocity.z -= push.z * into;
+                }
+            }
+
             speed = Math.hypot(velocity.x, velocity.z);
             distanceWalked += speed * deltaSeconds;
 

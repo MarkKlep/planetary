@@ -17,6 +17,7 @@ import {
     Vector3,
 } from 'three';
 import { CRATER_REACH, craterDiameter, craterProfile } from '../../../craters';
+import type { Collider } from './colliders';
 import { fbm, mulberry32 } from '../../../noise';
 import { MOON_RADIUS_M } from '../../../constants/planets.const';
 import {
@@ -629,6 +630,13 @@ export interface Terrain {
     readonly ground: Object3D;
     /** Two `InstancedMesh`es, split by size — see `buildBoulders`. */
     readonly boulders: Object3D;
+    /**
+     * The blocks big enough to stop somebody, in plan. Not the whole field: the size
+     * distribution is a power law, so nearly all of it is 20 cm chips that a walker
+     * steps over without noticing and a wheel rolls straight across — see
+     * `BOULDER_SOLID_M`.
+     */
+    readonly obstacles: readonly Collider[];
     /** Ground height in metres at a point in the local frame. */
     heightAt(x: number, z: number): number;
     dispose(): void;
@@ -936,11 +944,12 @@ export function buildTerrain(site: LandingSite, sample: SiteSample, tracks: Trac
     ground.add(proxy);
     sectorGeometries.push(proxyGeometry);
 
-    const boulders = buildBoulders(sample, craters, random, heightAt);
+    const { object: boulders, obstacles } = buildBoulders(sample, craters, random, heightAt);
 
     return {
         ground,
         boulders,
+        obstacles,
         heightAt,
         dispose() {
             // The attributes are shared, so disposing the master releases the vertex
@@ -1010,13 +1019,24 @@ const BOULDER_EJECTA_FRACTION = 0.65;
 const BOULDER_KEEP_OUT_M = 4;
 /** Blocks at least this wide get the subdivided icosahedron. See `buildBoulders`. */
 const BOULDER_DETAIL_THRESHOLD_M = 0.75;
+/**
+ * And at least this wide are things you walk *round* rather than over.
+ *
+ * Half a metre is a little above the knee of a suited crewman and a little above the
+ * LRV's 36 cm of ground clearance, which is the coincidence that lets one number serve
+ * both — below it, a block is something the walker's own step height and the rover's
+ * axles deal with silently. It also keeps the collider list to the few dozen blocks that
+ * are actually in the way: the size distribution is a power law, so raising the bar from
+ * 20 cm to 50 cm removes about nine tenths of the field and none of the obstacles.
+ */
+const BOULDER_SOLID_M = 0.5;
 
 function buildBoulders(
     sample: SiteSample,
     craters: Crater[],
     random: () => number,
     heightAt: (x: number, z: number) => number
-): Object3D {
+): { object: Object3D; obstacles: Collider[] } {
     // Blocks large enough to see are thrown out of impacts, so most of them lie in
     // the ejecta blankets of the fresher craters rather than being sprinkled evenly
     // about. That clustering is the whole reason to place them deliberately.
@@ -1099,6 +1119,7 @@ function buildBoulders(
     material.color.copy(sample.albedo).multiplyScalar(1.35);
 
     const group = new Group();
+    const obstacles: Collider[] = [];
     const matrix = new Matrix4();
     const position = new Vector3();
     const quaternion = new Quaternion();
@@ -1118,11 +1139,26 @@ function buildBoulders(
             quaternion.setFromAxisAngle(placement.axis, placement.angle);
             matrix.compose(position, quaternion, placement.scale);
             mesh.setMatrixAt(i, matrix);
+
+            // Solid, if it is big enough to be worth being solid. The block is an
+            // arbitrarily-rotated ellipsoid, so the plan radius is taken from its widest
+            // horizontal semi-axis and the top from its own — a little generous either
+            // way, which is the right direction to be wrong in: being stopped a few
+            // centimetres early beside a rock reads as the rock, and walking through the
+            // middle of one reads as a bug.
+            if (placement.size * 2 >= BOULDER_SOLID_M) {
+                obstacles.push({
+                    x: placement.x,
+                    z: placement.z,
+                    radius: Math.max(placement.scale.x, placement.scale.z),
+                    top: position.y + placement.scale.y,
+                });
+            }
         });
 
         mesh.instanceMatrix.needsUpdate = true;
         group.add(mesh);
     }
 
-    return group;
+    return { object: group, obstacles };
 }

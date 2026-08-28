@@ -1,5 +1,6 @@
 import { Euler, MathUtils, PerspectiveCamera, Quaternion, Vector3 } from 'three';
 import {
+    LRV_HEIGHT_M,
     LRV_MAX_STEER_RAD,
     LRV_TOP_SPEED_MS,
     LRV_TRACK_M,
@@ -7,6 +8,7 @@ import {
 } from '../../../constants/planets.const';
 import { SURFACE_FOV } from './sky';
 import { WHEEL_BURST_SPACING_M, type Dust } from './dust';
+import type { Obstacles } from './colliders';
 import type { Tracks } from './tracks';
 import type { Rover } from './rover';
 
@@ -82,6 +84,22 @@ const SEAT_OFFSET = new Vector3(-0.36, 1.26, 0.4);
 const HALF_BASE = LRV_WHEELBASE_M / 2;
 const HALF_TRACK = LRV_TRACK_M / 2;
 
+/**
+ * The vehicle in plan, over one that is 3.05 m long and 2.06 m across the wheels.
+ *
+ * A single circle for a rectangle is the same trade `colliders.ts` makes everywhere else,
+ * and the LRV is close enough to square in plan for it to cost very little. Set nearer
+ * the half-length than the half-width so that nosing into the lander stops the front
+ * wheels at it rather than the seats.
+ */
+const ROVER_RADIUS_M = 1.3;
+/**
+ * What it drives over. The wheels are 81 cm across on 36 cm of clearance, so anything up
+ * to about a third of a metre passes under the axles — which the crews demonstrated
+ * repeatedly and at some cost to the fenders.
+ */
+const ROVER_STEP_M = 0.3;
+
 const X_AXIS = new Vector3(1, 0, 0);
 const Y_AXIS = new Vector3(0, 1, 0);
 const Z_AXIS = new Vector3(0, 0, 1);
@@ -109,7 +127,8 @@ export function createDriver(
     camera: PerspectiveCamera,
     domElement: HTMLElement,
     dust: Dust,
-    tracks: Tracks
+    tracks: Tracks,
+    obstacles: Obstacles
 ): Driver {
     const held = new Set<string>();
     // The look direction is relative to the *vehicle*, not to the world: turning your
@@ -120,6 +139,7 @@ export function createDriver(
     const seat = new Vector3();
     const spin = new Quaternion();
     const heading3 = new Vector3();
+    const push = new Vector3();
     // Where each wheel is actually touching, filled in by `settle`. Kept rather than
     // recomputed, because the dust has to come off the same four points the vehicle's
     // attitude was derived from.
@@ -138,6 +158,26 @@ export function createDriver(
     let nextSpray = WHEEL_BURST_SPACING_M;
     /** Distance driven since the last rut segment went down. */
     let rutCarry = 0;
+
+    /**
+     * Hand the parked rover to the collision set, or take it away again.
+     *
+     * It is the one obstacle on this surface that moves, and the one that has to *stop*
+     * being an obstacle: while you are driving it, it is where you are, and a vehicle
+     * that collided with itself would be pinned in place from the first frame.
+     */
+    function publishVehicle(): void {
+        obstacles.setVehicle(
+            enabled
+                ? null
+                : {
+                      x: position.x,
+                      z: position.z,
+                      radius: ROVER_RADIUS_M,
+                      top: position.y + LRV_HEIGHT_M,
+                  }
+        );
+    }
 
     /**
      * Attitude from the ground under the wheels.
@@ -324,6 +364,13 @@ export function createDriver(
 
         park(x, z, azimuth) {
             position.set(x, 0, z);
+            // Set down clear of anything solid. The parking spot is chosen off a bearing
+            // and a distance by something that has no idea what is there, and a metre-plus
+            // block eight metres from the landing point is an ordinary thing for the
+            // crater field to have produced. Its own collider is taken away first, or it
+            // would be pushed out of where it is already standing.
+            obstacles.setVehicle(null);
+            obstacles.resolve(position, ROVER_RADIUS_M, ground(x, z), ROVER_STEP_M, push);
             heading = -azimuth;
             speed = 0;
             steer = 0;
@@ -337,6 +384,7 @@ export function createDriver(
             rover.object.position.copy(position);
             rover.object.quaternion.copy(orientation);
             rover.setSteering(0);
+            publishVehicle();
         },
 
         update(deltaSeconds, fieldOfView) {
@@ -344,8 +392,10 @@ export function createDriver(
                 // Still has to sit on the ground correctly while parked and looked at.
                 rover.object.position.copy(position);
                 rover.object.quaternion.copy(orientation);
+                publishVehicle();
                 return;
             }
+            publishVehicle();
 
             if (Math.abs(camera.fov - fieldOfView) > 1e-4) {
                 camera.fov = fieldOfView;
@@ -391,6 +441,19 @@ export function createDriver(
             position.x -= travelled * Math.sin(heading);
             position.z -= travelled * Math.cos(heading);
             odometer += Math.abs(travelled);
+
+            // Off anything solid, and slowed by how squarely it was hit. Driving straight
+            // into a landing leg stops the vehicle; clipping one at an angle scrubs off
+            // part of the speed and lets it slide by, which is the same treatment the
+            // walker gets and for the same reason. `position.y` is the axle height, which
+            // is what the step test wants — the wheels are what have to clear the rock.
+            if (obstacles.resolve(position, ROVER_RADIUS_M, position.y, ROVER_STEP_M, push)) {
+                const direction = Math.sign(speed);
+                const into =
+                    -Math.sin(heading) * direction * push.x +
+                    -Math.cos(heading) * direction * push.z;
+                if (into < 0) speed *= MathUtils.clamp(1 + into, 0, 1);
+            }
 
             for (let i = 0; i < contacts.length; i++) previousContacts[i].copy(contacts[i]);
             settle();

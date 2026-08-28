@@ -24,6 +24,7 @@ import { createSky, SKY_ZOOM_FOV, SURFACE_FOV, type Sky, type SkyState } from '.
 import { createWalker, type Walker } from './walk';
 import { createDust } from './dust';
 import { createArtefacts, type Artefacts } from './artefacts';
+import { createObstacles } from './colliders';
 import { createRover } from './rover';
 import { createDriver, type Driver } from './drive';
 import { DEFAULT_SITE, type LandingSite } from './sites';
@@ -273,9 +274,15 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     // has to overwrite them in the one place both are stored.
     const tracks = createTracks();
 
-    const walker = createWalker(camera, domElement, dust, tracks);
+    // Everything on this surface that is not the height field: the blocks, whatever was
+    // left here, and the rover. One set, shared by both controllers, because a boot and a
+    // wheel have to be stopped by the same lander for the same reason they have to stand
+    // on the same ground.
+    const obstacles = createObstacles();
+
+    const walker = createWalker(camera, domElement, dust, tracks, obstacles);
     const rover = createRover();
-    const driver = createDriver(rover, camera, domElement, dust, tracks);
+    const driver = createDriver(rover, camera, domElement, dust, tracks, obstacles);
     scene.add(rover.object);
 
     let sky: Sky | null = null;
@@ -389,6 +396,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
     }
 
     function teardown(): void {
+        obstacles.clear();
         if (terrain) {
             scene.remove(terrain.ground);
             scene.remove(terrain.boulders);
@@ -429,6 +437,13 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         artefacts = createArtefacts(site, terrain.heightAt);
         if (artefacts) scene.add(artefacts.object);
 
+        // The solid things, in one flat list. Fixed for the life of the site — the
+        // terrain and the artefacts are both rebuilt from scratch on every landing, so
+        // there is nothing here that can go stale without this line being reached again.
+        obstacles.set(
+            artefacts ? [...terrain.obstacles, ...artefacts.obstacles] : terrain.obstacles
+        );
+
         sky = createSky(site);
         // The starfield comes along, at whatever scale this scene needs. `add` detaches
         // it from wherever it was, which is how it gets away with being a singleton.
@@ -438,9 +453,13 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
 
         walker.setGround(terrain.heightAt);
         driver.setGround(terrain.heightAt);
-        // Parked at the origin for now; the real spot needs the sky, because it is
-        // placed in front of wherever the first look ends up pointing.
-        driver.park(0, 0, 0);
+        // Provisional: the real spot needs the sky, because the rover is placed relative
+        // to wherever the first look ends up pointing, and which way that is depends on
+        // where Earth turns out to be. Parked at the right *distance* in an arbitrary
+        // direction rather than at the origin, because the origin is where the observer
+        // is standing — and the rover is a solid object, so setting it down on top of
+        // them shoves them a clear two metres off the landing point on the first frame.
+        driver.park(0, -ROVER_PARK_DISTANCE_M, 0);
         driving = false;
         state = null;
         needsFacing = true;

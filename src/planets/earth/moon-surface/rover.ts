@@ -9,11 +9,13 @@ import {
     Mesh,
     MeshStandardMaterial,
     Object3D,
+    Quaternion,
     SphereGeometry,
     TorusGeometry,
     Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { foilNormalMap } from './foil';
 import {
     LRV_BUMP_STOP_RADIUS_M,
     LRV_GROUND_CLEARANCE_M,
@@ -101,9 +103,18 @@ const deckMaterial = new MeshStandardMaterial({
  */
 const foilMaterial = new MeshStandardMaterial({
     color: 0xd7a244,
-    metalness: 0.88,
-    roughness: 0.22,
+    // Not the 0.9-odd that aluminised film really has: there is no environment map in
+    // this scene, so a near-metal takes its diffuse to zero and renders black. See the
+    // note on `kaptonMaterial` in `artefacts.ts`, which is the same trade for the same
+    // blanket on the vehicle this one was folded up against.
+    metalness: 0.6,
+    roughness: 0.3,
+    // Taped over the battery covers by hand, so it is creased — and a smooth metal panel
+    // under one hard light with a black sky carries almost no shading information at all.
+    // The same map the lunar module's blankets use, for the same reason. See `foil.ts`.
+    normalMap: foilNormalMap(),
 });
+foilMaterial.normalScale.set(0.85, 0.85);
 /** Nylon webbing over aluminium tube. Muted tan, not orange. */
 const webbingMaterial = new MeshStandardMaterial({
     color: 0x93714b,
@@ -336,8 +347,52 @@ function buildChassis(): { group: Object3D; aim: Object3D } {
     // The dish is the one piece that cannot be merged: a spherical cap only reads as a
     // *dish* when you can see its concave face, which needs both sides drawn — and it
     // hangs off a pivot because the crews re-aimed it at Earth by hand at every stop.
+    const aim = new Group();
+    aim.position.set(0, FLOOR_Y + 2.18, -1.3);
+    buildHighGainAntenna(aim);
+    group.add(aim);
+
+    return { group, aim };
+}
+
+/** A tube between two points, for the few places on this vehicle that are not axis-aligned. */
+function brace(from: Vector3, to: Vector3, radius: number): BufferGeometry {
+    const along = to.clone().sub(from);
+    const length = along.length();
+    const geometry = new CylinderGeometry(radius, radius, length, 5);
+    geometry.applyQuaternion(
+        new Quaternion().setFromUnitVectors(new Vector3(0, 1, 0), along.divideScalar(length))
+    );
+    geometry.translate((from.x + to.x) / 2, (from.y + to.y) / 2, (from.z + to.z) / 2);
+    return geometry;
+}
+
+/**
+ * The 0.91 m high-gain antenna, and it is a *mesh* parabola rather than a solid one.
+ *
+ * That is the whole character of the thing and the reason it is worth more than a
+ * spherical cap: it was a gold-plated wire grid stretched over sixteen radial ribs, so
+ * from the front it is a dish and from behind it is a skeleton, and the sky shows through
+ * it either way. Drawn as a solid it is a satellite antenna off any roof; drawn with the
+ * ribs it is unmistakably the thing on the front of the rover.
+ *
+ * The other half of that is the feed at the focus, on its own tripod out in front. It is
+ * why the crews could not simply point the vehicle and drive: the beam was about 3° wide
+ * and Earth is half a degree of sky 384,000 km away, so it had to be re-aimed by hand,
+ * through an optical sight, at every single stop — and the television everyone watched
+ * came down this.
+ */
+function buildHighGainAntenna(aim: Object3D): void {
+    // A cap of a sphere, which within a tenth of a millimetre over this aperture is the
+    // parabola it is meant to be. The pole is the vertex, so the dish's own concave face
+    // looks down -Y — which is what `DISH_FACE` says and what `aimDish` turns onto Earth.
+    const ARC = Math.PI * 0.36;
+    const CURVATURE = 0.45;
+    const RIM_R = Math.sin(ARC) * CURVATURE;
+    const RIM_Y = Math.cos(ARC) * CURVATURE;
+
     const dish = new Mesh(
-        new SphereGeometry(0.45, 26, 10, 0, Math.PI * 2, 0, Math.PI * 0.36),
+        new SphereGeometry(CURVATURE, 26, 10, 0, Math.PI * 2, 0, ARC),
         new MeshStandardMaterial({
             color: 0xd4d6da,
             metalness: 0.45,
@@ -346,13 +401,49 @@ function buildChassis(): { group: Object3D; aim: Object3D } {
         })
     );
     dish.castShadow = true;
-
-    const aim = new Group();
-    aim.position.set(0, FLOOR_Y + 2.18, -1.3);
     aim.add(dish);
-    group.add(aim);
 
-    return { group, aim };
+    // The ribs, the rim hoop that ties them together, and the feed. All one buffer.
+    const structure: BufferGeometry[] = [];
+    const hoop = new TorusGeometry(RIM_R, 0.008, 4, 30);
+    hoop.rotateX(Math.PI / 2);
+    hoop.translate(0, RIM_Y, 0);
+    structure.push(hoop);
+
+    const vertex = new Vector3(0, CURVATURE, 0);
+    const RIBS = 16;
+    for (let i = 0; i < RIBS; i++) {
+        const angle = (i / RIBS) * Math.PI * 2;
+        structure.push(
+            brace(
+                vertex,
+                new Vector3(Math.cos(angle) * RIM_R, RIM_Y, Math.sin(angle) * RIM_R),
+                0.006
+            )
+        );
+    }
+
+    // The feed horn, at the focus. For a mirror of this curvature that is half the radius
+    // in front of the vertex, which lands it very nearly in the plane of the rim — so its
+    // tripod runs back to the rim rather than out past it.
+    const focus = new Vector3(0, CURVATURE / 2, 0);
+    const horn = new CylinderGeometry(0.028, 0.05, 0.11, 10);
+    horn.translate(focus.x, focus.y - 0.02, focus.z);
+    structure.push(horn);
+    for (let i = 0; i < 3; i++) {
+        const angle = (i / 3) * Math.PI * 2 + 0.5;
+        structure.push(
+            brace(
+                focus,
+                new Vector3(Math.cos(angle) * RIM_R * 0.96, RIM_Y, Math.sin(angle) * RIM_R * 0.96),
+                0.005
+            )
+        );
+    }
+
+    const mesh = new Mesh(mergeGeometries(structure, false)!, frameMaterial);
+    mesh.castShadow = true;
+    aim.add(mesh);
 }
 
 // --- the wheel -------------------------------------------------------------
