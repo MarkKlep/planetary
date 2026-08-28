@@ -72,10 +72,22 @@ interface Satellite {
   nested?: Array<Toggle & { label: string }>;
 }
 
-interface Planet {
+/**
+ * A top-level row in the object list: the eight planets, and Pluto.
+ *
+ * Named for what the list holds rather than `Planet`, because since 2006 one of these is
+ * not one — and a constant called `PLANETS` with Pluto in it would be the sort of quiet
+ * inaccuracy the rest of this project goes out of its way to avoid.
+ */
+interface Body {
   id: string;
   label: string;
   satellites: Satellite[];
+  /**
+   * Draws a hairline above this row. Set on the first planet, so the eight are divided
+   * from the Sun, and on Pluto, which is a dwarf planet and belongs to neither group.
+   */
+  startsGroup?: boolean;
   /**
    * A row in the dropdown that toggles something rather than flying to it. Venus has
    * no moons, so its dropdown would otherwise be empty — what belongs in there is the
@@ -86,7 +98,7 @@ interface Planet {
   toggle?: { label: string; toggleId: string };
 }
 
-const PLANETS: Planet[] = [
+const BODIES: Body[] = [
   // The one entry with nothing to expand: Mercury has no moons, no cloud deck and no
   // atmosphere, so it gets a plain full-width button and no chevron.
   {
@@ -179,12 +191,29 @@ const PLANETS: Planet[] = [
     label: 'Uranus',
     satellites: [],
   },
-  // The last row, and the last planet — plain button, no chevron, for Uranus's reason
-  // exactly: Triton and the ring arcs are worth having and are not modelled yet, and an
-  // empty dropdown would say there is nothing there rather than nothing yet.
+  // The last planet — plain button, no chevron, for Uranus's reason exactly: Triton and
+  // the ring arcs are worth having and are not modelled yet, and an empty dropdown would
+  // say there is nothing there rather than nothing yet.
   {
     id: 'neptune',
     label: 'Neptune',
+    satellites: [],
+  },
+  /**
+   * And Pluto, which is not a planet and gets a rule above it saying so.
+   *
+   * It has been a dwarf planet since August 2006 on one criterion of three: it orbits the
+   * Sun and it is round, and it has not cleared its neighbourhood — it shares that
+   * neighbourhood with the whole Kuiper belt, and with a moon half its own diameter.
+   *
+   * No chevron, for Uranus's and Neptune's reason exactly: Charon is real and worth
+   * having and is not modelled yet, and an empty dropdown would say there is nothing
+   * there rather than nothing yet.
+   */
+  {
+    id: 'pluto',
+    label: 'Pluto',
+    startsGroup: true,
     satellites: [],
   },
 ];
@@ -280,7 +309,7 @@ export function NavPanel() {
               <span>Sun</span>
               <RangeTick id="sun" />
             </button>
-            {PLANETS.map((planet, index) => {
+            {BODIES.map((planet, index) => {
               const isExpanded = expanded.has(planet.id);
               // Nothing to reveal means no chevron — an expander that opens an empty
               // drawer is worse than no expander. `.nav-planet-btn` is `flex: 1`, so
@@ -294,7 +323,7 @@ export function NavPanel() {
                 // eyebrow headings: they cost a few pixels instead of a row each, and
                 // hairline-divided rectangles are already this chrome's vocabulary.
                 <div
-                  className={`nav-planet ${index === 0 ? 'nav-planet--starts-group' : ''}`}
+                  className={`nav-planet ${index === 0 || planet.startsGroup ? 'nav-planet--starts-group' : ''}`}
                   key={planet.id}
                 >
                   <div className="nav-planet-row">

@@ -8,6 +8,7 @@ import {
 import {
     earthOrbitPosition,
     neptuneOrbitPosition,
+    plutoOrbitPosition,
     jupiterOrbitPosition,
     marsOrbitPosition,
     mercuryOrbitPosition,
@@ -21,6 +22,7 @@ import {
     MARS_ORBITAL_PERIOD_DAYS,
     MERCURY_ORBITAL_PERIOD_DAYS,
     NEPTUNE_ORBITAL_PERIOD_DAYS,
+    PLUTO_ORBITAL_PERIOD_DAYS,
     SATURN_ORBITAL_PERIOD_DAYS,
     URANUS_ORBITAL_PERIOD_DAYS,
     VENUS_ORBITAL_PERIOD_DAYS,
@@ -186,6 +188,27 @@ export const neptuneOrbitPath = traceOrbit(
     0x8ab6e8
 );
 
+/**
+ * The ninth line, and the only one that crosses another.
+ *
+ * Pluto's eccentricity is 0.2488 against Neptune's 0.0086, so this is the one path here
+ * that is visibly an ellipse rather than a circle — 29.66 AU at perihelion, 49.31 at
+ * aphelion — and the inner end of it passes *inside* Neptune's. Drawn from the same 512
+ * samples of the same position function as the other eight, so the crossing is the model
+ * saying so rather than a curve drawn to cross.
+ *
+ * They cannot collide: the 3:2 resonance holds Pluto near aphelion whenever Neptune is
+ * anywhere near, and the two have never come within 17 AU. Turn the orbits on and pull
+ * back — the 17.14° inclination is the other half of the answer and it is the half you
+ * can see, since this is the only orbit here that leaves the plane of the others.
+ */
+export const plutoOrbitPath = traceOrbit(
+    plutoOrbitPosition,
+    PLUTO_ORBITAL_PERIOD_DAYS,
+    EPOCH,
+    0xc8a58a
+);
+
 export const orbitPaths = [
     mercuryOrbitPath,
     venusOrbitPath,
@@ -195,4 +218,5 @@ export const orbitPaths = [
     saturnOrbitPath,
     uranusOrbitPath,
     neptuneOrbitPath,
+    plutoOrbitPath,
 ];

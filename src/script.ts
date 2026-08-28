@@ -31,6 +31,7 @@ import { titan } from './planets/saturn/titan';
 import { titanHaze } from './planets/saturn/haze';
 import { uranus } from './planets/uranus/uranus';
 import { neptune } from './planets/neptune/neptune';
+import { pluto } from './planets/pluto/pluto';
 import {
     BOARDING_RANGE_M,
     createMoonSurface,
@@ -78,6 +79,9 @@ import {
     URANUS_AXIS_ORIENTATION,
     neptuneOrbitPosition,
     neptuneSpinAngle,
+    plutoOrbitPosition,
+    plutoSpinAngle,
+    PLUTO_AXIS_ORIENTATION,
     NEPTUNE_AXIS_ORIENTATION,
     mercuryOrbitPosition,
     mercurySpinAngle,
@@ -132,6 +136,7 @@ import {
     TITAN_RADIUS,
     NEPTUNE_EQUATORIAL_RADIUS,
     NEPTUNE_RADIUS,
+    PLUTO_RADIUS,
     URANUS_EQUATORIAL_RADIUS,
     URANUS_RADIUS,
     VENUS_RADIUS,
@@ -217,13 +222,21 @@ export function initScene(onFirstFrame?: () => void) {
 
     // The far plane has to clear the camera's own pull-back plus the width of the
     // system, and every outermost body has moved it: 400,000 was Jupiter's, 800,000
-    // Saturn's, 1,600,000 Uranus's, and this is Neptune's. The sum it has to cover is
+    // Saturn's, 1,600,000 Uranus's, 2,400,000 Neptune's, and this is Pluto's. The sum
+    // it has to cover is now the furthest the user can pull back (`controls.maxDistance`,
+    // 66 AU = 1,550,000 units) plus the far side of the outermost orbit beyond the Sun
+    // (Pluto's 49.31 AU aphelion = 1,158,000), which is 2,708,000 — so 3,600,000 with
+    // room to spare. It still costs nothing: depth resolution goes as z²/(near·2²⁴) and
+    // is set by the *near* plane, not this one. The old sum is left below for the
+    // arithmetic it shows.
+    //
+    // Neptune's: the sum it had to cover was
     // the furthest the user can pull back (`controls.maxDistance`, 60 AU = 1,409,000
     // units) plus the far side of the outermost orbit beyond the Sun (30.33 AU =
     // 712,000) — 2,121,000. Depth precision is set by the *near* plane, not this —
     // resolution goes as z^2/(near * 2^24) — so this has never cost anything and still
     // does not. With Neptune the set of planets is complete, so it stops here.
-    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 2400000);
+    const camera = new PerspectiveCamera(75, initialWidth / initialHeight, 0.1, 3600000);
 
     // Scene graph. The Sun is at the world origin; each planet hangs off a single
     // moving node so its orbit only has to be applied in one place.
@@ -274,9 +287,12 @@ export function initScene(onFirstFrame?: () => void) {
     //   ├── uranusSystem           <- 19.2 AU, twice Saturn's again
     //   │   └── uranusAxis         <- the same node once more, and it comes out 97.77°
     //   │       └── uranus            over — a planet lying on its side, unmentioned
-    //   └── neptuneSystem          <- 30.1 AU, and the last of them
-    //       └── neptuneAxis        <- 28.32°, the largest ordinary tilt here, from the
-    //           └── neptune           one published pole that moves — held at J2000
+    //   ├── neptuneSystem          <- 30.1 AU, and the last of the planets
+    //   │   └── neptuneAxis        <- 28.32°, the largest ordinary tilt here, from the
+    //   │       └── neptune           one published pole that moves — held at J2000
+    //   └── plutoSystem            <- 39.5 AU mean, 29.7 to 49.3 — and NOT a planet
+    //       └── plutoAxis          <- ~119.5° over, so it rolls along like Uranus
+    //           └── pluto
     const earthSystem = new Object3D();
     const earthTilt = new Object3D();
     // The tilt is applied here, above the spin, and is never touched again. That is
@@ -439,6 +455,23 @@ export function initScene(onFirstFrame?: () => void) {
     neptuneAxis.add(neptune);
     neptuneSystem.add(neptuneAxis);
 
+    // And the ninth body, which is not a ninth planet — the IAU settled that in 2006,
+    // and Pluto is here as the thing that broke the definition rather than as a
+    // survivor of it. It fails exactly one of the three tests: it has not cleared its
+    // orbital neighbourhood, sharing it with the Kuiper belt and with a moon half its
+    // own diameter.
+    //
+    // Same three nodes as everything else, then. Charon is not modelled, and the one
+    // consequence of that worth knowing is in `planets.const.ts`: these elements are
+    // barycentric, so Pluto is drawn up to 2,126 km from where it really is. There is
+    // nothing left in the scene to measure that against.
+    const plutoSystem = new Object3D();
+    const plutoAxis = new Object3D();
+    plutoAxis.quaternion.copy(PLUTO_AXIS_ORIENTATION);
+
+    plutoAxis.add(pluto);
+    plutoSystem.add(plutoAxis);
+
     scene.add(mercurySystem);
     scene.add(venusSystem);
     scene.add(earthSystem);
@@ -447,6 +480,7 @@ export function initScene(onFirstFrame?: () => void) {
     scene.add(saturnSystem);
     scene.add(uranusSystem);
     scene.add(neptuneSystem);
+    scene.add(plutoSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
@@ -552,6 +586,7 @@ export function initScene(onFirstFrame?: () => void) {
         // disc rather than up and down it, the axis being nearly in the orbit plane.
         { ...createLabel('Uranus', uranusSystem, URANUS_EQUATORIAL_RADIUS * 1.25), body: uranusSystem, radius: URANUS_RADIUS, hideBeyond: Infinity },
         { ...createLabel('Neptune', neptuneSystem, NEPTUNE_EQUATORIAL_RADIUS * 1.25), body: neptuneSystem, radius: NEPTUNE_RADIUS, hideBeyond: Infinity },
+        { ...createLabel('Pluto', plutoSystem, PLUTO_RADIUS * 1.6), body: plutoSystem, radius: PLUTO_RADIUS, hideBeyond: Infinity },
         // A local Earth-surface feature, not a findable body — meaningful only once
         // you're already close, so this gets a short `hideBeyond` like the ISS's
         // framing rather than the "visible across the whole system" bodies above.
@@ -665,6 +700,13 @@ export function initScene(onFirstFrame?: () => void) {
         // Uranus's own misbehaviour and Galle found it within an hour of looking, in
         // 1846 — the one body in this scene that was calculated before it was observed.
         createBodyMarker(0x8ab6e8, NEPTUNE_RADIUS, 4),
+        // Dimmer still, and now the reason changes. Neptune is faint because it is far;
+        // Pluto is faint because it is *small* — 0.19 units against Neptune's 3.87, so
+        // its disc is a twentieth the width. At magnitude 13.7 it is a hundred times
+        // below Neptune, four hundred thousand times below what an eye can reach, and
+        // Clyde Tombaugh found it in 1930 by blinking photographic plates two weeks
+        // apart looking for the one dot that had moved.
+        createBodyMarker(0xd8c3a8, PLUTO_RADIUS, 4),
     ];
     earthSystem.add(markers[0].sprite);
     moon.add(markers[1].sprite);
@@ -689,6 +731,7 @@ export function initScene(onFirstFrame?: () => void) {
     iapetus.add(markers[20].sprite);
     uranusSystem.add(markers[21].sprite);
     neptuneSystem.add(markers[22].sprite);
+    plutoSystem.add(markers[23].sprite);
 
     // Start a little closer than the full-system wide shot so the planets stay readable
     // without being hidden by a wall of labels. The zoom controls let the user move out
@@ -734,7 +777,13 @@ export function initScene(onFirstFrame?: () => void) {
     // Framing Neptune's orbit needs roughly 30.33 AU/tan(fov/2) ~ 39.5 AU, so this
     // leaves comfortable headroom past that. It was 40 AU when Uranus was the outermost
     // body, which would have stopped the user just short of ever seeing the whole thing.
-    controls.maxDistance = EARTH_ORBIT_RADIUS * 60;
+    // 60 AU -> 66. Framing Pluto's orbit whole needs its 49.31 AU aphelion over the
+    // 0.767 AU per AU a 75° vertical field sees, which is 64.3 — so 66 leaves a little
+    // air around the one orbit here that is visibly an ellipse. Note this is the only
+    // one of the four outer-body constants that Pluto moves by a small factor: the
+    // others are set by aphelion squared or by aphelion plus pull-back, and this one is
+    // set by aphelion alone.
+    controls.maxDistance = EARTH_ORBIT_RADIUS * 66;
     controls.enablePan = true;
 
     const setZoomFromButtons = (direction: 'in' | 'out') => {
@@ -801,6 +850,13 @@ export function initScene(onFirstFrame?: () => void) {
     // that is the radius the limb is drawn at, and framing on the mean would crop it.
     const URANUS_VIEW_DISTANCE = URANUS_EQUATORIAL_RADIUS * 3.2;
     const NEPTUNE_VIEW_DISTANCE = NEPTUNE_EQUATORIAL_RADIUS * 3.2;
+    /**
+     * Closer in than the giants' 3.2 radii, because there is far more to look *at* here
+     * than on any of them: Sputnik Planitia is a fifth of the disc and the crater field
+     * around it is the point. A gas giant framed at 3.2 radii shows its banding, which
+     * is all it has; Pluto at 2.6 shows a surface.
+     */
+    const PLUTO_VIEW_DISTANCE = PLUTO_RADIUS * 2.6;
     // The loop itself already reaches ANALEMMA_RADIUS (1.4) out from Earth's centre,
     // so framing it "3 radii out" the way Earth is would put the camera practically
     // inside the curve. Measuring from its own radius instead keeps the whole
@@ -855,6 +911,7 @@ export function initScene(onFirstFrame?: () => void) {
         { name: 'Iapetus', object: iapetus, radius: IAPETUS_RADIUS },
         { name: 'Uranus', object: uranusSystem, radius: URANUS_RADIUS },
         { name: 'Neptune', object: neptuneSystem, radius: NEPTUNE_RADIUS },
+        { name: 'Pluto', object: plutoSystem, radius: PLUTO_RADIUS },
     ];
     let nearestBody = flightBodies[1];
     let nearestClearance = 1;
@@ -921,7 +978,19 @@ export function initScene(onFirstFrame?: () => void) {
      * the camera do. Nothing further out is coming: Neptune is the last planet, so this
      * is the value the constant settles at.
      */
-    const MAX_EXPOSURE = 920;
+    /**
+     * 920 -> 2431, and the number is `d²` at the furthest body rather than a limit
+     * anyone chose. It is exactly what cancels the point light's own 1/d² falloff, so
+     * leaving it at Neptune's 30.33² would render Pluto at aphelion **2.6 times darker
+     * than the model says it is** — which is precisely the artefact the whole exposure
+     * mechanism exists to remove.
+     *
+     * 49.31² = 2431. Sunlight there is about 55 lux, against Neptune's 140 and Earth's
+     * 127,000. Fifty-five lux is a well-lit corridor, or twenty minutes after sunset:
+     * dim, and nothing whatever like dark. That is the thing this constant exists to
+     * let you see.
+     */
+    const MAX_EXPOSURE = 2431;
     /** Seconds to cover most of an exposure change. Slow enough to read as an eye
      *  adjusting rather than a light switch, quick enough to settle inside a fly-to. */
     const EXPOSURE_ADAPT_SECONDS = 0.7;
@@ -1518,6 +1587,7 @@ export function initScene(onFirstFrame?: () => void) {
         { hit: iapetus, focus: iapetus, distance: IAPETUS_VIEW_DISTANCE },
         { hit: uranus, focus: uranus, distance: URANUS_VIEW_DISTANCE },
         { hit: neptune, focus: neptune, distance: NEPTUNE_VIEW_DISTANCE },
+        { hit: pluto, focus: pluto, distance: PLUTO_VIEW_DISTANCE },
     ];
 
     // Hoisted: `pickTarget` runs on every hover event, and rebuilding this array per
@@ -1700,6 +1770,9 @@ export function initScene(onFirstFrame?: () => void) {
                         break;
                     case 'neptune':
                         focusOnObject(neptune, NEPTUNE_VIEW_DISTANCE, 4000);
+                        break;
+                    case 'pluto':
+                        focusOnObject(pluto, PLUTO_VIEW_DISTANCE, 4500);
                         break;
                     case 'sun':
                         focusOnObject(sun, SUN_RADIUS * 4, 2500);
@@ -2136,6 +2209,11 @@ export function initScene(onFirstFrame?: () => void) {
         // marks it out as retrograde, and the same one thing that marks Venus out. The
         // rate constant carries the sign and nothing here looks at it.
         uranus.rotation.y = uranusSpinAngle(now);
+
+        plutoOrbitPosition(now, plutoSystem.position);
+        // 56.36°/day — a 6.4-day day, the slowest rotation of any body in this scene by
+        // a factor of four, and it is slow because Charon stopped it. See the constant.
+        pluto.rotation.y = plutoSpinAngle(now);
 
         neptuneOrbitPosition(now, neptuneSystem.position);
         // 541.14°/day, i.e. 15h 58m — the third fastest spin here, on the planet with by

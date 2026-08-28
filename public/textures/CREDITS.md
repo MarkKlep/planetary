@@ -32,10 +32,47 @@ licence requirement.
 | `dione_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Dione_Cassini_Voyager_mosaic_global_154m.tif`, 23040×11520, downscaled to 4096×2048 |
 | `rhea_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Rhea_Cassini_Voyager_mosaic_global_417m.tif`, 11520×5760, downscaled to 4096×2048 |
 | `titan_color.jpg` | USGS Astrogeology — Cassini ISS global mosaic, 938 nm | `Titan_ISS_P19658_Mosaic_Global_4km.tif`, 4040×2020, rolled 180°, resampled to 2048×1024 |
+| `pluto_color.jpg` | NASA/JHUAPL/SwRI — New Horizons LORRI + MVIC global mosaic | 5926×2963, rolled 180°, saturation trimmed, unmapped south filled, downscaled to 4096×2048 |
 | `iapetus_color.jpg` | USGS Astrogeology — Cassini / Voyager global mosaic | `Iapetus_Cassini_Voyager_mosaic_global_783m.tif`, 5760×2880, downscaled to 4096×2048 |
 
 Relief and mask maps were downscaled because they carry only low-frequency detail;
 the colour maps are kept at full resolution since the camera can zoom close.
+
+## Pluto, which is a third not a photograph
+
+`pluto_color.jpg` gets more done to it than anything else here, and all of it is
+reproducible: `scripts/prepare-pluto-texture.mjs` is committed and takes the published
+mosaic as its input.
+
+**34% of it is generated.** New Horizons arrived in the middle of a 124-year southern
+winter, so everything below about −50° was in polar night and is pure black in the
+published product. The script continues the terrain immediately above the terminator
+downward with noise, converging on a common tone by the pole so the columns do not fan
+into a pinwheel. It invents no features — no south polar cap, no basins — because nothing
+is known to be there. The boundary it fills from is itself real: it is the daylight
+terminator of July 2015.
+
+Detecting that boundary needs care, and the obvious tests both fail. A luminance threshold
+finds **Cthulhu Macula** long before it finds the terminator — at a geometric albedo near
+0.10 it is the darkest large surface in the outer solar system — so no-data is identified
+by *chroma* instead, being near-neutral black where Cthulhu is emphatically red. And
+scanning a column from the bottom anchors on slivers of ground catching the sun past the
+limb, leaving the black wedge above them unfilled; the script uses the highest row below
+which a column is ≥90% no-data.
+
+**Saturation is trimmed to 85%**, the same treatment `mercury_color.jpg` gets and for the
+same reason: the circulating mosaic is a stretched multiband composite made to bring out
+compositional units, and the structure in it is real while the stretch is a visualisation
+choice. Luminance is untouched — that is albedo, and it carries Sputnik's edge, Cthulhu's
+darkness and every crater on the map.
+
+**The 180° roll** is verified rather than assumed. Read as a PDS grid the mosaic puts
+Sputnik Planitia at 189°E and Cthulhu at 85°E against their real 178° and ~80°; read as a
+three.js texture it puts them at 9°E and 265°E, which is nowhere.
+
+There is no height map, and there is not going to be one: New Horizons could not orbit, so
+Pluto elevations exist only as stereo patches over part of one hemisphere. `pluto.ts`
+derives its relief from this map's own pixels instead — see the note there.
 
 `mars_height.png` is MOLA's 16-pixel-per-degree grid of 16-bit elevations in metres,
 rescaled linearly onto 0–255 across its true range (−8177 m in Hellas to +21171 m at

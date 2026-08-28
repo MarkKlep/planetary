@@ -267,12 +267,13 @@
     // column, and the section title is a full-width heading that shares no layout with
     // the rows — so the only thing keeping the two aligned is that both are laid out
     // from these. Change one here and the legend follows the column.
-    // 58 rather than the 46 it started at, and the number is set by the closest pair
-    // rather than by taste. Earth and Mars are 0.068 of the track apart — the tightest
-    // gap in the set — so at 46px their two 2px marks were left with 1.1px of daylight
-    // between them and read as one thick tick. At 58 they clear each other by 2px. The
-    // label column can afford it: the longest row that carries a rail is "Mercury".
-    --nav-range-w: 58px;
+    // Set by the closest pair rather than by taste, and the closest pair changed when
+    // Pluto arrived: it used to be Venus and Earth, and it is now Neptune and Pluto,
+    // 0.053 of the track apart against their 0.063. At 58px that left 1.1px between two
+    // 2px marks, which is not enough to read as a step down the column. 66 gives the
+    // tightest pair 1.5px and Venus-Earth 2.2px. The label column can afford it: the
+    // longest row that carries a rail is "Mercury".
+    --nav-range-w: 66px;
     --nav-chevron-w: 34px;
     --nav-row-gap: 3px;
     --nav-btn-pad-x: 11px;
@@ -697,7 +698,7 @@
 // rail gives width back rather than at every phone.
 @media (max-width: 380px) {
     .navigation-panel {
-        --nav-range-w: 44px;
+        --nav-range-w: 50px;
     }
 }
 

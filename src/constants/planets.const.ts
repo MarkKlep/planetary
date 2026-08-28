@@ -769,6 +769,84 @@ export const NEPTUNE_ORBITAL_PERIOD_DAYS = 60189;
  */
 export const NEPTUNE_GEOMETRIC_ALBEDO = 0.41;
 
+// --- Pluto -----------------------------------------------------------------
+//
+// Not a planet since 24 August 2006, and the reason is worth stating precisely because
+// it is usually got wrong: Pluto meets two of the IAU's three tests — it orbits the Sun,
+// and it is massive enough that gravity has pulled it round — and fails the third, which
+// is that it has not cleared its own orbital neighbourhood. It shares that neighbourhood
+// with the whole Kuiper belt, and with a moon half its own diameter.
+//
+// **Charon is not modelled**, and one consequence is worth writing down rather than
+// leaving to be discovered. Standish's elements — like Horizons' body 9 against its body
+// 999 — describe the Pluto *system barycentre*, not Pluto, because a pair of comparable
+// mass has no single position. That barycentre lies 2,126 km from Pluto's centre, which
+// is outside the body: 1.79 Pluto radii, and the only such pair in the solar system. With
+// Charon absent, Pluto is drawn at the barycentre, so its position carries an error of up
+// to that 2,126 km — 0.34 scene units against a radius of 0.187.
+//
+// That is unobservable here and not a fudge: there is nothing left in the scene to
+// measure it against, and Pluto sits exactly on the orbit line drawn from the same
+// function. It would stop being unobservable the moment Charon came back.
+
+/**
+ * 1188.3 ± 1.6 km, measured by New Horizons on 14 July 2015 and not properly known
+ * before that — the pre-flyby figures ranged over 100 km because Pluto's atmosphere
+ * refracts starlight during an occultation and nobody could say where the solid edge was.
+ *
+ * There is **no flattening constant below**, and that is a fact rather than an omission:
+ * Pluto turns once every 6.4 days, far too slowly for rotation to raise a bulge, and New
+ * Horizons found it spherical to within its own measurement error. The four giants are
+ * all drawn squashed; this one is drawn round.
+ */
+export const PLUTO_RADIUS_KM = 1188.3;
+/** ~0.187 units — two thirds of the Moon, and smaller than seven of the moons here. */
+export const PLUTO_RADIUS = PLUTO_RADIUS_KM / EARTH_RADIUS_KM;
+/**
+ * IAU rotational elements (WGCCRE 2015). The declination is a long way south, which is
+ * what puts Pluto over on its side.
+ *
+ * The obliquity is stated nowhere, exactly as Uranus's is not: it is the angle between
+ * this pole and the orbit normal `PLUTO_ELEMENTS` implies, and measured out of the model
+ * it comes to **119.50°** against the published 119.591° — a gap of 0.087°, which is the
+ * constant precession offset the whole scene carries and not a discrepancy. Past 90°, so
+ * Pluto rotates backwards relative to its own orbit while this rate stays positive. That
+ * is the same one sign that makes Venus and Uranus retrograde and nothing branches on it.
+ *
+ * (Some fact sheets print 122.53° for this. 119.591° is the figure that follows from the
+ * IAU pole above, which is the pole this scene is built on.)
+ */
+export const PLUTO_POLE_RA_DEG = 132.993;
+export const PLUTO_POLE_DEC_DEG = -6.163;
+export const PLUTO_PRIME_MERIDIAN_DEG = 302.695;
+/**
+ * 6.387230 days — and this is a rotation rate that was set by something else.
+ *
+ * Pluto and Charon are **mutually** tidally locked: each keeps one face permanently
+ * toward the other, so Charon hangs motionless in Pluto's sky and half of Pluto never
+ * sees it at all. Every other locked pair in this project has the small body stopped by
+ * the large one while the large one spins freely; this is the only pair in the solar
+ * system where a body of planetary size has been stopped by its own moon.
+ *
+ * Charon is not drawn here, but this number is still its fingerprint. Charon's measured
+ * orbital period is 6.3872304 days and the rate above gives 6.3872230 — two quantities
+ * from unrelated measurements, differing by 0.64 seconds, one part in 863,000.
+ */
+export const PLUTO_ROTATION_DEG_PER_DAY = 56.3625225;
+/** 6 d 9 h 17 m. */
+export const PLUTO_SIDEREAL_DAY = (360 / PLUTO_ROTATION_DEG_PER_DAY) * 86400;
+/** 247.9 years. Discovered 1930; it has not yet been round once since. */
+export const PLUTO_ORBITAL_PERIOD_DAYS = 90553;
+/**
+ * Geometric albedo 0.52, and it is an average over a surface that runs 0.10 to 0.86 —
+ * the widest range of any body in the solar system. Sputnik Planitia is fresh nitrogen
+ * ice and nearly as bright as snow; Cthulhu Macula, on the equator beside it, is tholin
+ * sludge as dark as a fresh asphalt road. Supplied rather than carried by a map for the
+ * reason Uranus's and Neptune's are — see `pluto/pluto.ts`.
+ */
+export const PLUTO_GEOMETRIC_ALBEDO = 0.52;
+
+
 // Atmosphere / cloud constants (multiples of Earth's radius)
 export const CLOUD_RADIUS = 1.006;
 export const ATMOSPHERE_RADIUS = 1.035;

@@ -20,9 +20,16 @@ import { SEMI_MAJOR_AXIS_AU } from '../orbits';
  * ticks is the real thing.
  *
  * What falls out of that is the whole reason it earns its width. Normalised over the
- * track, the seven gaps run 0.131, 0.068, 0.088, **0.258**, 0.127, 0.147, 0.094 — the
- * jump from Mars to Jupiter is 1.76 times the next largest, so the asteroid belt becomes
- * the most conspicuous feature of the list without anything being drawn for it.
+ * track, the eight gaps run 0.122, 0.063, 0.082, **0.240**, 0.118, 0.137, 0.088, 0.053 —
+ * the jump from Mars to Jupiter is 1.75 times the next largest, so the asteroid belt
+ * becomes the most conspicuous feature of the list without anything being drawn for it.
+ *
+ * The smallest gap is the last one, Neptune to Pluto, and it is worth as much as the
+ * largest. Pluto is popularly the far edge of the solar system and it is 1.31 times
+ * Neptune's distance — a shorter step than any between two planets. What actually makes
+ * Pluto remote is not this axis but the two things it cannot show: the orbit is tilted
+ * 17° out of the plane everything else moves in, and it is eccentric enough that the
+ * tick is a fair account of one body's position in a way it is of no other.
  *
  * ## Cyan, and why that is not a free choice
  *
@@ -43,11 +50,17 @@ import { SEMI_MAJOR_AXIS_AU } from '../orbits';
 /**
  * The plotted range, in AU. Not the data's own extent: anchoring the left end at Mercury
  * would put it hard against the origin mark, which would read as Mercury being at the
- * Sun. A log axis has no zero to anchor to, so the ends are a stated plot range with
- * Mercury and Neptune inset a little from both.
+ * Sun. A log axis has no zero to anchor to, so the ends are a stated plot range with the
+ * innermost and outermost bodies inset a little from both.
+ *
+ * The top end was 35 while Neptune was the last row. Pluto's semi-major axis is 39.48
+ * and its aphelion 49.31, so 50 is the round figure that contains the whole of the one
+ * orbit here that needs containing — every other body's eccentricity is small enough
+ * that a single tick is a fair account of where it is, and Pluto's is not. See the note
+ * on `plutoOrbitPath` in `orbit-paths.ts`.
  */
 const TRACK_MIN_AU = 0.3;
-const TRACK_MAX_AU = 35;
+const TRACK_MAX_AU = 50;
 
 const LOG_MIN = Math.log10(TRACK_MIN_AU);
 const LOG_SPAN = Math.log10(TRACK_MAX_AU) - LOG_MIN;

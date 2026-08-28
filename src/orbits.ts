@@ -34,6 +34,10 @@ import {
     TETHYS_ORBIT_RADIUS,
     NEPTUNE_POLE_DEC_DEG,
     NEPTUNE_POLE_RA_DEG,
+    PLUTO_POLE_DEC_DEG,
+    PLUTO_POLE_RA_DEG,
+    PLUTO_PRIME_MERIDIAN_DEG,
+    PLUTO_ROTATION_DEG_PER_DAY,
     NEPTUNE_PRIME_MERIDIAN_DEG,
     NEPTUNE_ROTATION_DEG_PER_DAY,
     TITAN_ORBIT_RADIUS,
@@ -482,6 +486,40 @@ const NEPTUNE_ELEMENTS: OrbitalElements = {
 };
 
 /**
+ * Pluto's, and the one set in this file that is **not** fitted here.
+ *
+ * Every other body's elements were fitted against JPL's ephemeris and then run back
+ * against Horizons over 2000-2030, with the residuals recorded beside them. These are
+ * taken from Standish's published 1800-2050 table as printed, because the fitting rig
+ * needs a network Horizons query and none was available when this was added. **So there
+ * is no residual figure here, and one must not be invented.** Anyone with a Horizons
+ * query to hand should run the same check the other seven carry and write the answer in.
+ *
+ * What *can* be checked without a network is the physics, and it is a stronger test than
+ * a residual anyway — see `plutoNeptuneResonance` below.
+ *
+ * Three of these numbers are unlike anything else in the file:
+ *
+ *  - **e = 0.2488**, the largest here by a distance; Mercury's 0.2056 is next and every
+ *    planet outside Mars is under 0.06. It carries Pluto from 29.66 AU at perihelion to
+ *    49.31 at aphelion, a swing of two thirds of its own mean distance.
+ *  - **I = 17.14°**, six times any planet's. Pluto spends most of its orbit well clear
+ *    of the plane everything else here moves in, and the wide view shows it.
+ *  - **Perihelion inside Neptune's orbit.** 29.66 AU against Neptune's 30.07, so the
+ *    orbits genuinely cross — Pluto was nearer the Sun than Neptune from 1979 to 1999.
+ *    They cannot collide, and the reason is the resonance rather than luck or the
+ *    inclination.
+ */
+const PLUTO_ELEMENTS: OrbitalElements = {
+    semiMajorAxis: [39.48211675, -0.00031596],
+    eccentricity: [0.24882730, 0.00005170],
+    inclination: [17.14001206, 0.00004818],
+    meanLongitude: [238.92903833, 145.20780515],
+    perihelionLongitude: [224.06891629, -0.04062942],
+    ascendingNode: [110.30393684, -0.01183482],
+};
+
+/**
  * Kepler's equation, `M = E − e·sin E`, solved for the eccentric anomaly.
  *
  * There is no closed form, so this is Newton–Raphson. It converges in three or four
@@ -592,6 +630,50 @@ export const neptuneOrbitPosition = (date: Date, target = new Vector3()): Vector
     keplerianPosition(NEPTUNE_ELEMENTS, date, target);
 
 /**
+ * Pluto's, and note what this positions: the **Pluto system barycentre**, not Pluto.
+ *
+ * That distinction is meaningless for every other body here and is the whole point of
+ * this one. Standish's elements are barycentric, as is Horizons' body 9 against its body
+ * 999, because a two-body pair of comparable mass has no single position — what follows
+ * a Keplerian orbit around the Sun is the centre of mass. Pluto then goes round *that*,
+ * 2,126 km away, which is outside its own surface.
+ */
+export const plutoOrbitPosition = (date: Date, target = new Vector3()): Vector3 =>
+    keplerianPosition(PLUTO_ELEMENTS, date, target);
+
+/**
+ * The 3:2 resonance with Neptune, evaluated rather than asserted.
+ *
+ * This is the check that replaces the Horizons residual the elements above do not have,
+ * and it is a better one: a residual says a transcription was copied correctly, while
+ * this says the numbers describe the solar system. It also follows the pattern the
+ * Laplace resonance and Enceladus-Dione already set in this file — take mean motions
+ * fitted from unrelated sources and see whether the resonant argument closes.
+ *
+ * Pluto goes round twice for Neptune's three. The consequence is not a curiosity: the
+ * two orbits *cross*, and the resonance is the only reason that is survivable. The
+ * resonant argument φ = 3λ_P − 2λ_N − ϖ_P librates about 180°, which forces Pluto to
+ * reach perihelion — the part of its orbit inside Neptune's — only when Neptune is a
+ * quarter of the sky away. The two have never come within 17 AU of each other and
+ * cannot; Pluto passes closer to Uranus than it ever does to Neptune.
+ *
+ * φ̇ in degrees per day, and it is deliberately **not** compared against zero. A
+ * librating argument drifts by definition; what makes this a resonance rather than a
+ * near miss is that the drift is tiny next to the mean motions it is built from, so the
+ * argument turns through a slow cycle instead of circulating. The raw period ratio is
+ * 1.5046, which reads like a near miss and is not one.
+ *
+ * A constant rather than a function of date, because these elements carry linear rates
+ * and the three of them therefore give one number for all time. Exported so the check
+ * script can state it rather than restating the arithmetic.
+ */
+export const PLUTO_NEPTUNE_RESONANCE_DRIFT =
+    (3 * PLUTO_ELEMENTS.meanLongitude[1] -
+        2 * NEPTUNE_ELEMENTS.meanLongitude[1] -
+        PLUTO_ELEMENTS.perihelionLongitude[1]) /
+    36525;
+
+/**
  * Each planet's semi-major axis in AU, keyed by the ids the nav panel uses.
  *
  * Derived from the element sets above rather than typed out again, and that is the whole
@@ -618,6 +700,7 @@ export const SEMI_MAJOR_AXIS_AU: Readonly<Record<string, number>> = {
     saturn: SATURN_ELEMENTS.semiMajorAxis[0],
     uranus: URANUS_ELEMENTS.semiMajorAxis[0],
     neptune: NEPTUNE_ELEMENTS.semiMajorAxis[0],
+    pluto: PLUTO_ELEMENTS.semiMajorAxis[0],
 };
 
 /**
@@ -757,6 +840,21 @@ export const URANUS_AXIS_ORIENTATION = axisOrientationFromPole(
  * 26.73° and Earth's 23.44°. So after Uranus lying on its side, the outermost planet
  * turns out to have seasons of an entirely familiar shape, only 41 years long each.
  */
+/**
+ * Pluto's, and it lies over past its side like Uranus's.
+ *
+ * The obliquity is stated nowhere here, exactly as Uranus's is not: it is the angle
+ * between this pole and the orbit normal `PLUTO_ELEMENTS` implies, and it comes out
+ * obtuse — so Pluto turns backwards relative to its own orbit while
+ * `PLUTO_ROTATION_DEG_PER_DAY` stays positive. That is the same one sign that makes
+ * Venus and Uranus retrograde, and nothing branches on it for any of the three.
+ *
+ */
+export const PLUTO_AXIS_ORIENTATION = axisOrientationFromPole(
+    PLUTO_POLE_RA_DEG,
+    PLUTO_POLE_DEC_DEG
+);
+
 export const NEPTUNE_AXIS_ORIENTATION = axisOrientationFromPole(
     NEPTUNE_POLE_RA_DEG,
     NEPTUNE_POLE_DEC_DEG
@@ -850,6 +948,25 @@ export const uranusSpinAngle = (date: Date): number =>
  */
 export const neptuneSpinAngle = (date: Date): number =>
     primeMeridianAngle(NEPTUNE_PRIME_MERIDIAN_DEG, NEPTUNE_ROTATION_DEG_PER_DAY, date);
+
+/**
+ * Pluto's prime meridian — and the one in this project that is defined by something
+ * other than the body it belongs to.
+ *
+ * The IAU fixes Pluto's 0° meridian as **the mean sub-Charon meridian**: the longitude
+ * that faces its moon. No other body here has its coordinate system anchored to a
+ * second object, and that it was worth doing for this one is itself the measurement —
+ * the pair are locked hard enough that "the side facing Charon" is a permanent feature
+ * of Pluto rather than a moment in its day.
+ *
+ * Charon is not modelled, so nothing in the scene points at that meridian any more. It
+ * is still the frame these numbers are quoted in, and it is still why `pluto.ts` places
+ * Sputnik Planitia at longitude 178 — which is very nearly the anti-Charon point, and
+ * not by accident. See the note there.
+ */
+export const plutoSpinAngle = (date: Date): number =>
+    primeMeridianAngle(PLUTO_PRIME_MERIDIAN_DEG, PLUTO_ROTATION_DEG_PER_DAY, date);
+
 
 /**
  * Venus's cloud deck, which does not turn with the planet.

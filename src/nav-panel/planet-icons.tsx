@@ -33,7 +33,7 @@ const SPHERE_IDS = new Set([
     'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
-    'uranus', 'neptune',
+    'uranus', 'neptune', 'pluto',
 ]);
 
 export function BodyIcon({ id }: BodyIconProps) {
@@ -378,6 +378,39 @@ function BodyShape({ id }: BodyIconProps) {
             <rect x="5.0" y="5.6" width="4.6" height="0.9" rx="0.45" fill="#e8f1fb" opacity="0.85" />
             <rect x="8.4" y="13.6" width="5.2" height="1.0" rx="0.5" fill="#e8f1fb" opacity="0.8" />
             <rect x="11.8" y="4.0" width="3.0" height="0.8" rx="0.4" fill="#dceaf8" opacity="0.6" />
+          </g>
+        </>
+      );
+    case 'pluto':
+      // Butterscotch, a dark equatorial band, and the heart. Those three are the whole
+      // of what anybody would recognise, and at 20px there is room for exactly three
+      // things.
+      //
+      // The heart is drawn as a heart. That is not a liberty: Tombaugh Regio genuinely
+      // is one — two lobes of different ice meeting at a point, the western one Sputnik
+      // Planitia's nitrogen glacier and the eastern one older methane highland — and it
+      // is the only feature in the solar system that is famous for its outline rather
+      // than for what it is. Drawing it as a neutral bright blob would lose the single
+      // thing that makes this icon findable in a list.
+      return (
+        <>
+          <defs>
+            <clipPath id="planet-icon-pluto-disc">
+              <circle cx={CENTER} cy={CENTER} r={RADIUS} />
+            </clipPath>
+          </defs>
+          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#c9a077" />
+          <g clipPath="url(#planet-icon-pluto-disc)">
+            {/* Cthulhu Macula, on the equator, west of the heart. */}
+            <path d="M 1.6 9.4 Q 5.5 7.9 9.0 9.6 Q 6.2 12.2 1.6 11.8 Z" fill="#6b4630" opacity="0.85" />
+            {/* Tombaugh Regio. Two lobes over a point, sitting east of the dark band. */}
+            <path
+              d="M 12.4 8.2 Q 10.6 6.3 9.6 8.4 Q 9.1 10.6 12.4 13.4 Q 16.2 10.5 15.6 8.4 Q 14.6 6.3 12.4 8.2 Z"
+              fill="#f2e6cf"
+              opacity="0.95"
+            />
+            {/* The methane-frost polar cap. */}
+            <path d="M 2.2 4.6 Q 10 2.4 17.8 4.6 Q 10 6.0 2.2 4.6 Z" fill="#e8dcc4" opacity="0.55" />
           </g>
         </>
       );
