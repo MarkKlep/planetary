@@ -1,0 +1,176 @@
+@use '../variables.scss' as *;
+
+// A full-screen layer rather than a positioned box, because being *centred* is the
+// whole point — this is the one piece of chrome here that sits in the middle of the
+// frame rather than against an edge, and it earns that by being the one thing in the
+// mode you cannot find by looking around. See rover-hint.tsx.
+//
+// Centred on the *viewport*, not on the strip of it the nav panel leaves uncovered,
+// and that is deliberate twice over. The panel is an overlay on a full-bleed canvas
+// (`#app` is `inset: 0`) and it slides entirely off-screen when collapsed, so there is
+// no stable inset to centre against; and the middle of the viewport is where the
+// camera is actually pointing, which is where a first-person prompt belongs. Offsetting
+// it by the panel's 288px would put it off the optical axis and move it every time the
+// panel opened.
+//
+// `pointer-events: none` is not optional and not a nicety. The layer covers the entire
+// viewport and the canvas under it is being dragged to look around, so swallowing the
+// pointer here would break the only way to turn your head. Same rule `.surface-hud`
+// follows, with rather more of the screen at stake — and nothing in here ever opts
+// back in, because there is nothing in here to click.
+//
+// Above the HUDs (1000) so the read-out can never clip it, and below everything the
+// user opens deliberately: the zoom controls (1200), the landing card (1250), the chat
+// panel (1300) and the modal (1500). An invitation should not argue with a decision.
+.rover-hint {
+    position: fixed;
+    inset: 0;
+    z-index: 1100;
+    pointer-events: none;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    // `visibility` as well as opacity, so a hidden prompt is genuinely out of the
+    // accessibility tree rather than an invisible `role="status"` that a screen reader
+    // still reads out. Transitioned rather than animated: unlike the landing card this
+    // comes and goes repeatedly as you walk in and out of range, and an entry
+    // animation would re-run every time.
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.28s ease, visibility 0.28s;
+}
+
+.rover-hint--visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+// The key cap. Sized to be legible without becoming a target — it is a picture of a
+// key, not a button, and there is nothing to press here.
+.rover-hint__key {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 58px;
+    height: 58px;
+
+    border: 1px solid rgba(255, 138, 61, 0.55);
+    border-radius: var(--radius-md);
+    // Dark and translucent rather than tinted amber: this sits over the lunar surface,
+    // which at a high Sun is very nearly white, and an amber wash on white is
+    // invisible. A dark cap with an amber glyph reads on regolith and on sky alike —
+    // and those are the only two backgrounds it can ever have.
+    background: rgba(8, 8, 10, 0.55);
+    backdrop-filter: blur(6px);
+
+    font-family: var(--font-mono);
+    font-size: 26px;
+    font-weight: 500;
+    line-height: 1;
+    // The colour the key legends in both HUDs already use, so a returning visitor has
+    // learnt what amber-on-a-key means before ever seeing this.
+    color: var(--signal);
+
+    animation: rover-hint-blink 1.7s ease-in-out infinite;
+}
+
+.rover-hint__text {
+    font-size: 13px;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+    // No panel behind the line, so the contrast has to come from the text itself. A
+    // wide, soft shadow rather than a hard one: it has to survive a white crater rim
+    // without drawing a visible box around the words.
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.95), 0 0 14px rgba(0, 0, 0, 0.8);
+
+    kbd {
+        font-family: var(--font-mono);
+        font-size: 12px;
+        color: var(--signal);
+    }
+}
+
+// Both wordings stay in the DOM and the cascade picks one, the same always-mounted
+// rule `.surface-hud`'s walking and driving halves follow. Scoped under the block for
+// that file's reason as well: single-class selectors here would be decided by source
+// order rather than by intent.
+.rover-hint .rover-hint__near {
+    display: none;
+}
+
+// Within boarding range. The instruction stops being about walking and the cap stops
+// whispering — it never stops moving, because the pulse is what keeps it from reading
+// as part of the scene, but it no longer fades most of the way out.
+.rover-hint--near {
+    .rover-hint__far {
+        display: none;
+    }
+
+    .rover-hint__near {
+        display: inline;
+    }
+
+    .rover-hint__key {
+        border-color: rgba(255, 138, 61, 0.85);
+        animation-name: rover-hint-blink-near;
+    }
+}
+
+// 1.7s a cycle is about 0.6 Hz — well under the 3 Hz that flashing content has to stay
+// below, and slow enough to read as breathing rather than as an error light.
+@keyframes rover-hint-blink {
+    0%,
+    100% {
+        opacity: 0.34;
+        box-shadow: 0 0 0 rgba(255, 138, 61, 0);
+    }
+
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 20px rgba(255, 138, 61, 0.22);
+    }
+}
+
+@keyframes rover-hint-blink-near {
+    0%,
+    100% {
+        opacity: 0.72;
+        box-shadow: 0 0 6px rgba(255, 138, 61, 0.12);
+    }
+
+    50% {
+        opacity: 1;
+        box-shadow: 0 0 26px rgba(255, 138, 61, 0.4);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .rover-hint__key {
+        // Held at the pulse's bright end rather than at its average — the prompt has to
+        // stay legible over regolith, and this is the state it was designed against.
+        animation: none;
+        opacity: 1;
+    }
+
+    .rover-hint {
+        transition-duration: 0.01ms;
+    }
+}
+
+// No keyboard, nothing to prompt. Surface mode is driven entirely from the keys — the
+// walker, the rover and the long lens all are — so on a touch device this would be an
+// instruction that cannot be followed, sitting in the middle of the view. The HUD hides
+// its own key legend on small screens for the same reason; this asks the sharper
+// question, since a narrow desktop window still has an `R` to press.
+@media (hover: none) and (pointer: coarse) {
+    .rover-hint {
+        display: none;
+    }
+}

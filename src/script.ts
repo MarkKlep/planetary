@@ -31,7 +31,11 @@ import { titan } from './planets/saturn/titan';
 import { titanHaze } from './planets/saturn/haze';
 import { uranus } from './planets/uranus/uranus';
 import { neptune } from './planets/neptune/neptune';
-import { createMoonSurface, prepareMoonSurface } from './planets/earth/moon-surface/moon-surface';
+import {
+    BOARDING_RANGE_M,
+    createMoonSurface,
+    prepareMoonSurface,
+} from './planets/earth/moon-surface/moon-surface';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, getTimeSpeed, isPaused, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
@@ -1271,6 +1275,48 @@ export function initScene(onFirstFrame?: () => void) {
     const surfaceNote = document.getElementById('surface-note');
     const surfaceSiteSelect = document.getElementById('surface-site') as HTMLSelectElement | null;
     const toggleMoonSurfaceBtn = document.getElementById('toggle-moon-surface');
+    const roverHint = document.getElementById('rover-hint');
+
+    /**
+     * The centre-screen prompt that says the rover can be driven — see rover-hint.tsx
+     * for what it is and why it is in the middle of the frame. Its whole state is three
+     * lines, because everything it needs is already computed here: whether we are
+     * landed, how far the rover is, and whether anyone is already in it.
+     *
+     * Two rules, and the second is the one that makes it a hint rather than an overlay.
+     * It is shown for a window after being set down, which is the moment the rover is
+     * behind you and unfindable; and it is shown again, indefinitely, whenever you are
+     * actually standing within reach of it, because at that range it is no longer an
+     * announcement but a control label. Either way it retires for good the first time
+     * anyone boards — the fact has landed, and repeating it after that is a nag.
+     */
+    const ROVER_HINT_INTRO_MS = 14000;
+    /** Named like `planetary:moon-hint`, and stored the same way and for its reasons. */
+    const ROVER_HINT_KEY = 'planetary:rover-hint';
+
+    /**
+     * Session rather than persistent storage, exactly as the landing card uses: this is
+     * "you have driven it, stop telling me" for as long as the tab is open, not forever.
+     * The same `?hint=1` / `?hint=0` override works here, since a one-time prompt is
+     * otherwise unreachable the moment you have used it once — which makes it the
+     * hardest thing in the app to work on.
+     */
+    function roverHintSpent(): boolean {
+        const forced = new URLSearchParams(window.location.search).get('hint');
+        if (forced === '1') return false;
+        if (forced === '0') return true;
+        try {
+            return window.sessionStorage.getItem(ROVER_HINT_KEY) !== null;
+        } catch {
+            // Private-mode Safari throws on Storage outright. Showing it is the safe
+            // side of that: a visitor who cannot be remembered is exactly the one who
+            // has not been told, and the prompt costs a corner of nothing to ignore.
+            return false;
+        }
+    }
+
+    let roverHintSpentThisSession = roverHintSpent();
+    let roverHintIntroUntilMs = 0;
 
     /**
      * Leaving the Moon used to be one keystroke away from half the chrome — Escape, L,
@@ -1328,6 +1374,14 @@ export function initScene(onFirstFrame?: () => void) {
         if (!landed) sceneState.surfaceSite = null;
 
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
+
+        // Re-armed on every landing, including a change of site from the dropdown —
+        // that rebuilds the terrain and re-parks the rover, so it is a fresh arrival by
+        // every measure that matters here. Cleared outright on the way out, because the
+        // per-frame update below runs only while landed and would otherwise leave the
+        // prompt painted over the solar system.
+        if (landed) roverHintIntroUntilMs = performance.now() + ROVER_HINT_INTRO_MS;
+        else roverHint?.classList.remove('rover-hint--visible', 'rover-hint--near');
         // The CSS2D labels are a DOM overlay, not something the renderer draws, so
         // skipping `labelRenderer.render()` while landed leaves them frozen on screen
         // at whatever opacity they last had — "Earth" hanging in the lunar sky, 384,000
@@ -1905,8 +1959,46 @@ export function initScene(onFirstFrame?: () => void) {
         } else if (surfaceRoverValue) {
             const distance = moonSurface.roverDistance;
             surfaceRoverValue.textContent =
-                distance <= 4.5 ? 'press R to board' : `${formatRange(distance)} away`;
+                distance <= BOARDING_RANGE_M
+                    ? 'press R to board'
+                    : `${formatRange(distance)} away`;
         }
+
+        updateRoverHint(nowMs);
+    }
+
+    /**
+     * Show, hide and reword the centre-screen prompt — see the constants above for the
+     * two rules it runs on.
+     *
+     * Driving is what spends it, and that is checked here rather than at the keypress
+     * because `toggleRover` is the surface module's own and boarding can be refused
+     * (out of range). Getting *into* the seat is the only evidence that the fact has
+     * landed, and it is exactly what this flag reads.
+     */
+    function updateRoverHint(nowMs: number) {
+        if (!roverHint) return;
+
+        if (moonSurface.driving && !roverHintSpentThisSession) {
+            roverHintSpentThisSession = true;
+            try {
+                window.sessionStorage.setItem(ROVER_HINT_KEY, 'seen');
+            } catch {
+                // See roverHintSpent — nothing to do, and nothing worth reporting.
+            }
+        }
+
+        const withinReach = moonSurface.roverDistance <= BOARDING_RANGE_M;
+        const shown =
+            !roverHintSpentThisSession &&
+            !moonSurface.driving &&
+            // A question that has not been answered yet must not be talked over. The
+            // dialog is centred too, and the mode is suspended behind it anyway.
+            !leaveModal.open &&
+            (nowMs < roverHintIntroUntilMs || withinReach);
+
+        roverHint.classList.toggle('rover-hint--visible', shown);
+        roverHint.classList.toggle('rover-hint--near', withinReach);
     }
 
     function formatRange(metres: number): string {

@@ -160,8 +160,13 @@ const ZOOM_SECONDS = 0.28;
 /**
  * How close you have to be to climb aboard. Generous — the LRV is 3.1 m long and you
  * are aiming at it with a mouse.
+ *
+ * Exported because the chrome has to agree with it exactly: both the HUD's rover row
+ * and the centre-screen prompt change what they say at the moment boarding becomes
+ * possible, and a second copy of this number would put the offer on screen a step
+ * before or after the key actually works.
  */
-const BOARDING_RANGE_M = 4.5;
+export const BOARDING_RANGE_M = 4.5;
 /** Where the rover is set down relative to where you land, metres and radians. */
 const ROVER_PARK_DISTANCE_M = 8;
 const ROVER_PARK_BEARING_OFFSET = 0.38;

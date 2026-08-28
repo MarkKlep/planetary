@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
+import { RoverHint } from './rover-hint/rover-hint';
 import { IssHud } from './iss-hud/iss-hud';
 import { ChatWidget } from './chat-widget/chat-widget';
 import { MoonHint } from './moon-hint/moon-hint';
@@ -54,6 +55,11 @@ export function App() {
       <NavPanel />
       <FlightHud />
       <SurfaceHud />
+      {/* The centre-screen half of the same read-out: the HUD above names `R` in a
+          corner legend, this says it where the eye actually is. Always mounted and
+          driven by classes from `script.ts`, which owns the mode, the rover's distance
+          and whether anyone is already driving. See rover-hint.tsx. */}
+      <RoverHint />
       {/* Shares the bottom-right corner with the two HUDs above, which is safe because
           all three are mutually exclusive: entering free flight or landing on the Moon
           both give up the camera's focus target, and this panel is shown only while
