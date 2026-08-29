@@ -34,97 +34,14 @@
         color: var(--signal);
     }
 
+    // A quarter turn while its sheet is up, not a half: the glyph points right, and
+    // half a turn would point it back at the row it came from. This barely shows — the
+    // dialog's scrim is over it within the same frame — but the class is also what
+    // `moon-hint.scss` reads to know Earth's sheet has been opened, so the state has
+    // to be real rather than implied by the dialog being up.
     &--open svg {
-        transform: rotate(180deg);
+        transform: rotate(90deg);
     }
-}
-
-// A satellite's own chevron — ISS's, so far — sits in an already-indented row next to
-// a narrower, shorter button than a planet's, so the planet's 40px would overwhelm it.
-.nav-expand-btn--compact {
-    width: 26px;
-}
-
-// A grid row animates where `height: auto` cannot, and unlike a fixed max-height it
-// never clips a taller satellite list or leaves a visible pause on a shorter one:
-// the track itself grows from 0fr to 1fr of the content's own height.
-.nav-satellites {
-    display: grid;
-    grid-template-rows: 0fr;
-    transition: grid-template-rows 0.2s ease;
-
-    &--open {
-        grid-template-rows: 1fr;
-    }
-}
-
-.nav-satellites__inner {
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    // The grid item still reports its content's intrinsic height regardless of the
-    // 0fr track, so it is this wrapper's overflow that actually does the clipping —
-    // and it needs min-height: 0 or a flex/grid child refuses to shrink below its
-    // content size in the first place.
-    min-height: 0;
-    padding-top: 6px;
-}
-
-// A satellite's own dropdown (ISS's, so far) nests one level deeper than the planet
-// list it sits inside. `.nav-satellite-row` below already indents 18px for that outer
-// level; doubling it here is what makes "Trajectory" read as belonging to ISS rather
-// than sitting beside it at the same rank Moon and Analemma are at.
-.nav-satellites--nested .nav-satellite-row {
-    margin-left: 36px;
-}
-
-// The indentation lives here rather than on the button itself, so a row with a
-// visibility toggle attached still lines up with a plain one — the button inside
-// just becomes the flexible part of a wider indented row instead of being indented
-// on its own.
-.nav-satellite-row {
-    display: flex;
-    gap: 6px;
-    margin-left: 18px;
-}
-
-.nav-btn--satellite {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    flex: 1;
-    padding: 9px 14px;
-    font-size: 13px;
-    background: transparent;
-    border-color: var(--hairline);
-
-    &:hover {
-        border-color: var(--hairline-bright);
-        // `.nav-btn` no longer shifts sideways on hover, but keep the override
-        // explicit — these controls live in a clipped satellite row, so a future
-        // change to the base rule shifting it again would cut off their edge.
-        transform: none;
-    }
-}
-
-/**
- * A selected satellite, and the rule that was missing.
- *
- * `.navigation-panel .nav-btn.nav-btn--satellite` below is specificity (0,3,0) and beats
- * the global `.nav-btn.active` (0,2,0) on `border-color`, `background` *and* `color` — so
- * an active Moon or Titan kept only the left-edge tick from the base rule and stayed at
- * `--ink-dim`. A selected planet was loud and a selected moon was nearly invisible.
- *
- * Restated here at (0,4,0) so it wins, and deliberately *quieter* than the planet's: a
- * 2px tick against a planet row's 3px, because a satellite row is already an indented,
- * smaller thing and marking it as loudly would flatten the hierarchy it sits in.
- */
-.navigation-panel .nav-btn.nav-btn--satellite.active {
-    border-color: var(--signal);
-    background: var(--signal-dim);
-    box-shadow: inset 2px 0 0 var(--signal);
-    color: var(--ink);
 }
 
 // A row label that borrows the satellite button's shape without being a control:
@@ -262,27 +179,19 @@
     // gradient. The one thing that still radiates is the signal colour, sparingly.
     background: var(--void);
 
-    // The object row's right-hand columns, as properties rather than as literals in
-    // four places. The `AU` legend in the section title has to sit over the range
-    // column, and the section title is a full-width heading that shares no layout with
-    // the rows — so the only thing keeping the two aligned is that both are laid out
-    // from these. Change one here and the legend follows the column.
-    // Set by the closest pair rather than by taste, and the closest pair changed when
-    // Pluto arrived: it used to be Venus and Earth, and it is now Neptune and Pluto,
-    // 0.053 of the track apart against their 0.063. At 58px that left 1.1px between two
-    // 2px marks, which is not enough to read as a step down the column. 66 gives the
-    // tightest pair 1.5px and Venus-Earth 2.2px. The label column can afford it: the
-    // longest row that carries a rail is "Mercury".
-    --nav-range-w: 66px;
+    // The object row's columns, as properties rather than as literals in several
+    // places: the chevron's width and the gap before it have to agree between the row
+    // itself and anything laid out against its right-hand end.
     --nav-chevron-w: 34px;
     --nav-row-gap: 3px;
     --nav-btn-pad-x: 11px;
     // The object button's own border. Transparent until the row is hovered or active,
-    // but it still insets the content box — which is a whole pixel the `AU` legend in
-    // the section heading does not have, because an `h2` has no border. Named so the
-    // legend can subtract exactly what the rows lose rather than carrying a bare 1px.
+    // but it still insets the content box, so it is named rather than left as a bare
+    // 1px wherever something has to line up with the inside of a row.
     --nav-btn-border: 1px;
 
+    // No longer the scroller: it is the frame, and the scroller is the child below.
+    // That split is what holds the header still — see `.nav-panel-scroll`.
     .nav-panel-content {
         display: flex;
         flex-direction: column;
@@ -290,11 +199,32 @@
         width: 100%;
         height: 100%;
         padding: 20px;
+        overflow: hidden;
+    }
+
+    // Everything under the header, and the only thing in the panel that scrolls.
+    //
+    // `min-height: 0` is not optional: a flex item's default `min-height: auto` is its
+    // content's intrinsic height, so without it this refuses to shrink below the full
+    // length of the object list and the panel grows a scrollbar of its own instead —
+    // the same failure the object list's own dropdowns used to hit from the other
+    // direction, back when they animated a grid row.
+    .nav-panel-scroll {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+        min-height: 0;
         overflow-x: hidden;
         overflow-y: auto;
     }
 
+    // Outside the scroller, so it holds while the object list moves under it. The
+    // wordmark says which app this is, and the clock beneath it is a *live* value
+    // written every frame from the one date the whole scene is a pure function of — a
+    // read-out that scrolls off the screen has stopped being a read-out, which is the
+    // argument for pinning this and not the section headings below it.
     .nav-header {
+        flex: none;
         padding: 6px 2px 4px;
     }
 
@@ -439,107 +369,6 @@
         }
     }
 
-    // Satellite rows (Moon, ISS, Analemma, Phobos, Deimos) sit in a shorter button,
-    // so their icon shrinks to match rather than crowding the label.
-    .nav-object-symbol--small {
-        width: 16px;
-        height: 16px;
-    }
-
-    // --- the range rail ---------------------------------------------------
-    //
-    // Before anything else: the rail is the first thing in this panel anchored to the
-    // *right* edge of its row, and that is what makes the next rule necessary.
-    //
-    // A row with nothing to expand gets no chevron, and `.nav-planet-btn` is `flex: 1`,
-    // so its button takes the whole row instead. That lined up perfectly well while
-    // every part of a row was left-aligned — but it puts the right edge of those
-    // buttons 37px further out than the rest, so Sun, Mercury, Uranus and Neptune hung
-    // their rail off the end of the column while the five with dropdowns sat correctly
-    // under the `AU` legend.
-    //
-    // Read off the layout rather than passed down as a flag with the row, because the
-    // row already knows: the chevron is either in it or it is not. A prop would be one
-    // more thing to keep in step by hand the first time a body gains or loses a
-    // dropdown — which is exactly what Uranus and Neptune are waiting to do.
-    .nav-planet-row > .nav-planet-btn:only-child .nav-range,
-    .nav-object-list > .nav-btn.nav-object-btn .nav-range {
-        margin-right: calc(var(--nav-chevron-w) + var(--nav-row-gap));
-    }
-
-    // How far out each body orbits, as a mark on a shared axis. See range-rail.tsx for
-    // why the tick moves instead of the row spacing, and why it is cyan.
-    //
-    // `margin-left: auto` rather than a fixed label width: planet names run from four
-    // characters to twelve, and pinning the column would either clip "Solar system" or
-    // leave a hole after "Mars". The rail simply takes the right-hand end of the row.
-    .nav-range {
-        position: relative;
-        flex-shrink: 0;
-        width: var(--nav-range-w);
-        height: 11px;
-        margin-left: auto;
-
-        // The axis. Drawn on the element rather than as a child so the empty column on
-        // the system view can suppress it by suppressing one pseudo-element.
-        &::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 0;
-            width: 100%;
-            height: 1px;
-            background: var(--hairline);
-        }
-    }
-
-    // A 2px bar, not a dot: the rest of this chrome is drawn from sharp rectangles, and
-    // a gauge marker is what this is. `translateX(-50%)` centres it on its own value,
-    // so the ends of the track read as the stated range rather than half a mark short.
-    .nav-range__mark {
-        position: absolute;
-        top: 50%;
-        width: 2px;
-        height: 9px;
-        transform: translate(-50%, -50%);
-        background: var(--telemetry);
-    }
-
-    // The Sun. Not a data point — a log axis has no zero to put it at — but the origin
-    // every other mark on this column is measured from, so it is drawn in the colour
-    // that stands for the light it casts and carries no track behind it.
-    .nav-range--origin {
-        &::before { display: none; }
-
-        .nav-range__mark {
-            left: 0;
-            background: var(--signal);
-        }
-    }
-
-    // Held over the column by the same properties the rows lay it out with. The extra
-    // right margin is the chevron column and the button's own padding, which sit
-    // between the rail and the edge of the list.
-    .nav-section-title--ranged {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-    }
-
-    .nav-range-legend {
-        flex-shrink: 0;
-        width: var(--nav-range-w);
-        margin-right: calc(
-            var(--nav-chevron-w) + var(--nav-row-gap) + var(--nav-btn-pad-x) +
-            var(--nav-btn-border)
-        );
-        text-align: center;
-        font-family: var(--font-mono);
-        font-size: 9px;
-        letter-spacing: 0.14em;
-        color: var(--ink-faint);
-    }
-
     .nav-expand-btn {
         width: var(--nav-chevron-w);
         min-height: 38px;
@@ -552,26 +381,6 @@
             border-color: var(--hairline);
             color: var(--signal);
         }
-    }
-
-    .nav-satellites__inner {
-        gap: 3px;
-        padding-top: 3px;
-    }
-
-    .nav-satellite-row {
-        gap: 4px;
-        margin-left: 30px;
-    }
-
-    .nav-btn.nav-btn--satellite {
-        min-height: 34px;
-        padding: 7px 10px;
-        border-color: transparent;
-        border-radius: var(--radius-sm);
-        background: transparent;
-        color: var(--ink-dim);
-        font-size: 12px;
     }
 
     .nav-btn.nav-visibility-btn {
@@ -652,27 +461,27 @@
 
     // The panel scrolls on smaller viewports. Match its recessed instrument
     // treatment instead of exposing the browser's bright default scrollbar.
-    .nav-panel-content {
+    .nav-panel-scroll {
         scrollbar-width: thin;
         scrollbar-color: var(--hairline-bright) transparent;
     }
 
-    .nav-panel-content::-webkit-scrollbar {
+    .nav-panel-scroll::-webkit-scrollbar {
         width: 9px;
     }
 
-    .nav-panel-content::-webkit-scrollbar-track {
+    .nav-panel-scroll::-webkit-scrollbar-track {
         margin: 8px 0;
         background: transparent;
     }
 
-    .nav-panel-content::-webkit-scrollbar-thumb {
+    .nav-panel-scroll::-webkit-scrollbar-thumb {
         background: var(--hairline-bright);
         border: 2px solid var(--void);
         border-radius: 999px;
     }
 
-    .nav-panel-content::-webkit-scrollbar-thumb:hover {
+    .nav-panel-scroll::-webkit-scrollbar-thumb:hover {
         background: var(--signal);
     }
 }
@@ -691,16 +500,6 @@
     }
 }
 
-// Not at the 768px drawer breakpoint, which is the counter-intuitive part: the panel is
-// `min(85vw, 320px)` there, so on an ordinary phone it is *wider* than the docked 288px
-// and the rail has more room, not less. It is only the genuinely narrow viewports — a
-// 320px-wide device, where 85vw is 272px — that squeeze the label, so that is where the
-// rail gives width back rather than at every phone.
-@media (max-width: 380px) {
-    .navigation-panel {
-        --nav-range-w: 50px;
-    }
-}
 
 /**
  * Reduced motion.
@@ -713,7 +512,6 @@
  * beside its own declaration instead.
  */
 @media (prefers-reduced-motion: reduce) {
-    .nav-satellites,
     .nav-panel-scrim,
     .nav-expand-btn svg,
     .nav-flag::after {

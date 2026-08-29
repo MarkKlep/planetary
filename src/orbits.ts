@@ -297,8 +297,15 @@ function eclipticToScene(x: number, y: number, z: number, target: Vector3): Vect
     return target.set(x, z, -y);
 }
 
-/** J2000 equatorial → scene, i.e. tilt down by the obliquity, then re-axis as above. */
-function equatorialToScene(v: Vector3): Vector3 {
+/**
+ * J2000 equatorial → scene, i.e. tilt down by the obliquity, then re-axis as above.
+ *
+ * Exported because it is not only planetary poles that arrive in equatorial
+ * coordinates: a star catalogue quotes right ascension and declination, and
+ * `background/betelgeuse.ts` has to land in the same frame the poles do.
+ * Mutates and returns `v`.
+ */
+export function equatorialToScene(v: Vector3): Vector3 {
     const cos = Math.cos(EARTH_OBLIQUITY);
     const sin = Math.sin(EARTH_OBLIQUITY);
     // Rotate about the shared x axis (the equinox line) into ecliptic coordinates.
@@ -672,36 +679,6 @@ export const PLUTO_NEPTUNE_RESONANCE_DRIFT =
         2 * NEPTUNE_ELEMENTS.meanLongitude[1] -
         PLUTO_ELEMENTS.perihelionLongitude[1]) /
     36525;
-
-/**
- * Each planet's semi-major axis in AU, keyed by the ids the nav panel uses.
- *
- * Derived from the element sets above rather than typed out again, and that is the whole
- * reason this exists as an export instead of a table in `planets.const.ts`. The nav
- * panel draws a distance scale from these numbers while `keplerianPosition` flies the
- * planets by the same ones, so the scale cannot come to disagree with the scene — there
- * is one value per planet and both readers take it from the same place.
- *
- * Only the J2000 value is used, not the per-century drift beside it. Over the range this
- * app is ever pointed at, the largest of those drifts moves Saturn by 0.0013 AU, which is
- * a hundredth of a pixel on any scale a panel 288px wide could draw.
- *
- * Earth's 1 is exact rather than the measured 1.00000011, because `earthOrbitPosition`
- * has no elements to read: it comes off an almanac series that puts Earth on a perfect
- * circle of exactly one AU, so 1 is what this model actually does. See the note on the
- * two known systematic residuals above.
- */
-export const SEMI_MAJOR_AXIS_AU: Readonly<Record<string, number>> = {
-    mercury: MERCURY_ELEMENTS.semiMajorAxis[0],
-    venus: VENUS_ELEMENTS.semiMajorAxis[0],
-    earth: 1,
-    mars: MARS_ELEMENTS.semiMajorAxis[0],
-    jupiter: JUPITER_ELEMENTS.semiMajorAxis[0],
-    saturn: SATURN_ELEMENTS.semiMajorAxis[0],
-    uranus: URANUS_ELEMENTS.semiMajorAxis[0],
-    neptune: NEPTUNE_ELEMENTS.semiMajorAxis[0],
-    pluto: PLUTO_ELEMENTS.semiMajorAxis[0],
-};
 
 /**
  * The fixed orientation of a planet's spin axis, as a rotation to hang it under — the

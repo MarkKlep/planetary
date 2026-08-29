@@ -4,6 +4,7 @@ import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
 import { RoverHint } from './rover-hint/rover-hint';
 import { IssHud } from './iss-hud/iss-hud';
+import { BetelgeuseHud } from './betelgeuse-hud/betelgeuse-hud';
 import { ChatWidget } from './chat-widget/chat-widget';
 import { MoonHint } from './moon-hint/moon-hint';
 import { Modal } from './shared/modal/modal';
@@ -65,6 +66,11 @@ export function App() {
           both give up the camera's focus target, and this panel is shown only while
           that target is the station. */}
       <IssHud />
+      {/* The fourth panel in that same corner, and exclusive with the other three for
+          the same structural reason plus one of its own: flying to any other body
+          stands the approach down. See betelgeuse-hud.tsx — the row that earns it is
+          the one saying the range is modelled. */}
+      <BetelgeuseHud />
       <ChatWidget />
       {/* Mounted only once the scene has actually drawn, and it decides for itself
           whether it has anything to say — a visitor who has already been told renders

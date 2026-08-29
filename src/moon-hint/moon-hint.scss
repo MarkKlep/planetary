@@ -197,12 +197,12 @@ body.moon-hint-live {
     //    mention. On a desktop this never matches, and beaconing it there would be
     //    pointing at the control that *hides* everything the card is asking for.
     .navigation-panel--collapsed .nav-panel-toggle,
-    // 2. Earth's chevron, until its dropdown is open. `--open` is the panel's own
-    //    class for that, set by the same state that runs the accordion.
+    // 2. Earth's opener, until its sheet is up. `--open` is the panel's own class for
+    //    that, set by the same state that decides which dialog shows.
     .nav-expand-btn[data-expand='earth']:not(.nav-expand-btn--open),
-    // 3. Land itself, once the dropdown holding it is open. Until then it is inside a
-    //    collapsed grid row and there is nothing on screen to light up.
-    .nav-satellites--open #toggle-moon-surface {
+    // 3. Land itself, once the dialog holding it is up. Until then it is inside a
+    //    closed overlay and there is nothing on screen to light up.
+    .system-sheet--open #toggle-moon-surface {
         border-color: var(--signal);
         color: var(--signal);
         animation: moon-hint-beacon 1.9s ease-in-out infinite;
@@ -238,7 +238,7 @@ body.moon-hint-live {
 
         .navigation-panel--collapsed .nav-panel-toggle,
         .nav-expand-btn[data-expand='earth']:not(.nav-expand-btn--open),
-        .nav-satellites--open #toggle-moon-surface {
+        .system-sheet--open #toggle-moon-surface {
             animation: none;
             box-shadow: 0 0 0 3px rgba(255, 138, 61, 0.18);
         }

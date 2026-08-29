@@ -35,7 +35,12 @@ const gCenter = new Vector3(0.92, 0.0, -0.4);
 gCenter.addScaledVector(gNorth, -gCenter.dot(gNorth)).normalize();
 const gEast = new Vector3().crossVectors(gNorth, gCenter).normalize();
 
-const SKY_RADIUS = 960;
+/**
+ * Radius of the backdrop shell. Exported because anything placed *at a real
+ * direction* on this sky — see `betelgeuse.ts` — has to sit on the same shell as
+ * the procedural field, or it would sort against the galaxy dome.
+ */
+export const SKY_RADIUS = 960;
 
 // --- Star sprites ---------------------------------------------------------
 
@@ -95,12 +100,22 @@ function createStarSprite(profile: SpriteProfile): CanvasTexture {
 
 const compactSprite = createStarSprite('compact');
 const softSprite = createStarSprite('soft');
-const flareSprite = createStarSprite('flare');
+/** Exported for `betelgeuse.ts`, which is a brighter star than anything in here. */
+export const flareSprite = createStarSprite('flare');
 
 // --- Star colour ----------------------------------------------------------
 
-/** Tanner Helland's blackbody approximation — gives naturally-related star hues. */
-function kelvinToColor(kelvin: number): Color {
+/**
+ * Tanner Helland's blackbody approximation — gives naturally-related star hues.
+ *
+ * `whiten` is how far the result is pulled toward white, and it is a fact about the
+ * *eye* rather than about the star: colour vision is cone vision, and a point source
+ * near the naked-eye limit does not deliver enough light to a small enough patch of
+ * retina to fire them, so faint stars read white whatever their temperature. The
+ * default is the field's; anything bright enough to show its colour to an actual
+ * observer — which on this sky is Betelgeuse and nothing else — passes less.
+ */
+export function kelvinToColor(kelvin: number, whiten = 0.45): Color {
     const t = kelvin / 100;
     let r: number;
     let g: number;
@@ -124,8 +139,7 @@ function kelvinToColor(kelvin: number): Color {
 
     const clamp255 = (v: number) => Math.max(0, Math.min(255, v)) / 255;
     const color = new Color(clamp255(r), clamp255(g), clamp255(b));
-    // The eye desaturates faint point sources, so pull everything toward white.
-    return color.lerp(new Color(1, 1, 1), 0.45);
+    return color.lerp(new Color(1, 1, 1), whiten);
 }
 
 /** Skewed toward hot blue-white, with a warm minority — matches the naked-eye sky. */

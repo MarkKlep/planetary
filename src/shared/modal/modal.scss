@@ -19,7 +19,16 @@
 
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.16s ease, visibility 0.16s;
+    // Zero-length with a delay, not faded over the same 0.16s as the opacity, and the
+    // difference is what makes `modal-controller.ts`'s focus contract true rather than
+    // merely written down. Faded, the computed value is still `hidden` on the frame the
+    // dialog opens — and nothing inside a hidden subtree can take focus, so the
+    // controller's `cancelButton?.focus()` was being silently rejected and the keyboard
+    // stayed on `<body>`: Escape still worked, because that listener is on the document,
+    // but Enter and Tab had nothing to act on. Zero seconds with no delay flips it
+    // visible at once on the way in; zero seconds delayed by the fade keeps it visible
+    // all the way out.
+    transition: opacity 0.16s ease, visibility 0s linear 0.16s;
     // Closed, it must not sit over the canvas eating drags; open, swallowing them is
     // exactly the point.
     pointer-events: none;
@@ -27,6 +36,7 @@
     &--open {
         opacity: 1;
         visibility: visible;
+        transition: opacity 0.16s ease, visibility 0s linear 0s;
         pointer-events: auto;
     }
 }

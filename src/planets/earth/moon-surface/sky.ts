@@ -87,6 +87,21 @@ export interface SkyState {
 export interface Sky {
     readonly scene: Scene;
     readonly camera: PerspectiveCamera;
+    /**
+     * The rotation that carries the main scene's world frame into this observer's
+     * horizon frame — `intoScene` below, expressed once as an orientation instead of
+     * applied to a vector.
+     *
+     * It exists for the borrowed starfield. Those stars are positioned in the world
+     * frame and the sky is drawn in the horizon frame, so leaving the group at
+     * identity hangs the whole sky at an arbitrary angle: whatever is overhead from
+     * a given site is then whatever happened to be along +Y in the solar-system
+     * view, which is ecliptic north and has nothing to do with where you are
+     * standing. Live rather than fixed per site, because the Moon turns — the stars
+     * wheel over the observer once every 27.3 days, which is the same rotation that
+     * carries the Sun through the two-week lunar day.
+     */
+    readonly worldToScene: Quaternion;
     update(context: SkyContext): SkyState;
     dispose(): void;
 }
@@ -189,6 +204,7 @@ export function createSky(site: LandingSite): Sky {
     scene.add(sunLight.target);
 
     const worldToMoon = new Quaternion();
+    const worldToScene = new Quaternion();
     const sunDirection = new Vector3();
     const earthDirection = new Vector3();
     const toSunFromEarth = new Vector3();
@@ -206,6 +222,9 @@ export function createSky(site: LandingSite): Sky {
 
     function update(context: SkyContext): SkyState {
         worldToMoon.copy(context.moonQuaternion).invert();
+        // The same composition `intoScene` performs, kept as a rotation so the
+        // starfield can be handed it whole. See the note on `Sky.worldToScene`.
+        worldToScene.copy(localToScene).multiply(worldToMoon);
 
         // Sunlight is geometric everywhere in this project: the Sun is at the world
         // origin, so the way to it is simply the way back.
@@ -274,6 +293,7 @@ export function createSky(site: LandingSite): Sky {
     return {
         scene,
         camera,
+        worldToScene,
         update,
         dispose() {
             earth.geometry.dispose();

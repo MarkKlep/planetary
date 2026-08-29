@@ -9,6 +9,12 @@ import './iss-hud.scss';
 /**
  * The station's read-out, shown while the camera is following it.
  *
+ * It shares the bottom-right corner with the flight, surface and star read-outs. The
+ * first two exclude it by construction — both give up the camera's focus target on
+ * their way in — but `betelgeuse-hud` does not, because pointing at a star leaves the
+ * camera keeping station with whatever body it was on. That one is excluded by name in
+ * `updateIssHud`.
+ *
  * Static markup, like `flight-hud.tsx` and `surface-hud.tsx` and for the same reason:
  * `script.ts` owns which body the camera is on, and it can be changed from the nav
  * panel, from a click in the scene, from a keyboard shortcut or by entering free

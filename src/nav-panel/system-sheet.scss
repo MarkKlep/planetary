@@ -1,0 +1,219 @@
+@use '../variables.scss' as *;
+
+/**
+ * The dialog that replaced the object list's accordion — see `system-sheet.tsx`.
+ *
+ * Built on `shared/modal`'s shape rather than sharing its class names: that one is a
+ * confirmation, sized to a sentence and two buttons, and this is a list. What they do
+ * share is the treatment — the same scrim, the same card, the same eyebrow title — so
+ * the two read as one piece of chrome rather than as two different ideas of a dialog.
+ */
+
+// Above the nav panel and the HUDs (1000) and the zoom buttons (1200); below the
+// confirmation dialog (1500), which can be raised from inside this one by choosing a
+// body while standing on the Moon, and below the splash (2000).
+.system-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 1400;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+
+    background: rgba(4, 4, 6, 0.62);
+    backdrop-filter: blur(2px);
+
+    opacity: 0;
+    visibility: hidden;
+    // `visibility` is switched with a *zero-length* transition and a delay rather than
+    // faded over the same 0.16s as the opacity, and the difference is not cosmetic:
+    // faded, its computed value is still `hidden` on the frame the dialog opens, and
+    // nothing inside a hidden subtree can take focus — so `system-sheet.tsx`'s call to
+    // focus the close button is silently rejected and the keyboard never enters the
+    // dialog. Zero seconds with no delay flips it visible at once on the way in; zero
+    // seconds delayed by the fade keeps it visible all the way out.
+    transition: opacity 0.16s ease, visibility 0s linear 0.16s;
+    // Closed, it must not sit over the canvas eating drags; open, swallowing them is
+    // exactly the point.
+    pointer-events: none;
+
+    &--open {
+        opacity: 1;
+        visibility: visible;
+        transition: opacity 0.16s ease, visibility 0s linear 0s;
+        pointer-events: auto;
+    }
+}
+
+.system-sheet__dialog {
+    width: 100%;
+    max-width: 340px;
+    // Saturn's is the tallest at eight rows, and on a short laptop that plus the
+    // header is more than the viewport. The header stays put and the list scrolls.
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px 16px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    // The one place a real shadow is warranted: like the confirmation dialog, this is
+    // genuinely floating above the scene rather than bonded to an edge.
+    box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    transform: translateY(10px) scale(0.985);
+    transition: transform 0.16s ease;
+
+    .system-sheet--open & {
+        transform: none;
+    }
+
+    // `hidden` is how the five inactive groups stay out of the way while staying in
+    // the DOM, and a flex child overrides the attribute's own `display: block` unless
+    // this says otherwise. Getting it wrong stacks all six dialogs on top of one
+    // another, which is exactly what the attribute is being trusted to prevent.
+    &[hidden] {
+        display: none;
+    }
+}
+
+.system-sheet__header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex: none;
+    padding-bottom: 12px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.system-sheet__symbol {
+    display: flex;
+    flex: none;
+    width: 22px;
+    height: 22px;
+}
+
+.system-sheet__title {
+    flex: 1;
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+}
+
+.system-sheet__close {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--ink-dim);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease;
+
+    &:hover {
+        border-color: var(--hairline-bright);
+        color: var(--ink);
+    }
+
+    &:focus-visible {
+        outline: 2px solid var(--signal);
+        outline-offset: 2px;
+    }
+}
+
+.system-sheet__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--hairline-bright) transparent;
+}
+
+.system-sheet__group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.system-sheet__row {
+    display: flex;
+    gap: 6px;
+}
+
+// A satellite's own layer, set in from the row that owns it so it reads as belonging
+// to it rather than sitting beside it at the same rank.
+.system-sheet__row--nested {
+    margin-left: 18px;
+}
+
+// The group's own layer, below a rule: everything above it is somewhere to go.
+.system-sheet__row--parted {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--hairline);
+}
+
+// The wide half of a row. Restated here rather than borrowed from `.nav-btn--satellite`
+// because that one is sized for an indented column 288px wide and carries its own
+// left margin; this sits in a dialog and starts at the edge.
+.system-sheet__target {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex: 1;
+    min-width: 0;
+    padding: 9px 12px;
+    font-size: 13px;
+    background: transparent;
+    border-color: var(--hairline);
+
+    &:hover {
+        border-color: var(--hairline-bright);
+    }
+}
+
+// The selected row, restated at a specificity that beats the global `.nav-btn.active`
+// on all three properties — the same fight `.navigation-panel .nav-btn--satellite.active`
+// documents in nav-panel.scss, and settled the same way and for the same reason: a 2px
+// tick rather than a planet row's 3px, because this is the smaller thing.
+.system-sheet .system-sheet__list .nav-btn.system-sheet__target.active {
+    border-color: var(--signal);
+    background: var(--signal-dim);
+    box-shadow: inset 2px 0 0 var(--signal);
+    color: var(--ink);
+}
+
+.system-sheet__row-symbol {
+    display: flex;
+    flex: none;
+    width: 16px;
+    height: 16px;
+}
+
+// The drawer breakpoint the rest of the chrome uses. The dialog takes the width it can
+// get and gives back its padding — on a 375px screen the 24px inset either side is the
+// difference between a comfortable row and a wrapped moon name.
+@media (max-width: 768px) {
+    .system-sheet {
+        padding: 16px;
+    }
+
+    .system-sheet__dialog {
+        max-width: none;
+        max-height: calc(100vh - 32px);
+    }
+}

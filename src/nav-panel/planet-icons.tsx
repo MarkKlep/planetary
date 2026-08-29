@@ -30,7 +30,7 @@ const RADIUS = 8.4;
 // highlight painted over the rings as well would read as a smear across them. Its
 // globe carries its own drawn shading below instead.
 const SPHERE_IDS = new Set([
-    'sun', 'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
+    'mercury', 'venus', 'earth', 'mars', 'moon', 'system',
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
     'uranus', 'neptune', 'pluto',
@@ -61,15 +61,91 @@ export function BodyIcon({ id }: BodyIconProps) {
   );
 }
 
+/**
+ * The two stars in the list, drawn as one shape so they read as one kind of thing.
+ *
+ * They used to be built like the planets — a flat disc under the shared lit-sphere
+ * overlay — and that is exactly why they did not read as stars. **That overlay's dark
+ * edge is a terminator**: it is the shading of a ball lit from somewhere else, which
+ * is the one thing a star is not. Wearing it, the Sun was a yellow planet and
+ * Betelgeuse an orange one, sitting at either end of a list of actual planets.
+ *
+ * So both are excluded from `SPHERE_IDS` and built from what makes a star look like a
+ * star instead, in the order light actually leaves one:
+ *
+ *  - **A corona**, spilling past the disc to the edge of the icon. Emission, not a
+ *    highlight — it is the only element here that draws light *outside* the body.
+ *  - **Four short rays**, the diffraction spikes an instrument puts on a bright point.
+ *    The scene does the same thing: `background/betelgeuse.ts` draws this star with
+ *    the four-point flare sprite that `background.ts` keeps for its brightest stars.
+ *  - **A limb-darkened disc**, bright at the centre and falling to a cooler, redder
+ *    edge — which is the *opposite* gradient to the planets' and the honest one, since
+ *    it is what `sun.ts`'s photosphere shader actually computes: we see shallower,
+ *    cooler gas at the limb, so it is dimmer and redder than the middle.
+ *
+ * The two then differ only in colour and in how far the disc is pushed toward red,
+ * which is the whole of the real difference: 5,800 K against 3,600 K.
+ */
+function StarShape({
+  id,
+  core,
+  mid,
+  edge,
+  corona,
+  discRadius,
+}: {
+  id: string;
+  core: string;
+  mid: string;
+  edge: string;
+  corona: string;
+  discRadius: number;
+}) {
+  const coronaId = `star-corona-${id}`;
+  const discId = `star-disc-${id}`;
+  // Rays start just clear of the limb so they read as light thrown off the disc
+  // rather than as spokes drawn through it.
+  const inner = discRadius + 1.2;
+  const outer = CENTER - 0.6;
+
+  return (
+    <>
+      <defs>
+        <radialGradient id={coronaId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={corona} stopOpacity="0.6" />
+          <stop offset="45%" stopColor={corona} stopOpacity="0.26" />
+          <stop offset="100%" stopColor={corona} stopOpacity="0" />
+        </radialGradient>
+        <radialGradient id={discId} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor={core} />
+          <stop offset="55%" stopColor={mid} />
+          <stop offset="100%" stopColor={edge} />
+        </radialGradient>
+      </defs>
+      <circle cx={CENTER} cy={CENTER} r={CENTER} fill={`url(#${coronaId})`} />
+      <g stroke={corona} strokeWidth="1.1" strokeLinecap="round" opacity="0.55">
+        <path d={`M${CENTER} ${CENTER - outer} V${CENTER - inner}`} />
+        <path d={`M${CENTER} ${CENTER + outer} V${CENTER + inner}`} />
+        <path d={`M${CENTER - outer} ${CENTER} H${CENTER - inner}`} />
+        <path d={`M${CENTER + outer} ${CENTER} H${CENTER + inner}`} />
+      </g>
+      <circle cx={CENTER} cy={CENTER} r={discRadius} fill={`url(#${discId})`} />
+    </>
+  );
+}
+
 function BodyShape({ id }: BodyIconProps) {
   switch (id) {
     case 'sun':
       return (
-        <>
-          <circle cx={CENTER} cy={CENTER} r={RADIUS + 2.6} fill="#ff9d3f" opacity="0.22" />
-          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#ffb443" />
-          <circle cx={CENTER} cy={CENTER} r={RADIUS} fill="#ffde8a" opacity="0.4" />
-        </>
+        <StarShape
+          id="sun"
+          core="#fffdf2"
+          mid="#ffd469"
+          edge="#ff9c2b"
+          corona="#ffb03c"
+          discRadius={6.4}
+        />
       );
     case 'mercury':
       return (
@@ -499,6 +575,22 @@ function BodyShape({ id }: BodyIconProps) {
           {/* The equatorial ridge, 13 km high and on no other body anywhere. */}
           <path d="M 2.2 10 Q 6 9.2 10 10" stroke="#7a6450" strokeWidth="0.8" fill="none" opacity="0.9" />
         </>
+      );
+    // The same shape as the Sun's, which is the point of it — these are the only two
+    // rows in the list that are stars and they sit at either end of it. What differs
+    // is the two facts that actually differ: a disc pushed a size larger, because this
+    // is a supergiant 764 times the Sun's radius, and every colour a long way down the
+    // blackbody curve, because 3,600 K against 5,800 K.
+    case 'betelgeuse':
+      return (
+        <StarShape
+          id="betelgeuse"
+          core="#ffddb8"
+          mid="#f2854a"
+          edge="#bf4419"
+          corona="#e35c22"
+          discRadius={6.9}
+        />
       );
     case 'system':
       return (

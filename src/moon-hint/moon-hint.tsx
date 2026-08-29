@@ -8,15 +8,15 @@ import './moon-hint.scss';
  * Landing is the only thing in the app that is a *mode* rather than a camera move —
  * it replaces the whole render (see CLAUDE.md on `moon-surface/`) — and it is also
  * the only feature that is invisible on arrival: the Land button lives inside Earth's
- * dropdown, which starts collapsed, inside a panel that starts collapsed as well on a
+ * sheet, which opens only when asked, inside a panel that starts collapsed as well on a
  * phone. `LandFlag` in the nav panel already marks the row permanently for anyone
- * who opens that dropdown; nothing tells the visitor who never does.
+ * who opens that sheet; nothing tells the visitor who never does.
  *
  * So this is the announcement half of the same fact, and it is built the opposite way
  * on purpose: temporary rather than permanent, animated rather than steady, and gone
  * for good once it has done its job. Two things carry it — the card, and a beacon
  * that walks the route the card describes, one control at a time: the panel's toggle
- * while the panel is shut, Earth's chevron while its dropdown is shut, and then the
+ * while the panel is shut, Earth's opener while its sheet is shut, and then the
  * Land button itself. That is why the card can name two controls in a sentence and
  * still be followed on a phone, where the first control is a third one it never
  * mentions. The whole trail is CSS — see moon-hint.scss — because every stage of it
@@ -74,7 +74,7 @@ function isLandKey(event: KeyboardEvent): boolean {
 
 /**
  * The two steps *before* that one. Deliberately not dismissals: opening the panel or
- * Earth's dropdown is someone halfway through the instruction, and taking the card
+ * Earth's sheet is someone halfway through the instruction, and taking the card
  * away at that exact moment removes the word "Land" from the screen one frame before
  * the Land button appears on it. They restart the clock instead, so following the
  * hint slowly can never run it out.

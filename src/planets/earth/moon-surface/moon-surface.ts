@@ -592,6 +592,7 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
 
             // Hand the stars back the way they were found.
             stars.scale.setScalar(1);
+            stars.quaternion.identity();
             starsHome.add(stars);
 
             teardown();
@@ -629,6 +630,13 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
             sky.camera.updateProjectionMatrix();
 
             state = sky.update(context);
+            // Turned into the observer's horizon frame, so the sky over this site is
+            // the sky that is actually over it. Without this the field hangs at the
+            // solar-system view's orientation and Betelgeuse — the one point in it
+            // that has a real place to be — is at an arbitrary altitude and bearing.
+            // One quaternion copy a frame, and the stars wheel over the site once a
+            // lunar month for free, because `worldToScene` carries the Moon's spin.
+            stars.quaternion.copy(sky.worldToScene);
 
             // The sky is only known after the first update, so the opening view is
             // aimed here rather than at build time. Earth if there is one — it is what

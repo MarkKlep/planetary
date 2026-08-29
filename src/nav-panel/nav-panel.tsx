@@ -1,222 +1,9 @@
-import { Fragment, useState } from 'react';
+import { useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
+import { BODIES, SHEET_GROUPS, hasSheet } from './bodies';
 import { BodyIcon } from './planet-icons';
-import { RangeTick, rangeLabel } from './range-rail';
+import { SystemSheet } from './system-sheet';
 import './nav-panel.scss';
-
-/**
- * The mark that says "this one you can also stand on, not just look at".
- *
- * Every other row here is a camera target — this is the one place that switches the
- * app into a different mode entirely, and nothing about "Moon" sitting in a list next
- * to "ISS" and "Analemma" says so. Permanent, not a one-time callout: the distinction
- * ("landable" vs. "observe only") is a standing fact about this row, the same way the
- * live dot beside "Solar system simulator" is a standing fact rather than an
- * announcement — so, like that dot, this has no dismissal and no animation, just a
- * steady glow.
- *
- * A flag rather than an abstract icon, because the thing it points at has a real one:
- * `moon-surface/artefacts.ts` plants the actual Apollo 11 flag at Tranquility Base,
- * lying flat where the ascent engine knocked it over.
- *
- * `aria-label` rather than `aria-hidden`: this sits inside the Moon's own button, so
- * it extends that button's accessible name — a screen reader gets "Moon, click Land
- * to walk the surface" instead of an unexplained icon.
- *
- * The hover card is a `data-tooltip` + CSS `::after`, not the native `title`
- * attribute: `title` renders as the browser's own unstyled tooltip on its own ~1s
- * delay, which would fight this chrome's instrument-panel look.
- */
-function LandFlag() {
-  const message = 'Click Land to walk the surface';
-  return (
-    <span className="nav-flag" role="img" aria-label={message} data-tooltip={message}>
-      <svg viewBox="0 0 12 12" width="12" height="12" focusable="false">
-        <path d="M3 1.2v9.6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" fill="none" />
-        <path d="M3.75 1.7h6.1v4.05h-6.1z" fill="currentColor" />
-      </svg>
-    </span>
-  );
-}
-
-/**
- * A button sitting beside a row that switches something rather than flying to it.
- * `script.ts` owns the label and the state outright — same reasoning as free flight's
- * button: several paths (this button, a keyboard shortcut, a click in the scene) all
- * have to be able to drive it, and none of them should have to fight React state to
- * do it. Everything here does is put it on the page with the right initial label, so
- * there is no flash of the wrong one before `initScene`'s deferred effect runs.
- */
-interface Toggle {
-  toggleId: string;
-  initialLabel: string;
-  /** Renders dimmed, matching the "currently off" state script.ts starts it in. */
-  startsOff?: boolean;
-}
-
-interface Satellite {
-  id: string;
-  label: string;
-  toggle?: Toggle;
-  /**
-   * Rows that live in this satellite's *own* dropdown, collapsed behind its own
-   * expand chevron — the same pattern a `Planet` gets, one level deeper.
-   *
-   * Not rendered as an always-visible row beside the satellite's own button: a bare
-   * "Show" sitting next to a row labelled "ISS" reads as showing the ISS, the same trap
-   * Saturn's "Titan haze" row was pulled out to avoid, and an always-open sub-row would
-   * also permanently cost Earth's own dropdown a row of height for something most
-   * visits to Earth have no reason to touch. Tucking it behind its own chevron keeps it
-   * reachable without either problem.
-   */
-  nested?: Array<Toggle & { label: string }>;
-}
-
-/**
- * A top-level row in the object list: the eight planets, and Pluto.
- *
- * Named for what the list holds rather than `Planet`, because since 2006 one of these is
- * not one — and a constant called `PLANETS` with Pluto in it would be the sort of quiet
- * inaccuracy the rest of this project goes out of its way to avoid.
- */
-interface Body {
-  id: string;
-  label: string;
-  satellites: Satellite[];
-  /**
-   * Draws a hairline above this row. Set on the first planet, so the eight are divided
-   * from the Sun, and on Pluto, which is a dwarf planet and belongs to neither group.
-   */
-  startsGroup?: boolean;
-  /**
-   * A row in the dropdown that toggles something rather than flying to it. Venus has
-   * no moons, so its dropdown would otherwise be empty — what belongs in there is the
-   * cloud deck, which is the only thing on any of these planets you can take off.
-   * `toggleId` is looked up by script.ts, which owns the button's label and state
-   * outright, the same way it owns the analemma's and the orbits'.
-   */
-  toggle?: { label: string; toggleId: string };
-}
-
-const BODIES: Body[] = [
-  // The one entry with nothing to expand: Mercury has no moons, no cloud deck and no
-  // atmosphere, so it gets a plain full-width button and no chevron.
-  {
-    id: 'mercury',
-    label: 'Mercury',
-    satellites: [],
-  },
-  {
-    id: 'venus',
-    label: 'Venus',
-    satellites: [],
-    toggle: { label: 'Clouds', toggleId: 'toggle-venus-clouds' },
-  },
-  {
-    id: 'earth',
-    label: 'Earth',
-    satellites: [
-      // The only row here that switches the app into a different mode rather than
-      // pointing the camera somewhere. Its label reads Land / Leave, not Show / Hide,
-      // because there is nowhere in the solar-system scene that "the lunar surface"
-      // could be — at true scale an astronaut's eye is 2.7e-7 of a scene unit off the
-      // ground, so it gets its own scene, in metres.
-      { id: 'moon', label: 'Moon', toggle: { toggleId: 'toggle-moon-surface', initialLabel: 'Land', startsOff: true } },
-      // The one satellite with a dropdown of its own: the orbit the station is flying
-      // and the ground track under that. Both are diagram rather than scenery, so they
-      // start off, and they live behind ISS's own chevron rather than as a row that
-      // is always open — see `Satellite.nested`.
-      {
-        id: 'iss',
-        label: 'ISS',
-        nested: [
-          { label: 'Trajectory', toggleId: 'toggle-iss-trajectory', initialLabel: 'Show', startsOff: true },
-        ],
-      },
-      { id: 'analemma', label: 'Analemma', toggle: { toggleId: 'toggle-analemma', initialLabel: 'Show', startsOff: true } },
-    ],
-  },
-  {
-    id: 'mars',
-    label: 'Mars',
-    satellites: [
-      { id: 'phobos', label: 'Phobos' },
-      { id: 'deimos', label: 'Deimos' },
-    ],
-  },
-  // The only entry whose satellites are worth flying to in their own right: all four
-  // are larger than Pluto and Ganymede is larger than Mercury, which is four rows up.
-  // Listed inward-out, the order Galileo numbered them in and the order they are
-  // locked in — Io twice round for Europa's one, Europa twice for Ganymede's.
-  {
-    id: 'jupiter',
-    label: 'Jupiter',
-    satellites: [
-      { id: 'io', label: 'Io' },
-      { id: 'europa', label: 'Europa' },
-      { id: 'ganymede', label: 'Ganymede' },
-      { id: 'callisto', label: 'Callisto' },
-    ],
-  },
-  // The longest dropdown here, and the only planet whose list carries both kinds of row
-  // at once: seven moons to fly to, and — under Titan — the one toggle in the outer
-  // system, which is Venus's cloud row again for the only other body whose surface is
-  // hidden by its own atmosphere. Listed inward-out like Jupiter's, which is also
-  // discovery order for five of the seven: Huygens found Titan in 1655, Cassini the four
-  // between 1671 and 1684, and Herschel the two innermost in a single fortnight of 1789.
-  {
-    id: 'saturn',
-    label: 'Saturn',
-    satellites: [
-      { id: 'mimas', label: 'Mimas' },
-      { id: 'enceladus', label: 'Enceladus' },
-      { id: 'tethys', label: 'Tethys' },
-      { id: 'dione', label: 'Dione' },
-      { id: 'rhea', label: 'Rhea' },
-      { id: 'titan', label: 'Titan' },
-      { id: 'iapetus', label: 'Iapetus' },
-    ],
-    // Venus's cloud row again, and it has to be the *planet*-level toggle rather than
-    // one hanging off Titan's row: a bare "Hide" sitting beside a button labelled Titan
-    // reads as hiding Titan. This one gets to say what it takes off.
-    toggle: { label: 'Titan haze', toggleId: 'toggle-titan-haze' },
-  },
-  // Back to a plain full-width button with no chevron, which Mercury is the only other
-  // entry to get — and for the opposite reason. Mercury has nothing to expand because
-  // there is nothing there; Uranus has five moons worth flying to and a set of rings,
-  // and they are simply not modelled yet. An empty dropdown would say the wrong one of
-  // those two things, so it does not get one until there is something to put in it.
-  {
-    id: 'uranus',
-    label: 'Uranus',
-    satellites: [],
-  },
-  // The last planet — plain button, no chevron, for Uranus's reason exactly: Triton and
-  // the ring arcs are worth having and are not modelled yet, and an empty dropdown would
-  // say there is nothing there rather than nothing yet.
-  {
-    id: 'neptune',
-    label: 'Neptune',
-    satellites: [],
-  },
-  /**
-   * And Pluto, which is not a planet and gets a rule above it saying so.
-   *
-   * It has been a dwarf planet since August 2006 on one criterion of three: it orbits the
-   * Sun and it is round, and it has not cleared its neighbourhood — it shares that
-   * neighbourhood with the whole Kuiper belt, and with a moon half its own diameter.
-   *
-   * No chevron, for Uranus's and Neptune's reason exactly: Charon is real and worth
-   * having and is not modelled yet, and an empty dropdown would say there is nothing
-   * there rather than nothing yet.
-   */
-  {
-    id: 'pluto',
-    label: 'Pluto',
-    startsGroup: true,
-    satellites: [],
-  },
-];
 
 // Matches the breakpoint the modal and surface HUD already use elsewhere in the
 // chrome. Below it the panel stops being a docked pane and becomes a drawer: it
@@ -224,11 +11,61 @@ const BODIES: Body[] = [
 // visitor sees first, not 288px of instrument panel covering most of a ~375px screen.
 const MOBILE_QUERY = '(max-width: 768px)';
 
+/**
+ * The control that opens a group's sheet.
+ *
+ * **It points right, not down**, and that is the only visible trace of the change from
+ * an accordion to a dialog — a chevron pointing down promises the row will grow and
+ * push the list apart, which is exactly what this no longer does. Right is the list
+ * idiom for "there is another level, and it is somewhere else".
+ *
+ * It keeps `.nav-expand-btn`, `data-expand` and `--open`, none of which are cosmetic:
+ * `moon-hint.scss` beacons Earth's while its card is up, `moon-hint.tsx` treats a click
+ * on `[data-expand="earth"]` as progress rather than dismissal, and both are pointing
+ * at this button whatever it opens. An attribute rather than an id because every group
+ * has one of these, and the id would have to be invented per group for one selector.
+ */
+function SheetOpener({
+  id,
+  label,
+  open,
+  onOpen,
+}: {
+  id: string;
+  label: string;
+  open: boolean;
+  onOpen(id: string): void;
+}) {
+  return (
+    <button
+      type="button"
+      className={`nav-expand-btn ${open ? 'nav-expand-btn--open' : ''}`}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      aria-label={`Show more of ${label}`}
+      data-expand={id}
+      onClick={() => onOpen(id)}
+    >
+      <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
+        <path
+          d="M4 2l4 4-4 4"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+}
+
 export function NavPanel() {
   const [activeTarget, setActiveTarget] = useState<string | null>(null);
   const [activeSpeed, setActiveSpeed] = useState<number>(DEFAULT_TIME_SPEED);
   const [paused, setPaused] = useState(false);
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  /** Which group's sheet is up, or null. See system-sheet.tsx. */
+  const [openSheet, setOpenSheet] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
 
   // Delegated rather than wired onto every `data-target` button individually — this
@@ -244,17 +81,22 @@ export function NavPanel() {
     if (window.matchMedia(MOBILE_QUERY).matches) setIsCollapsed(true);
   };
 
-  const toggleExpanded = (id: string) => {
-    setExpanded((previous) => {
-      const next = new Set(previous);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
+  /**
+   * Opens a group's sheet, and remembers where the pointer came from.
+   *
+   * Focus goes back to that button on close rather than to the top of the panel,
+   * which is the one thing a dialog opened from a list has to get right — the row it
+   * belongs to is a long way down a scrolling column, and losing the place is worse
+   * than never having opened it.
+   */
+  const closeSheet = () => {
+    const opener = openSheet;
+    setOpenSheet(null);
+    if (opener) {
+      document.querySelector<HTMLElement>(`.nav-expand-btn[data-expand="${opener}"]`)?.focus();
+    }
   };
+
 
   // The actual behaviour is wired up in script.ts, which listens on the data-*
   // attributes and ids below. These handlers only drive the button styling.
@@ -289,16 +131,15 @@ export function NavPanel() {
             </div>
           </div>
         </header>
+        {/* Everything below the header scrolls; the header does not. It is its own
+            element rather than the header being `position: sticky` inside one
+            scroller, because sticky would have to be pinned through this container's
+            own 20px of padding — and paying that back in negative margins leaves the
+            resting layout depending on two numbers agreeing that nothing enforces.
+            Taking the header out of the scrollport makes it structural instead. */}
+        <div className="nav-panel-scroll">
         <div className="nav-section nav-section--objects">
-          {/* The unit for the range column, labelled once at its head rather than
-              eight times down it. Sits in the section title because the title is the
-              only full-width element that lines up with the rows below, and it is
-              held over the column by the same custom properties the rows lay their
-              own chevron and rail out with — so the two cannot drift apart. */}
-          <h2 className="nav-section-title nav-section-title--ranged">
-            Objects
-            <span className="nav-range-legend" aria-hidden="true">AU</span>
-          </h2>
+          <h2 className="nav-section-title">Objects</h2>
           <div className="nav-object-list" onClick={handleObjectListClick}>
             <button
               className={`nav-btn nav-object-btn ${activeTarget === 'sun' ? 'active' : ''}`}
@@ -307,198 +148,38 @@ export function NavPanel() {
             >
               <span className="nav-object-symbol"><BodyIcon id="sun" /></span>
               <span>Sun</span>
-              <RangeTick id="sun" />
             </button>
-            {BODIES.map((planet, index) => {
-              const isExpanded = expanded.has(planet.id);
-              // Nothing to reveal means no chevron — an expander that opens an empty
-              // drawer is worse than no expander. `.nav-planet-btn` is `flex: 1`, so
-              // the button simply takes the whole row and still lines up.
-              const isExpandable = planet.satellites.length > 0 || planet.toggle !== undefined;
-              return (
-                // A hairline above the first planet, and another above the system
-                // view at the end. The list mixes three kinds of thing — a star, the
-                // eight planets, and a place to look from — and it read as ten
-                // identical rows because nothing said so. Rules rather than more
-                // eyebrow headings: they cost a few pixels instead of a row each, and
-                // hairline-divided rectangles are already this chrome's vocabulary.
-                <div
-                  className={`nav-planet ${index === 0 || planet.startsGroup ? 'nav-planet--starts-group' : ''}`}
-                  key={planet.id}
-                >
-                  <div className="nav-planet-row">
-                    <button
-                      className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === planet.id ? 'active' : ''}`}
-                      data-target={planet.id}
-                      // The rail's tick is two pixels of decoration to a screen
-                      // reader, so it is hidden and the figure it stands for is
-                      // spoken here instead. See `rangeLabel`.
-                      aria-label={rangeLabel(planet.id, planet.label)}
-                      onClick={() => setActiveTarget(planet.id)}
-                    >
-                      <span className="nav-object-symbol"><BodyIcon id={planet.id} /></span>
-                      <span>{planet.label}</span>
-                      <RangeTick id={planet.id} />
-                    </button>
-                    {isExpandable && (
-                      <button
-                        type="button"
-                        className={`nav-expand-btn ${isExpanded ? 'nav-expand-btn--open' : ''}`}
-                        aria-expanded={isExpanded}
-                        aria-label={`${isExpanded ? 'Hide' : 'Show'} more of ${planet.label}`}
-                        // The same DOM bridge the fly-to buttons use, for something
-                        // outside the panel that needs to point *at* a specific
-                        // chevron: `moon-hint.scss` beacons Earth's while its card is
-                        // up. An attribute rather than an id because every planet has
-                        // one of these, and the id would then have to be invented per
-                        // planet for the sake of one selector.
-                        data-expand={planet.id}
-                        onClick={() => toggleExpanded(planet.id)}
-                      >
-                        <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                          <path
-                            d="M2 4l4 4 4-4"
-                            stroke="currentColor"
-                            strokeWidth="1.6"
-                            fill="none"
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                  {/* Always mounted — never conditionally rendered on `isExpanded`.
-                      script.ts collects every `.nav-btn[data-target]` once when the
-                      scene initialises; a satellite button that doesn't exist yet
-                      while collapsed would never pick up its click handler. Showing
-                      and hiding it is CSS-only. */}
-                  <div className={`nav-satellites ${isExpanded ? 'nav-satellites--open' : ''}`}>
-                    <div className="nav-satellites__inner">
-                      {planet.satellites.map((satellite) => {
-                        const isNestedExpandable = (satellite.nested?.length ?? 0) > 0;
-                        // Shares the same `expanded` state and `toggleExpanded` a
-                        // planet's own chevron uses — satellite ids never collide with
-                        // planet ids, so one Set safely tracks both levels.
-                        const isSatelliteExpanded = expanded.has(satellite.id);
-                        return (
-                        // A fragment rather than a single row, because one satellite can
-                        // own two elements: itself, and its own collapsible dropdown.
-                        <Fragment key={satellite.id}>
-                        <div className="nav-satellite-row">
-                          <button
-                            className={`nav-btn nav-btn--satellite ${activeTarget === satellite.id ? 'active' : ''}`}
-                            data-target={satellite.id}
-                            onClick={() => setActiveTarget(satellite.id)}
-                          >
-                            <span className="nav-object-symbol nav-object-symbol--small"><BodyIcon id={satellite.id} /></span>
-                            <span>{satellite.label}</span>
-                            {/* Inline rather than a corner badge on the Land button
-                                beside it: `.nav-satellites__inner` clips to
-                                `overflow: hidden` for the accordion animation, so
-                                anything hung off that button's outer edge would get
-                                its corner cut. */}
-                            {satellite.id === 'moon' && <LandFlag />}
-                          </button>
-                          {/* Two rows carry one of these, and they are the two things
-                              under Earth that aren't simply a body to fly to: the
-                              analemma is a permanent overlay worth switching off, and
-                              the Moon's surface is a mode rather than a place in the
-                              scene. See `Toggle` for why script.ts owns both labels. */}
-                          {satellite.toggle && (
-                            <button
-                              type="button"
-                              className={`nav-btn nav-btn--compact nav-visibility-btn ${satellite.toggle.startsOff ? 'nav-visibility-btn--off' : ''
-                                }`}
-                              id={satellite.toggle.toggleId}
-                            >
-                              {satellite.toggle.initialLabel}
-                            </button>
-                          )}
-                          {/* ISS is the one satellite so far with a dropdown of its
-                              own — see `Satellite.nested`. A smaller chevron than a
-                              planet's own, since it sits in an already-indented row
-                              next to a narrower button. */}
-                          {isNestedExpandable && (
-                            <button
-                              type="button"
-                              className={`nav-expand-btn nav-expand-btn--compact ${isSatelliteExpanded ? 'nav-expand-btn--open' : ''}`}
-                              aria-expanded={isSatelliteExpanded}
-                              aria-label={`${isSatelliteExpanded ? 'Hide' : 'Show'} more of ${satellite.label}`}
-                              onClick={() => toggleExpanded(satellite.id)}
-                            >
-                              <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                                <path
-                                  d="M2 4l4 4 4-4"
-                                  stroke="currentColor"
-                                  strokeWidth="1.6"
-                                  fill="none"
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                />
-                              </svg>
-                            </button>
-                          )}
-                          </div>
-                          {/* Always mounted, same rule as the outer satellite lists:
-                              script.ts looks the toggle button up by id once, at scene
-                              init, so it has to exist even while collapsed. Showing
-                              and hiding it is CSS-only. */}
-                          {isNestedExpandable && (
-                            <div className={`nav-satellites nav-satellites--nested ${isSatelliteExpanded ? 'nav-satellites--open' : ''}`}>
-                              <div className="nav-satellites__inner">
-                                {satellite.nested!.map((item) => (
-                                  <div className="nav-satellite-row" key={item.toggleId}>
-                                    {/* Not a `data-target` button: there is nothing
-                                        here to fly to, so it carries no click handler
-                                        and no active state — same as the Orbits and
-                                        Titan haze rows. */}
-                                    <span className="nav-btn nav-btn--satellite nav-btn--static">
-                                      {item.label}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      className={`nav-btn nav-btn--compact nav-visibility-btn ${item.startsOff ? 'nav-visibility-btn--off' : ''
-                                        }`}
-                                      id={item.toggleId}
-                                    >
-                                      {item.initialLabel}
-                                    </button>
-                                  </div>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </Fragment>
-                        );
-                      })}
-                      {planet.toggle && (
-                        <div className="nav-satellite-row">
-                          {/* Not a `data-target` button: there is nothing to fly to.
-                              The row labels the toggle beside it, so it carries no
-                              click handler and no active state — same as the Orbits
-                              row under Solar system. */}
-                          <span className="nav-btn nav-btn--satellite nav-btn--static">
-                            {planet.toggle.label}
-                          </span>
-                          {/* Starts on, matching script.ts's own default, so there is
-                              no flash of the wrong label before initScene runs. This
-                              is the one toggle here that begins visible: the clouds
-                              are what Venus looks like. */}
-                          <button
-                            type="button"
-                            className="nav-btn nav-btn--compact nav-visibility-btn"
-                            id={planet.toggle.toggleId}
-                          >
-                            Hide
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+            {BODIES.map((planet, index) => (
+              // A hairline above the first planet, and another above Pluto. The list
+              // mixes three kinds of thing — a star, the eight planets, and a place to
+              // look from — and it read as ten identical rows because nothing said so.
+              // Rules rather than more eyebrow headings: they cost a few pixels instead
+              // of a row each, and hairline-divided rectangles are already this
+              // chrome's vocabulary.
+              <div
+                className={`nav-planet ${index === 0 || planet.startsGroup ? 'nav-planet--starts-group' : ''}`}
+                key={planet.id}
+              >
+                <div className="nav-planet-row">
+                  <button
+                    className={`nav-btn nav-planet-btn nav-object-btn ${activeTarget === planet.id ? 'active' : ''}`}
+                    data-target={planet.id}
+                    onClick={() => setActiveTarget(planet.id)}
+                  >
+                    <span className="nav-object-symbol"><BodyIcon id={planet.id} /></span>
+                    <span>{planet.label}</span>
+                  </button>
+                  {hasSheet(planet) && (
+                    <SheetOpener
+                      id={planet.id}
+                      label={planet.label}
+                      open={openSheet === planet.id}
+                      onOpen={setOpenSheet}
+                    />
+                  )}
                 </div>
-              );
-            })}
+              </div>
+            ))}
             <div className="nav-planet nav-planet--starts-group">
               <div className="nav-planet-row">
                 <button
@@ -508,56 +189,13 @@ export function NavPanel() {
                 >
                   <span className="nav-object-symbol"><BodyIcon id="system" /></span>
                   <span>Solar system</span>
-                  {/* Renders nothing, and the nothing is the point: this is a place
-                      to look from rather than a body at a distance from the Sun. Left
-                      in so the row says that deliberately rather than by omission. */}
-                  <RangeTick id="system" />
                 </button>
-                <button
-                  type="button"
-                  className={`nav-expand-btn ${expanded.has('system') ? 'nav-expand-btn--open' : ''}`}
-                  aria-expanded={expanded.has('system')}
-                  aria-label={`${expanded.has('system') ? 'Hide' : 'Show'} solar system options`}
-                  onClick={() => toggleExpanded('system')}
-                >
-                  <svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true">
-                    <path
-                      d="M2 4l4 4 4-4"
-                      stroke="currentColor"
-                      strokeWidth="1.6"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-              {/* Same always-mounted rule as the satellite lists above: script.ts looks
-                  this button up by id once, at scene init, so it has to exist even
-                  while the dropdown is collapsed. */}
-              <div className={`nav-satellites ${expanded.has('system') ? 'nav-satellites--open' : ''}`}>
-                <div className="nav-satellites__inner">
-                  <div className="nav-satellite-row">
-                    {/* Not a `data-target` button: there is nothing to fly to here.
-                        The row is a label for the toggle beside it, which is why it
-                        carries no click handler and no active state. */}
-                    <span className="nav-btn nav-btn--satellite nav-btn--static">
-                      <span className="nav-object-symbol nav-object-symbol--small">
-                        <BodyIcon id="orbits" />
-                      </span>
-                      <span>Orbits</span>
-                    </span>
-                    {/* Mirrors script.ts's own default (hidden) so there's no flash of
-                        "Hide" before initScene runs and corrects it. */}
-                    <button
-                      type="button"
-                      className="nav-btn nav-btn--compact nav-visibility-btn nav-visibility-btn--off"
-                      id="toggle-orbits"
-                    >
-                      Show
-                    </button>
-                  </div>
-                </div>
+                <SheetOpener
+                  id="system"
+                  label="Solar system"
+                  open={openSheet === 'system'}
+                  onOpen={setOpenSheet}
+                />
               </div>
             </div>
           </div>
@@ -609,6 +247,7 @@ export function NavPanel() {
             <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
           </a>
         </div>
+        </div>
       </div>
     </nav>
     {/* A tap-outside-to-close convenience, visible only at the mobile breakpoint (see
@@ -619,6 +258,24 @@ export function NavPanel() {
       className={`nav-panel-scrim ${!isCollapsed ? 'nav-panel-scrim--visible' : ''}`}
       onClick={() => setIsCollapsed(true)}
       aria-hidden="true"
+    />
+    {/* Outside the panel, not inside it: the panel is `position: fixed` and slides
+        clean off the screen when collapsed, which would take the dialog with it — and
+        on the mobile layout, choosing a moon closes the drawer, so the sheet would be
+        leaving at the moment it is being read. */}
+    <SystemSheet
+      groups={SHEET_GROUPS}
+      openId={openSheet}
+      activeTarget={activeTarget}
+      onSelect={(id) => {
+        setActiveTarget(id);
+        // The drawer's own "select and get out of the way" rule, which the delegated
+        // handler on the object list cannot reach from here — the sheet is not inside
+        // it. Same condition, same reason: on desktop the panel is docked and must not
+        // fight the user's own collapse choice.
+        if (window.matchMedia(MOBILE_QUERY).matches) setIsCollapsed(true);
+      }}
+      onClose={closeSheet}
     />
     </>
   );

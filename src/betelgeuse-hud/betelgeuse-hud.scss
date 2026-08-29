@@ -1,0 +1,119 @@
+@use '../variables.scss' as *;
+
+/**
+ * The star read-out, in the same corner and the same frame as the flight, surface and
+ * station HUDs. All four are mutually exclusive by construction: free flight and the
+ * lunar surface both give up the camera's focus target, and flying to any other body
+ * stands the approach down — so the corner can only ever hold one of them.
+ *
+ * Same width as `.iss-hud` and for the same reason: two rows carry a second, quieter
+ * figure underneath the first, and those wrap at the flight HUD's 232px.
+ */
+.betelgeuse-hud {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    width: 272px;
+    padding: 16px 18px;
+    border-radius: var(--radius-md);
+    background: var(--panel);
+    backdrop-filter: blur(10px);
+    border: 1px solid var(--hairline);
+    color: var(--ink);
+    font-family: var(--font-body);
+
+    // The canvas underneath is being dragged to orbit the camera, so the panel must
+    // never swallow the pointer.
+    pointer-events: none;
+
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(8px);
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0.18s;
+
+    &--visible {
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+    }
+}
+
+.betelgeuse-hud__title {
+    font-family: var(--font-display);
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    color: var(--ink);
+}
+
+.betelgeuse-hud__subtitle {
+    font-family: var(--font-mono);
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--ink-faint);
+    margin-top: 3px;
+    padding-bottom: 10px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.betelgeuse-hud__readout {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 6px 12px;
+    align-items: baseline;
+    padding-bottom: 12px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--hairline);
+}
+
+.betelgeuse-hud__label {
+    font-size: 12px;
+    color: var(--ink-dim);
+}
+
+.betelgeuse-hud__value {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    color: var(--telemetry);
+    text-align: right;
+    // The range is rewritten every frame through seven orders of magnitude, so its
+    // digits would otherwise shuffle the column sideways the whole way in.
+    font-variant-numeric: tabular-nums;
+}
+
+/** The second, quieter figure under a value: what the first one means. */
+.betelgeuse-hud__aside {
+    display: block;
+    font-size: 10px;
+    color: var(--ink-faint);
+    letter-spacing: 0.02em;
+    margin-top: 1px;
+}
+
+.betelgeuse-hud__note {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--hairline);
+    font-size: 11px;
+    line-height: 1.45;
+    color: var(--ink-faint);
+}
+
+// Same breakpoint and the same trade the other three HUDs make in this corner. The
+// asides go first; the note stays, because on the layout where the panel is a drawer
+// and the star fills the whole screen it is doing more work, not less.
+@media (max-width: 768px) {
+    .betelgeuse-hud {
+        right: 12px;
+        bottom: 12px;
+        width: 196px;
+        padding: 12px 14px;
+    }
+
+    .betelgeuse-hud__aside {
+        display: none;
+    }
+}

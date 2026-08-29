@@ -6,6 +6,12 @@ import { clouds } from './planets/earth/clouds';
 import { atmosphere, atmosphereSunDirection } from './planets/earth/atmosphere';
 import { sun, sunLight, updateSun } from './sun';
 import { backgroundTexture } from './background/background';
+import {
+    betelgeuse,
+    betelgeuseDirection,
+    betelgeuseTelemetry,
+    updateBetelgeuse,
+} from './background/betelgeuse';
 import { iss, issTelemetry, updateISS, updateISSPosition } from './iss';
 import { issGroundTrack, issOrbitPath, updateISSTrajectory } from './iss-trajectory';
 import { moon, moonTidalRotation } from './planets/earth/moon';
@@ -483,6 +489,12 @@ export function initScene(onFirstFrame?: () => void) {
     scene.add(plutoSystem);
     scene.add(sun);
     scene.add(backgroundTexture);
+    // Into the backdrop group rather than into the scene, which buys two things for
+    // nothing: the group is re-parked on the camera every frame, so the star holds
+    // its direction however far you travel (see betelgeuse.ts on why that is not a
+    // cheat), and surface mode borrows the whole group, so it hangs in the lunar sky
+    // too without that path knowing it exists.
+    backgroundTexture.add(betelgeuse);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
     // the path a body traces *through* the Sun's frame, so it has to stay put while
     // the body moves along it. Parenting each one to the node that carries its planet
@@ -591,6 +603,15 @@ export function initScene(onFirstFrame?: () => void) {
         // you're already close, so this gets a short `hideBeyond` like the ISS's
         // framing rather than the "visible across the whole system" bodies above.
         { ...createLabel('Analemma', analemmaAnchor, 0.05), body: analemmaAnchor, radius: ANALEMMA_RADIUS, hideBeyond: 15 },
+        // The only label on something that is not in the solar system, and the only
+        // reason the star is findable at all — it is one point among 17,760, and
+        // nothing else here says which. `radius` is nominal rather than the star's
+        // real 764 solar radii: the field only feeds the "camera is parked on this
+        // body" test, and a backdrop pinned 960 units from the camera can never be
+        // parked on. `hideBeyond` is likewise never reached, so the chip comes and
+        // goes on the same two rules as the planets' — off in the system-wide shot,
+        // and off when a nearer label wants the same pixels.
+        { ...createLabel('Betelgeuse', betelgeuse, 24), body: betelgeuse, radius: 1, hideBeyond: Infinity },
     ];
 
     // --- per-frame label scratch ------------------------------------------
@@ -1212,6 +1233,11 @@ export function initScene(onFirstFrame?: () => void) {
             return;
         }
 
+        // Being taken anywhere at all is also leaving Betelgeuse. One line here covers
+        // the nav panel, every keyboard shortcut, the reset button and a click in the
+        // scene, none of which need to know the star has a mode.
+        standDownBetelgeuse();
+
         const isSystemView =
             target === sun &&
             !!approachFrom &&
@@ -1260,6 +1286,148 @@ export function initScene(onFirstFrame?: () => void) {
     }
 
     /**
+     * A world direction the camera is being turned toward, or null.
+     *
+     * Betelgeuse is the one destination `focusOnObject` cannot serve, and the reason is
+     * worth stating because it is the same fact the whole feature rests on: that
+     * function flies the camera to `target.getWorldPosition() + offset`, and this
+     * target's world position *is the camera's own*, plus a fixed 960-unit direction —
+     * the backdrop group is re-parked on the camera every frame. Feeding that back in
+     * is a loop with no fixed point: the star retreats exactly as fast as the camera
+     * chases it, which is a fair account of trying to fly to a star and a poor way to
+     * animate one.
+     *
+     * So the camera does not travel; it turns. That is not a lesser version of the
+     * move, it is the whole of the move that exists — no reachable camera position
+     * changes this direction by a ten-thousandth of a pixel.
+     */
+    let aimDirection: Vector3 | null = null;
+    const AIM_IDENTITY = new Quaternion();
+    const aimCurrent = new Vector3();
+    const aimStep = new Quaternion();
+    const aimRotation = new Quaternion();
+
+    /**
+     * Whether the panel and its read-out are up. Not a camera mode: the camera is the
+     * ordinary orbit camera throughout, and this only records that the last thing
+     * asked for was the star.
+     */
+    let betelgeuseSelected = false;
+
+    /**
+     * How far *past* a blocking body the camera steps, as a multiple of its radius.
+     * Just past the far limb, so the body is strictly behind the camera plane and
+     * cannot occlude anything — no trigonometry, and no dependence on the field of
+     * view.
+     */
+    const STEP_CLEAR_MARGIN = 1.25;
+    /**
+     * How near the line of sight a body has to be before it is worth stepping past,
+     * as a multiple of its own angular radius.
+     *
+     * Relative rather than a fixed angle, and that is the load-bearing part. A fixed
+     * "within 25°" would fire on the Sun in the system-wide shot, where it is three
+     * pixels across and blocking nothing, and pay for it with a 27 AU move. Measured
+     * in the body's own angular radius, the test asks the only question that matters —
+     * is this thing actually in the way — so the move is large only when the body is
+     * genuinely dead ahead and filling the frame.
+     */
+    const STEP_CLEAR_APPROACH = 3;
+
+    /** Distance still to travel along the star's direction, in world units. */
+    let stepClearRemaining = 0;
+    const stepClearToBody = new Vector3();
+
+    /**
+     * Points the camera at Betelgeuse and steps clear of whatever is in front of it.
+     *
+     * There is no flying to a star and the panel says so, but there is a real and
+     * small thing the camera can do about the *view*: the body it is parked at is the
+     * only object in this scene big enough to hide a point of light, and stepping past
+     * it is a move of a few Earth radii. So the action is a turn plus, when something
+     * is genuinely in the way, a short step forward that leaves it behind.
+     *
+     * The orbit pivot is kept at its current distance rather than pushed out to the
+     * star: it is what `OrbitControls` orbits around, and a pivot at the star's real
+     * range would make a drag rotate the camera about a point 8×10¹¹ units away, which
+     * is not a camera control, it is a fixed direction. Holding the range the user
+     * already had means dragging afterwards feels exactly as it did before.
+     */
+    function viewBetelgeuse() {
+        if (moonSurface.active) {
+            confirmLeaveSurface(() => viewBetelgeuse());
+            return;
+        }
+
+        setFreeFlight(false);
+        setOrbitsVisible(false);
+        // A fly-to still in the air would keep writing the pivot this is about to own.
+        focusAnimation = null;
+        setFocusedObject(betelgeuse);
+
+        aimDirection = betelgeuseDirection;
+        betelgeuseSelected = true;
+        stepClearRemaining = clearanceNeeded();
+    }
+
+    /**
+     * How far along the star's direction the camera has to go to leave the body in
+     * front of it behind, or 0 if nothing is in the way.
+     *
+     * Measured against `nearestBody` rather than `followTarget`, and the two are not
+     * the same thing: the follow target is what the camera keeps station with and can
+     * be a system node with no radius of its own, while `updateNearestBody` already
+     * answers exactly the question being asked here — what is closest, and how big is
+     * it — and carries the radius to answer it with. Whatever can hide a point of
+     * light is whatever you are nearest.
+     */
+    function clearanceNeeded(): number {
+        const radius = nearestBody.radius;
+        stepClearToBody.subVectors(
+            nearestBody.object.getWorldPosition(scratchTarget),
+            camera.position
+        );
+
+        const along = stepClearToBody.dot(betelgeuseDirection);
+        // Already behind the camera: nothing to step past.
+        if (along <= 0) return 0;
+
+        const distance = Math.max(stepClearToBody.length(), radius);
+        const angularRadius = Math.asin(Math.min(1, radius / distance));
+        if (stepClearToBody.angleTo(betelgeuseDirection) > angularRadius * STEP_CLEAR_APPROACH) {
+            return 0;
+        }
+        return along + radius * STEP_CLEAR_MARGIN;
+    }
+
+    /**
+     * Ends the approach, and releases the nav row with it.
+     *
+     * The row needs releasing separately because it is the only entry in that list
+     * that can be left claiming a destination the app has since left. Every other row
+     * names a body the camera really is parked at, and stays true until another is
+     * picked; this one names a mode, and landing on the Moon or taking the controls
+     * ends the mode without touching the panel. Free flight already clears the whole
+     * row of buttons for its own reasons, so this is idempotent there.
+     */
+    function standDownBetelgeuse() {
+        betelgeuseSelected = false;
+        stepClearRemaining = 0;
+        document
+            .querySelector('.nav-btn[data-target="betelgeuse"]')
+            ?.classList.remove('active');
+    }
+
+    // Taking hold of the camera cancels the turn but *not* the approach: the two are
+    // different things, and someone who drags mid-swing wants to look somewhere else
+    // while the star keeps growing, not to call the whole thing off. Every way of
+    // actually going elsewhere already stands the approach down through
+    // `focusOnObject` and `setFreeFlight`.
+    controls.addEventListener('start', () => {
+        aimDirection = null;
+    });
+
+    /**
      * Hand control between the two camera modes.
      *
      * They cannot both be live: `OrbitControls.update()` ends by aiming the camera at
@@ -1272,6 +1440,9 @@ export function initScene(onFirstFrame?: () => void) {
 
         if (enabled) {
             focusAnimation = null;
+            // Flying yourself somewhere is the one destination `focusOnObject` never
+            // hears about, so the star has to be stood down here as well.
+            standDownBetelgeuse();
             controls.enabled = false;
             freeFlight.enable();
             document
@@ -1494,6 +1665,10 @@ export function initScene(onFirstFrame?: () => void) {
     function setMoonSurface(landed: boolean, site: LandingSite = DEFAULT_SITE) {
         if (landed) {
             setFreeFlight(false);
+            // Landing does not route through `focusOnObject` either, and the borrowed
+            // starfield takes the disc down with it — so it has to be stood down before
+            // it goes, or it would come back grown when the surface is left again.
+            standDownBetelgeuse();
             focusAnimation = null;
             moonSurface.enter(site);
             updateSurfaceChrome(true, site);
@@ -1594,12 +1769,34 @@ export function initScene(onFirstFrame?: () => void) {
     // event allocated garbage on the mouse's own event rate. The set never changes.
     const clickTargetMeshes = clickTargets.map((t) => t.hit);
 
-    function pickTarget(event: MouseEvent) {
+    /**
+     * How close a click has to come to Betelgeuse to count, in radians — about 1.7°,
+     * which at the default field of view is roughly 20 px.
+     *
+     * The star is picked by *angle to the ray* rather than by raycasting geometry, and
+     * that is the cheap way round rather than the crude one. It is a single vertex of
+     * a `Points`, drawn at a size fixed in *pixels* — so hit-testing the geometry would
+     * mean tuning `Raycaster.params.Points.threshold`, which is in world units, against
+     * a target whose screen size does not vary with distance at all. The angle is
+     * exact, allocates nothing, and is the same quantity the sprite's size stands for.
+     */
+    const BETELGEUSE_PICK_RADIANS = 0.03;
+
+    /** Sets `raycaster` from a mouse event. Both pick paths below start here. */
+    function setPickRay(event: MouseEvent) {
         const rect = renderer.domElement.getBoundingClientRect();
         mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
         mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
         raycaster.setFromCamera(mouse, camera);
+    }
+
+    /** Whether the ray already set by `setPickRay` is on the star. */
+    function rayHitsBetelgeuse() {
+        return raycaster.ray.direction.angleTo(betelgeuseDirection) < BETELGEUSE_PICK_RADIANS;
+    }
+
+    function pickTarget(event: MouseEvent) {
+        setPickRay(event);
         const intersects = raycaster.intersectObjects(clickTargetMeshes, true);
         if (intersects.length === 0) return null;
 
@@ -1643,7 +1840,11 @@ export function initScene(onFirstFrame?: () => void) {
         const focusable =
             picked !== null &&
             (!isAlreadyObserving(picked.focus, picked.distance) || picked.focus === moon);
-        renderer.domElement.style.cursor = focusable ? 'pointer' : 'default';
+        // Tested only where nothing in the solar system was hit, which is both the
+        // cheap ordering and the correct one: everything in this scene is in front of
+        // the star, so anything the ray already found is between you and it.
+        const onStar = !picked && !betelgeuseSelected && rayHitsBetelgeuse();
+        renderer.domElement.style.cursor = focusable || onStar ? 'pointer' : 'default';
     });
 
     renderer.domElement.addEventListener('click', (event: MouseEvent) => {
@@ -1656,6 +1857,17 @@ export function initScene(onFirstFrame?: () => void) {
         if (picked?.focus === moon && isAlreadyObserving(moon, picked.distance)) {
             const local = moon.worldToLocal(picked.point.clone()).normalize();
             setMoonSurface(true, nearestSite(local));
+            return;
+        }
+
+        // Same ordering as the hover, and the same reason. Ignored when the star is
+        // already the selection, so a stray click on it is not a second step forward.
+        if (!picked && !betelgeuseSelected && rayHitsBetelgeuse()) {
+            document
+                .querySelectorAll('.nav-btn[data-target]')
+                .forEach((button) => button.classList.remove('active'));
+            document.querySelector('.nav-btn[data-target="betelgeuse"]')?.classList.add('active');
+            viewBetelgeuse();
             return;
         }
 
@@ -1703,6 +1915,11 @@ export function initScene(onFirstFrame?: () => void) {
                         break;
                     case 'moon':
                         focusOnObject(moon, 3, 1500);
+                        break;
+                    // The one arm here that is not a fly-to, because there is no
+                    // flying to a star — see `approachBetelgeuse`.
+                    case 'betelgeuse':
+                        viewBetelgeuse();
                         break;
                     case 'iss':
                         focusOnObject(iss, ISS_VIEW_DISTANCE, 1500);
@@ -1954,7 +2171,17 @@ export function initScene(onFirstFrame?: () => void) {
     }
 
     function updateIssHud(nowMs: number) {
-        const shown = followTarget === iss && !freeFlight.enabled && !moonSurface.active;
+        // The last clause is the one that is not like the others. Free flight and the
+        // lunar surface both give up the camera's focus target, so they exclude this
+        // panel by construction; pointing at Betelgeuse deliberately does *not* — the
+        // camera keeps station with whatever body it was on, which is the whole reason
+        // the view does not drift while you look at a star. So the station's read-out
+        // has to be stood down by name, or the two share the corner.
+        const shown =
+            followTarget === iss &&
+            !freeFlight.enabled &&
+            !moonSurface.active &&
+            !betelgeuseSelected;
         issHud?.classList.toggle('iss-hud--visible', shown);
         if (!shown || nowMs < issHudRefreshDue) return;
         issHudRefreshDue = nowMs + 100;
@@ -1980,6 +2207,27 @@ export function initScene(onFirstFrame?: () => void) {
                     : 'Modelled'
         );
         issFeedValue?.classList.toggle('iss-hud__state--quiet', source !== 'live');
+    }
+
+    // --- Betelgeuse read-out ----------------------------------------------
+
+    const betelgeuseHud = document.getElementById('betelgeuse-hud');
+    const betelgeuseMagnitudeValue = document.getElementById('betelgeuse-magnitude');
+    let betelgeuseHudRefreshDue = 0;
+
+    /**
+     * One live figure, and the panel is otherwise constants rendered once by React —
+     * so this is the whole of it. Throttled like the other read-outs anyway: the
+     * magnitude moves by a hundredth over about four simulated days, which at the
+     * default rate is not a per-frame quantity by any stretch.
+     */
+    function updateBetelgeuseHud(nowMs: number) {
+        const shown = betelgeuseSelected && !freeFlight.enabled && !moonSurface.active;
+        betelgeuseHud?.classList.toggle('betelgeuse-hud--visible', shown);
+        if (!shown || nowMs < betelgeuseHudRefreshDue) return;
+        betelgeuseHudRefreshDue = nowMs + 100;
+
+        setText(betelgeuseMagnitudeValue, betelgeuseTelemetry.magnitude.toFixed(2));
     }
 
     let surfaceHudRefreshDue = 0;
@@ -2142,6 +2390,9 @@ export function initScene(onFirstFrame?: () => void) {
         // reachable by keyboard from anywhere, including from the station, and the
         // branch below returns before anything else could take the panel down.
         updateIssHud(frameMs);
+        // Ahead of the surface branch for the same reason `updateIssHud` is: landing
+        // is reachable from anywhere, and this panel has to be taken down on the way.
+        updateBetelgeuseHud(frameMs);
 
         // --- Orbits and rotations ---
         earthOrbitPosition(now, earthSystem.position);
@@ -2151,6 +2402,10 @@ export function initScene(onFirstFrame?: () => void) {
         clouds.rotation.y = spin * CLOUD_ANGULAR_VELOCITY_SCALE;
 
         updateSun(now);
+        // Ahead of the surface branch below, like everything else in this block: the
+        // backdrop is borrowed by the lunar sky, so the star has to keep pulsing
+        // whichever render path the frame takes.
+        updateBetelgeuse(now);
         moonOrbitPosition(now, moon.position);
         // Tidal lock: one rotation per orbit, so the near side always faces Earth.
         moon.rotation.y = moonTidalRotation(moonEclipticLongitude(now));
@@ -2432,6 +2687,44 @@ export function initScene(onFirstFrame?: () => void) {
             }
             followPrevious.copy(position);
             followInitialised = true;
+        }
+
+        // Turning to face the star, if one was asked for. After the follow drift above
+        // — which translates camera and pivot together and so leaves the view direction
+        // untouched — and before `controls.update()`, which reads the pivot this writes.
+        //
+        // Slerped through a quaternion rather than lerped between the two directions:
+        // the turn can be a full 180°, and a lerp through the midpoint of two opposed
+        // vectors passes through zero length. The exponential step is frame-rate
+        // independent, which matters because this runs at the idle rate as readily as
+        // at 60.
+        // The step clear of whatever was in front of the star. Applied incrementally
+        // rather than lerped between a stored start and end, because the follow drift
+        // just above is moving the camera too — an absolute interpolation would fight
+        // it and drag the camera back off the body it is keeping station with. Camera
+        // and pivot move together, so the direction being looked at is untouched.
+        if (stepClearRemaining > 0) {
+            const step = stepClearRemaining * (1 - Math.pow(0.008, realDelta));
+            camera.position.addScaledVector(betelgeuseDirection, step);
+            controls.target.addScaledVector(betelgeuseDirection, step);
+            stepClearRemaining -= step;
+            // An exponential approach never arrives; a millionth of an Earth radius is
+            // comfortably past the point where anything can see the difference.
+            if (stepClearRemaining < 1e-6) stepClearRemaining = 0;
+        }
+
+        if (aimDirection) {
+            const pivotRange = camera.position.distanceTo(controls.target);
+            aimCurrent.subVectors(controls.target, camera.position).normalize();
+            const remaining = aimCurrent.angleTo(aimDirection);
+            if (remaining < 0.0005) {
+                aimDirection = null;
+            } else {
+                aimRotation.setFromUnitVectors(aimCurrent, aimDirection);
+                aimStep.slerpQuaternions(AIM_IDENTITY, aimRotation, 1 - Math.pow(0.02, realDelta));
+                aimCurrent.applyQuaternion(aimStep);
+                controls.target.copy(camera.position).addScaledVector(aimCurrent, pivotRange);
+            }
         }
 
         // The user's own movement goes on top of the frame drift above, so that
