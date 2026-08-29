@@ -172,8 +172,9 @@
     transform: translateX(-50%) translateY(0);
 }
 
-// Instrument-panel treatment. Keep this scoped to the panel: `.nav-btn` is also used
-// by the heatmap host, and the scene initialiser relies on its data attributes.
+// Instrument-panel treatment. Keep this scoped to the panel: the scene initialiser
+// collects `.nav-btn` by its data attributes, so the class is a contract with
+// `script.ts` and not only a style hook.
 .navigation-panel {
     // Flat, not a glow — the panel is lit by the void it sits in, not by its own
     // gradient. The one thing that still radiates is the signal colour, sparingly.

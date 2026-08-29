@@ -238,15 +238,6 @@ export function NavPanel() {
             <span className="nav-action-icon" aria-hidden="true">↺</span>Reset camera
           </button>
         </div>
-        <div className="nav-section nav-section--data">
-          <h2 className="nav-section-title">Data layers</h2>
-          <a
-            className="nav-btn nav-action-btn nav-action-btn--secondary"
-            href="/heatmap.html"
-          >
-            <span className="nav-action-icon" aria-hidden="true">▦</span>Surface heat map
-          </a>
-        </div>
         </div>
       </div>
     </nav>

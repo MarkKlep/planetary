@@ -7,11 +7,11 @@ description: Provides a quick overview of the Planetary project—what it is, it
 
 ## What is this project?
 
-**Planetary** is an interactive Three.js/React web application that visualizes the solar system with scientifically accurate orbital mechanics, planetary physics, and real-time data integration. It combines a 3D space simulator with educational tools for exploring celestial mechanics and environmental science.
+**Planetary** is an interactive Three.js/React web application that visualizes the solar system with scientifically accurate orbital mechanics, planetary physics, and real-time data integration. It combines a 3D space simulator with educational tools for exploring celestial mechanics.
 
-The project consists of two main components:
-1. **Main App** (`src/`) — the 3D solar-system visualization
-2. **Heatmap Sub-App** (`external/heatmap-client` + `external/heatmap-server`) — sea-surface-temperature visualization served as a standalone app and embedded via iframe
+The project consists of two components:
+1. **Main App** (`src/`) — the 3D solar-system visualization, and the only Vite entry point
+2. **Chat backend** (`backend/`) — a small Express service streaming responses to the in-app assistant
 
 ## Purpose
 
@@ -36,14 +36,9 @@ The app is built to be scientifically rigorous while remaining visually engaging
 - **Free Flight**: WASD + mouse to pilot; speed scales automatically based on distance to nearest body
 - **Lunar Surface Mode**: Land on the Moon and walk or drive the Lunar Rover Vehicle (LRV) at true scale—see the horizon at 2.4 km just as astronauts did
 
-### Environmental Data Integration
-- **Heatmap Visualization**: Sea-surface-temperature data displayed on an interactive map
-- **Palette Selection**: Choose from multiple color schemes (viridis, turbo, spectral)
-- **Real Data Processing**: Reads binary SST grid files and rasterizes them with proper sampling
-
 ### Developer-Friendly Architecture
 - Built with **Vite** (fast dev server) and **React** for UI
-- **Heatmap sub-app** is a separate Create React App (independent dev/build)
+- **Chat backend** is a separate Express service under `backend/` (independent dev/install)
 - Scene graph structure that cleanly separates orbital mechanics from rendering
 - Deterministic, frame-rate-independent simulation driven by a real-world date/time
 - Keyboard shortcuts for quick navigation (0–9 to focus planets, F for free flight, L to land on Moon)
@@ -55,11 +50,11 @@ The app is built to be scientifically rigorous while remaining visually engaging
 npm run dev:planetary
 ```
 
-**Explore with heatmap (full stack):**
+**Run with the chat assistant (full stack):**
 ```bash
-npm run dev:mf:full
+npm run dev:chat
 ```
-This starts the 3D scene, heatmap client, and heatmap API server concurrently.
+This starts the 3D scene and the chat backend concurrently.
 
 **Build for production:**
 ```bash

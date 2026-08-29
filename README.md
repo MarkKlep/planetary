@@ -19,11 +19,10 @@ geometry rather than being animated in.
 Everything is at true scale, including the empty space. Earth is 1 unit across against a
 23,481-unit orbit.
 
-The repo holds three things:
+The repo holds two things:
 
 1. **3D Solar System** (`src/`) — the simulation, its three camera modes and its UI
-2. **Heatmap Viewer** (`external/`) — a sea-surface-temperature app, embedded by iframe
-3. **Chat backend** (`backend/`) — a small streaming service behind the in-app assistant
+2. **Chat backend** (`backend/`) — a small streaming service behind the in-app assistant
 
 ## Core Features
 
@@ -84,13 +83,6 @@ one tool (`focus_body`), on purpose — every extra tool is another thing a 7B m
 reach for at the wrong moment. Backed by a stateless Express service streaming NDJSON
 from Ollama; see [`backend/README.md`](backend/README.md).
 
-### 🌡️ Environmental data
-
-- **Heatmap visualization** — sea-surface-temperature data on an interactive map
-- **Palette selection** — viridis, turbo, or spectral
-- **Real data processing** — reads a 36000×17999 binary SST grid and rasterizes it
-  server-side with `node-canvas`
-
 ### ⚙️ Performance
 
 - **Quality tiers** (`low` | `medium` | `high` | `ultra`) chosen once at load from
@@ -132,14 +124,11 @@ Other entry points:
 
 | Command | What it runs |
 | --- | --- |
-| `npm run dev:mf` | Planetary + heatmap client |
-| `npm run dev:mf:full` | Planetary + heatmap client + heatmap API |
 | `npm run dev:chat` | Planetary + chat backend (needs Ollama; see `backend/README.md`) |
-| `npm run build` | Production build of both HTML entry points |
+| `npm run build` | Production build |
 | `npm run preview` | Preview the production build |
 
-The heatmap sub-app has its own dependencies: run `npm run setup:heatmap` and
-`npm run setup:heatmap:server` once first. The chat backend needs `npm run setup:chat`.
+The chat backend has its own dependencies: run `npm run setup:chat` once first.
 
 There is no test suite at the root. Type errors do not block builds (`noEmit: true`);
 check manually with `npx tsc --noEmit`.
@@ -166,10 +155,6 @@ src/
 ├── nav-panel/ chat-widget/ *-hud/   the UI
 └── constants/planets.const.ts       every real-world figure, in one place
 ```
-
-The heatmap client and server are independent projects under `external/`, with their own
-`package.json` and lockfiles. They are not part of the root workspace — they run as
-sibling dev servers and are iframed in.
 
 `CLAUDE.md` carries the detailed architecture notes, including the traps that are easy to
 re-introduce.

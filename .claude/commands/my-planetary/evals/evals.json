@@ -10,13 +10,13 @@
     {
       "id": 2,
       "prompt": "What are the core features of this application?",
-      "expected_output": "A structured list of the main features including 3D solar system, ISS tracking, lunar surface mode, and heatmap visualization",
+      "expected_output": "A structured list of the main features including 3D solar system, ISS tracking, lunar surface mode, and the in-app chat assistant",
       "files": []
     },
     {
       "id": 3,
       "prompt": "Explain what this project does and how to run it",
-      "expected_output": "Project explanation plus the basic npm commands to get started (dev:planetary, dev:mf:full, build)",
+      "expected_output": "Project explanation plus the basic npm commands to get started (dev:planetary, dev:chat, build)",
       "files": []
     }
   ]

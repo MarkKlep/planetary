@@ -50,7 +50,8 @@
     --radius-sm: 3px;
     --radius-md: 5px;
 
-    /** Kept for `.heatmap-topbar`, which belongs to the external heatmap sub-app's
-     *  host chrome rather than this design pass — see CLAUDE.md on the two apps. */
+    /** Predates this design pass and survives it for one consumer: the splash
+     *  loader's radial gradient in `shared/loader/loader.scss`, whose midpoint is
+     *  this exact value. Not a token to reach for in new work — use `--void`. */
     --primary-black: rgba(15, 15, 25, 0.92);
 }

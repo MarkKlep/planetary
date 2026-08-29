@@ -4,34 +4,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A Three.js/React solar-system visualization (Earth, Moon, ISS with live position) plus a separate heatmap sub-app for sea-surface-temperature data. The root project ("planetary") and the heatmap sub-app are wired together as a micro-frontend: the heatmap app is embedded via `<iframe>` in the main app and can also be built as a standalone artifact served under `/heatmap/`.
+A Three.js/React solar-system visualization at true scale — every planet, 17 moons, the ISS on its live orbit, and a first-person mode standing on the lunar surface. One Vite app, plus a small streaming chat backend under `backend/`.
+
+A second sub-app lived here until it was removed: a sea-surface-temperature heatmap (Create React App + Express under `external/`, embedded by `<iframe>` through a `heatmap.html` entry point). It is gone entirely — the directory, both entry points, the nav panel's "Data layers" section, the `dev:mf` scripts and the multi-entry `rollupOptions` in `vite.config.ts`. Worth knowing only so its traces are recognised as dead references rather than as something to restore.
 
 ## Commands
 
 Run from the repo root unless noted.
 
 - `npm run dev:planetary` — Vite dev server for the main 3D scene only (port 5173, strict).
-- `npm run dev:heatmap` — heatmap-client (Create React App) dev server on port 3001. Requires `npm run setup:heatmap` once first (installs `external/heatmap-client`'s own deps).
-- `npm run dev:heatmap:server` — heatmap API server on port 3002. Requires `npm run setup:heatmap:server` once first.
-- `npm run dev:mf` — planetary + heatmap-client together (no API server).
-- `npm run dev:mf:full` — all three (planetary + heatmap-client + heatmap API server) concurrently. Use this for full end-to-end heatmap testing.
-- `npm run build` — Vite build; builds both `index.html` (main) and `heatmap.html` (iframe host page) as separate entry points (see `vite.config.ts`).
+- `npm run dev:chat` — planetary + the chat backend concurrently. Requires `npm run setup:chat` once first; see `backend/README.md`.
+- `npm run build` — Vite build. A single entry point (`index.html`), so `vite.config.ts` carries no `rollupOptions` at all.
 - `npm run preview` — preview the Vite production build.
-- No test suite is configured at the root (`npm test` is a stub). `external/heatmap-server/test` has its own `package.json`/`test.js`.
+- No test suite is configured (`npm test` is a stub).
 
 There is no lint or typecheck script defined; `tsc` runs implicitly via Vite during dev/build (`noEmit: true` in `tsconfig.json`, so type errors don't block builds by default — check manually with `npx tsc --noEmit` if needed).
 
 ## Architecture
 
-### Two independent apps sharing one repo
+### The app
 
-1. **Main app** (`src/`, entry `index.html` → `src/main.tsx` → `App.tsx`): the 3D scene.
-2. **Heatmap sub-app** (`external/heatmap-client`, `external/heatmap-server`): a *separate* Create React App + Express project, each with its own `package.json`, node_modules, and lockfile. They are not part of the root npm workspace — they're launched as sibling dev servers and proxied/iframed in.
-   - `src/HeatmapPage.tsx` (served via `heatmap.html` → `src/heatmap-main.tsx`) is the bridge: it renders an `<iframe>` pointing at `http://localhost:3001` in dev, or `/heatmap/` in production.
-   - `external/heatmap-client` fetches image data from `external/heatmap-server`'s `/api/data` endpoint (`external/heatmap-client/src/api/api-client.ts`, default `http://localhost:3002/api/data`).
-   - `external/heatmap-server` (`src/api/api-server.ts`) reads a binary SST grid file (`sst.grid`, 36000×17999 cells, gitignored/not checked in) and rasterizes it onto `empty-map.jpg` using `node-canvas`, downsampling to 3600×1800 and applying a color palette (`viridis` | `turbo` | `spectral`, chosen via `?palette=` query param). Results are cached in-memory per palette; `?refresh=1` forces regeneration.
-
-When changing anything heatmap-related, check whether the edit belongs in the root project or in `external/heatmap-client`/`external/heatmap-server` — they build and run independently.
+`src/`, entry `index.html` → `src/main.tsx` → `App.tsx`: the 3D scene, and the only Vite entry point. `backend/` is a separate Express service behind the chat widget, with its own `package.json` — it is not part of the root npm workspace and is launched as a sibling process.
 
 ### Main 3D scene (`src/script.ts`)
 

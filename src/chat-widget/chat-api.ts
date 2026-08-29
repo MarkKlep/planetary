@@ -9,9 +9,9 @@ export interface ChatMessage {
     tool_calls?: unknown[];
 }
 
-// Vite's own env convention (`import.meta.env.VITE_*`), not the CRA-style
-// `process.env.REACT_APP_*` the heatmap sub-app uses — the two apps are built by
-// different tools and don't share an env mechanism.
+// Vite's own env convention (`import.meta.env.VITE_*`), which is a build-time
+// substitution rather than a runtime lookup: the value is inlined into the bundle,
+// so it has to exist when `npm run build` runs, not when the page loads.
 //
 // The fallback has to differ by build, because the two situations are not the same
 // mistake. In development the backend is a sibling process on a known port. In a
