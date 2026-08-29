@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400" role="img" aria-label="Planetary">
+<!--
+Planetary -- alternate mark, the ringed planet.
+
+Reads "planets" at any size, and the ring system is the one structure in this
+project that is genuinely one-dimensional: rings.ts builds it from measured
+boundary radii and Cassini occultation optical depths, so the bands and the
+gap between them sit in roughly their real proportions, brightest at the B
+ring.  The dark band across the globe is the rings' own shadow, which
+saturn.ts patches into the planet's shader -- a translucent caster a shadow
+map cannot do.  The globe carries the same terminator as the primary mark.
+-->
+  <defs>
+    <radialGradient id="ground" cx="50%" cy="42%" r="74%">
+      <stop offset="0%" stop-color="#15151a"/>
+      <stop offset="62%" stop-color="#0c0c0f"/>
+      <stop offset="100%" stop-color="#08080a"/>
+    </radialGradient>
+    <radialGradient id="photosphere" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#fff6dc"/>
+      <stop offset="55%" stop-color="#ffc45e"/>
+      <stop offset="100%" stop-color="#ff8a3d"/>
+    </radialGradient>
+    <radialGradient id="corona" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#ffa54a" stop-opacity="0.34"/>
+      <stop offset="42%" stop-color="#ff8a3d" stop-opacity="0.13"/>
+      <stop offset="100%" stop-color="#ff8a3d" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="400" height="400" fill="url(#ground)"/>
+  <g transform="rotate(-19 192 210)">
+      <ellipse cx="192" cy="210" rx="176" ry="55.4" fill="none" stroke="#efe4c9" stroke-opacity="0.3" stroke-width="10"/>
+      <ellipse cx="192" cy="210" rx="152" ry="47.9" fill="none" stroke="#efe4c9" stroke-opacity="0.62" stroke-width="20"/>
+      <ellipse cx="192" cy="210" rx="124" ry="39.1" fill="none" stroke="#efe4c9" stroke-opacity="0.26" stroke-width="9"/>
+  </g>
+  <circle cx="192" cy="210" r="82" fill="#2b2721"/>
+    <clipPath id="globe"><circle cx="192" cy="210" r="82"/></clipPath>
+    <g transform="translate(192 210) rotate(139.09)"><path d="M -82 0 A 82 82 0 0 0 82 0 A 82 49.2 0 0 0 -82 0 Z" fill="#f4ecd8"/></g>
+  <g clip-path="url(#globe)" transform="rotate(-19 192 210) translate(10 16)">
+      <ellipse cx="192" cy="210" rx="176" ry="55.4" fill="none" stroke="#000000" stroke-opacity="0.3" stroke-width="10"/>
+      <ellipse cx="192" cy="210" rx="152" ry="47.9" fill="none" stroke="#000000" stroke-opacity="0.3" stroke-width="20"/>
+      <ellipse cx="192" cy="210" rx="124" ry="39.1" fill="none" stroke="#000000" stroke-opacity="0.3" stroke-width="9"/>
+  </g>
+  <g transform="rotate(-19 192 210)">
+    <g clip-path="url(#front)">
+      <ellipse cx="192" cy="210" rx="176" ry="55.4" fill="none" stroke="#efe4c9" stroke-opacity="0.3" stroke-width="10"/>
+      <ellipse cx="192" cy="210" rx="152" ry="47.9" fill="none" stroke="#efe4c9" stroke-opacity="0.62" stroke-width="20"/>
+      <ellipse cx="192" cy="210" rx="124" ry="39.1" fill="none" stroke="#efe4c9" stroke-opacity="0.26" stroke-width="9"/>
+    </g>
+  </g>
+  <clipPath id="front"><rect x="-18" y="210" width="420" height="240"/></clipPath>
+</svg>
