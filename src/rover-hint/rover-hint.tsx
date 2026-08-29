@@ -37,6 +37,8 @@ export function RoverHint() {
         // announced when it appears because the layer is genuinely hidden
         // (`visibility`, not just transparent) the rest of the time.
         <div className="rover-hint" id="rover-hint" role="status">
+            {/* The key cap is the desktop half of the prompt and is hidden with the
+                wordings that name it. */}
             <kbd className="rover-hint__key" aria-hidden="true">
                 R
             </kbd>
@@ -51,6 +53,16 @@ export function RoverHint() {
                 <span className="rover-hint__near">
                     Press <kbd>R</kbd> to board the rover
                 </span>
+                {/* The same two distances said without a key, for the device that has
+                    none. This used to be hidden outright on a coarse pointer, and that
+                    was right at the time: boarding was a keypress, so the prompt was an
+                    instruction that could not be followed. Now that `surface-touch.tsx`
+                    puts a Board button on the screen it is worth saying again — and it
+                    is still worth saying, because the button is disabled until you are
+                    within range and a disabled control explains neither where the rover
+                    is nor that it is worth walking to. */}
+                <span className="rover-hint__far-touch">Walk to the rover, then tap Board</span>
+                <span className="rover-hint__near-touch">Tap Board to ride the rover</span>
             </p>
         </div>
     );

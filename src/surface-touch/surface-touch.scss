@@ -1,0 +1,199 @@
+/**
+ * Shown only where it is both needed and usable: a coarse pointer with no hover, and
+ * the surface mode actually active. The media query is the same one
+ * `rover-hint.scss` uses to hide the `R` prompt — the two are opposite halves of one
+ * decision, and they have to agree about what a touch device is.
+ *
+ * A narrow desktop window deliberately does *not* get these. It still has a keyboard,
+ * the HUD's key legend is what belongs there, and `max-width` would put a thumb stick
+ * under a mouse pointer.
+ */
+.surface-touch {
+    position: fixed;
+    inset: 0;
+    // Below the nav drawer's scrim at 999, deliberately. While the drawer is open the
+    // scrim has to be the thing under the finger — that is how the drawer is
+    // dismissed on this layout — and a thumb stick floating over an open drawer would
+    // both look wrong and eat that tap.
+    z-index: 990;
+    display: none;
+    // The look gesture is a drag on the canvas underneath, and this layer spans the
+    // whole viewport — so it must be transparent to the pointer everywhere the
+    // controls themselves are not. Same rule, same reason, as `rover-hint`.
+    pointer-events: none;
+    // Belt and braces with the same declaration on the pad: a drag that starts on
+    // this layer must never become a browser scroll or a pull-to-refresh.
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .surface-touch--visible {
+        display: block;
+    }
+}
+
+// --- the stick ---------------------------------------------------------------
+
+.surface-touch__pad {
+    position: absolute;
+    left: 16px;
+    // Clear of the home indicator on a gesture-navigation phone, which sits in the
+    // bottom ~20px and swallows anything under it.
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    width: 116px;
+    height: 116px;
+    border-radius: 50%;
+    border: 1px solid var(--hairline);
+    // Nearly empty, deliberately. Every other piece of chrome here is a dark panel
+    // with a hairline on it, and this one sits over the *subject* — the regolith the
+    // whole mode exists to show — for the entire time the mode is on. A filled disc
+    // reads as a hole punched in the Moon; a ring with a knob in it reads as an
+    // instrument laid over it. The fill is only what keeps the ring findable against a
+    // bright crater rim.
+    background: rgba(8, 8, 10, 0.22);
+    // Light enough that the ring reads before the fill does. A heavier blur turns the
+    // disc into a flat grey patch on a surface whose whole texture is the point.
+    backdrop-filter: blur(3px);
+    // The ring has to survive both a black sky and a white crater rim, and a single
+    // hairline can only do one of those. The outer shadow is what carries it over the
+    // bright ground.
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35), 0 4px 16px rgba(0, 0, 0, 0.3);
+    pointer-events: auto;
+    touch-action: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: border-color 0.15s ease, background 0.15s ease;
+
+    &--active {
+        border-color: rgba(255, 138, 61, 0.55);
+        background: rgba(8, 8, 10, 0.42);
+    }
+}
+
+.surface-touch__knob {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    background: rgba(8, 8, 10, 0.55);
+    border: 1px solid var(--hairline-bright);
+    // No transition on the transform: this follows a finger, and 150ms of easing on
+    // a direct-manipulation control reads as lag rather than as smoothing.
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+
+    .surface-touch__pad--active & {
+        background: var(--signal-dim);
+        border-color: var(--signal);
+    }
+}
+
+.surface-touch__tick {
+    position: absolute;
+    background: var(--hairline);
+
+    &--n,
+    &--s {
+        width: 1px;
+        height: 6px;
+    }
+
+    &--w,
+    &--e {
+        width: 6px;
+        height: 1px;
+    }
+
+    &--n { top: 8px; }
+    &--s { bottom: 8px; }
+    &--w { left: 8px; }
+    &--e { right: 8px; }
+}
+
+// --- the actions -------------------------------------------------------------
+
+.surface-touch__actions {
+    position: absolute;
+    right: 12px;
+    bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+    display: grid;
+    grid-template-columns: repeat(2, 68px);
+    gap: 8px;
+    pointer-events: auto;
+}
+
+.surface-touch__btn {
+    height: 52px;
+    padding: 0;
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius-sm);
+    // The same panel colour and hairline the nav buttons and the zoom controls use, so
+    // these read as the app's own chrome rather than as a game pad dropped on top of
+    // it.
+    background: rgba(12, 14, 19, 0.78);
+    backdrop-filter: blur(8px);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 13px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    touch-action: manipulation;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease,
+        opacity 0.15s ease;
+
+    &:active {
+        border-color: var(--signal);
+        background: var(--signal-dim);
+        color: var(--signal);
+    }
+
+    // Out of reach of the rover. Dimmed rather than removed — see surface-touch.tsx:
+    // a control that disappears as you walk away reads as a fault, and the HUD beside
+    // it is already counting the metres down.
+    &:disabled {
+        opacity: 0.32;
+        cursor: default;
+    }
+
+    &--leave {
+        color: var(--ink-dim);
+    }
+}
+
+// Both wordings ship; the cascade picks one. `script.ts` owns the class.
+.surface-touch__drive-only { display: none; }
+
+.surface-touch--driving {
+    .surface-touch__walk-only { display: none; }
+    .surface-touch__drive-only { display: inline; }
+
+    // Nothing to hop off. The grid closes up on its own — three cells rather than a
+    // hole where the fourth was.
+    .surface-touch__btn--hop { display: none; }
+}
+
+// One row rather than two below this, because a 2x2 grid plus a 116px stick plus the
+// read-out above them is more than a 568px-tall phone in landscape has to give.
+@media (max-height: 460px) {
+    .surface-touch__pad {
+        width: 92px;
+        height: 92px;
+    }
+
+    .surface-touch__knob {
+        width: 38px;
+        height: 38px;
+    }
+
+    .surface-touch__actions {
+        grid-template-columns: repeat(4, 60px);
+    }
+
+    .surface-touch__btn {
+        height: 44px;
+        font-size: 12px;
+    }
+}

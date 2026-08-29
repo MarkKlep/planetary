@@ -43,6 +43,7 @@ import {
     createMoonSurface,
     prepareMoonSurface,
 } from './planets/earth/moon-surface/moon-surface';
+import { createThumbStick } from './surface-touch/thumb-stick';
 import { DEFAULT_SITE, findSite, nearestSite, type LandingSite } from './planets/earth/moon-surface/sites';
 import { advanceClock, getSimulatedDate, getTimeSpeed, isPaused, setPaused, setTimeSpeed } from './simulation';
 import { createBodyMarker, updateBodyMarker } from './body-marker';
@@ -1526,6 +1527,44 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     const surfaceSiteSelect = document.getElementById('surface-site') as HTMLSelectElement | null;
     const toggleMoonSurfaceBtn = document.getElementById('toggle-moon-surface');
     const roverHint = document.getElementById('rover-hint');
+    /**
+     * Whether this is a touch device, asked the same way the stylesheets ask it.
+     *
+     * Live rather than sampled once: a Windows tablet folded into a laptop changes the
+     * answer without reloading. It is read only for *wording* — every control below is
+     * built unconditionally and CSS decides what is shown, so this can disagree with
+     * nothing structural.
+     */
+    const touchQuery = window.matchMedia('(hover: none) and (pointer: coarse)');
+
+    const surfaceTouch = document.getElementById('surface-touch');
+    const surfaceStickPad = document.getElementById('surface-stick');
+    const surfaceStickKnob = document.getElementById('surface-stick-knob');
+    const surfaceTouchHop = document.getElementById('surface-touch-hop');
+    const surfaceTouchRover = document.getElementById(
+        'surface-touch-rover'
+    ) as HTMLButtonElement | null;
+    const surfaceTouchLens = document.getElementById('surface-touch-lens');
+    const surfaceTouchLeave = document.getElementById('surface-touch-leave');
+
+    /**
+     * The touch controls for the surface — see `surface-touch.tsx`.
+     *
+     * Wired here through the same DOM bridge the nav panel and both HUDs use: the
+     * elements are looked up once, in this one pass, and the handlers hang off ids.
+     * The stick is the only piece with any state of its own, and it is the thumb's
+     * position rather than anything about the scene.
+     *
+     * Everything below is built unconditionally, on every device. Whether it is *shown*
+     * is a CSS question — `(hover: none) and (pointer: coarse)`, the same test
+     * `rover-hint.scss` uses to hide the `R` prompt — so there is no capability check
+     * here that could disagree with the one the stylesheet makes.
+     */
+    if (surfaceStickPad && surfaceStickKnob) {
+        createThumbStick(surfaceStickPad, surfaceStickKnob, (x, y) => {
+            moonSurface.setMoveInput(x, y);
+        });
+    }
 
     /**
      * The centre-screen prompt that says the rover can be driven — see rover-hint.tsx
@@ -1624,6 +1663,18 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         if (!landed) sceneState.surfaceSite = null;
 
         surfaceHud?.classList.toggle('surface-hud--visible', landed);
+        // The controls follow the HUD exactly — both are "you are standing on the
+        // Moon" — but they are a separate layer rather than part of it, because the
+        // HUD is a read-out in a corner and this is a pair of controls under two
+        // thumbs. CSS decides whether the layer is ever seen; this only says whether
+        // the mode is on.
+        surfaceTouch?.classList.toggle('surface-touch--visible', landed);
+        // Ask the drawer to stand down, on the way in only. All three landing paths
+        // reach this funnel, so none of them can forget; `NavPanel` ignores it on the
+        // docked desktop layout, where the panel is not covering anything. Leaving is
+        // not symmetric — you come back out to the solar system and the panel is how
+        // you get anywhere in it.
+        if (landed) window.dispatchEvent(new Event('planetary:collapse-nav'));
 
         // Re-armed on every landing, including a change of site from the dropdown —
         // that rebuilds the terrain and re-parks the rover, so it is a fresh arrival by
@@ -1696,6 +1747,21 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     }
 
     toggleMoonSurfaceBtn?.addEventListener('click', () => setMoonSurface(!moonSurface.active));
+
+    /**
+     * The three action buttons beside the thumb stick.
+     *
+     * Each is the exact counterpart of a key the HUD's legend names on a desktop —
+     * Space, `R` and Escape — and each routes to the same function that key does,
+     * rather than to a parallel implementation. Hop and the long lens go through the
+     * mode; leaving goes through `setMoonSurface`, so it raises the same confirmation
+     * dialog every other exit path raises. There is deliberately no touch equivalent
+     * of `Shift`: the stick's own lean is what picks the gait. See walk.ts.
+     */
+    surfaceTouchHop?.addEventListener('click', () => moonSurface.hop());
+    surfaceTouchLens?.addEventListener('click', () => moonSurface.toggleZoom());
+    surfaceTouchRover?.addEventListener('click', () => moonSurface.toggleRover());
+    surfaceTouchLeave?.addEventListener('click', () => setMoonSurface(false));
     surfaceSiteSelect?.addEventListener('change', () => {
         const site = findSite(surfaceSiteSelect.value);
         moonSurface.landAt(site);
@@ -2268,6 +2334,13 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         // The panel swaps which half of itself is showing, so only one of these two
         // branches is ever on screen.
         surfaceHud?.classList.toggle('surface-hud--driving', moonSurface.driving);
+        surfaceTouch?.classList.toggle('surface-touch--driving', moonSurface.driving);
+        // Boarding is refused out of range by `toggleRover` itself, so the button is
+        // disabled to say so before it is pressed rather than to enforce anything. On
+        // the way out it is always live: stepping off never fails.
+        if (surfaceTouchRover) {
+            surfaceTouchRover.disabled = !moonSurface.driving && !moonSurface.roverInReach;
+        }
 
         if (moonSurface.driving) {
             const { driver } = moonSurface;
@@ -2291,7 +2364,13 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             const distance = moonSurface.roverDistance;
             surfaceRoverValue.textContent =
                 distance <= BOARDING_RANGE_M
-                    ? 'press R to board'
+                    ? // Naming the key on a device that has none was the read-out's
+                      // half of the same gap the touch controls close: `R` is the
+                      // instruction on a keyboard, and on a phone the instruction is
+                      // the Board button, which lights up at this exact distance.
+                      touchQuery.matches
+                        ? 'in reach'
+                        : 'press R to board'
                     : `${formatRange(distance)} away`;
         }
 

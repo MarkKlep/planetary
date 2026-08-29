@@ -179,3 +179,44 @@
         display: none;
     }
 }
+
+/**
+ * On a touch device the bottom-right corner stops being the read-out's to have: the
+ * action buttons are there, because that is where a thumb is. So the panel is lifted
+ * clear of them — by the height of the 2x2 grid plus its own margin — rather than
+ * being shrunk or hidden. It is still the thing that answers "how far is the rover",
+ * which is the question the buttons below it are about.
+ *
+ * Same media query as `surface-touch.scss`, and it has to stay the same: these two are
+ * one layout, and a breakpoint that only half of it agrees with would drop the panel
+ * onto the buttons.
+ */
+@media (hover: none) and (pointer: coarse) {
+    /* 16px of margin, two 52px button rows and the 8px between them, then 12px of
+       clearance. Stated as the sum rather than as the total so it stays checkable
+       against `.surface-touch__actions`, which owns the three numbers in the middle. */
+    .surface-hud--visible {
+        bottom: calc(16px + 112px + 12px + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Hidden here as well as at `max-width: 768px`, because a tablet clears that
+       breakpoint and still has no keyboard to press any of it on. */
+    .surface-hud__keys {
+        display: none;
+    }
+
+    /* The legend it separated is gone, so the rule was left drawn across the bottom of
+       the panel marking off nothing — along with the space it was holding open for it. */
+    .surface-hud__readout {
+        border-bottom: 0;
+        padding-bottom: 0;
+        margin-bottom: 0;
+    }
+}
+
+/* Landscape: the buttons collapse to a single row, so the panel comes back down. */
+@media (hover: none) and (pointer: coarse) and (max-height: 460px) {
+    .surface-hud--visible {
+        bottom: calc(16px + 44px + 12px + env(safe-area-inset-bottom, 0px));
+    }
+}

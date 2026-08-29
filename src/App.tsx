@@ -3,6 +3,7 @@ import { NavPanel } from './nav-panel/nav-panel';
 import { FlightHud } from './flight-hud/flight-hud';
 import { SurfaceHud } from './surface-hud/surface-hud';
 import { RoverHint } from './rover-hint/rover-hint';
+import { SurfaceTouch } from './surface-touch/surface-touch';
 import { IssHud } from './iss-hud/iss-hud';
 import { BetelgeuseHud } from './betelgeuse-hud/betelgeuse-hud';
 import { ChatWidget } from './chat-widget/chat-widget';
@@ -65,6 +66,12 @@ export function App() {
           driven by classes from `script.ts`, which owns the mode, the rover's distance
           and whether anyone is already driving. See rover-hint.tsx. */}
       <RoverHint />
+      {/* The other half of the surface's chrome, and the half that took it from a
+          look-around to a place you can walk in: `walk.ts` and `drive.ts` both read
+          the keyboard, so on a phone the rover sat 8 m away with no way to reach it.
+          Always mounted, driven by classes from `script.ts`, and shown by CSS only on
+          a coarse pointer — see surface-touch.tsx. */}
+      <SurfaceTouch />
       {/* Shares the bottom-right corner with the two HUDs above, which is safe because
           all three are mutually exclusive: entering free flight or landing on the Moon
           both give up the camera's focus target, and this panel is shown only while

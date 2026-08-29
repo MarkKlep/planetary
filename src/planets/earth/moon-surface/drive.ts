@@ -48,6 +48,14 @@ const REVERSE_SPEED_MS = 1.2;
 /** How fast the hand controller can swing the wheels over, radians per second. */
 const STEER_RATE = 1.5;
 const STEER_RETURN_RATE = 2.4;
+/**
+ * How far the touch stick has to be pushed before it is throttle rather than noise.
+ *
+ * A key is pressed or it is not; a stick rests wherever the thumb leaves it, and a
+ * few hundredths of forward would keep the rover creeping forever — `ROLLING_DRAG`
+ * is what brings it to a stop, and it can only do that against no throttle at all.
+ */
+const THROTTLE_DEAD_ZONE = 0.2;
 
 /**
  * Below this the wheels are turning too slowly to fling anything clear: the grains
@@ -119,6 +127,13 @@ export interface Driver {
     setGround(heightAt: (x: number, z: number) => number): void;
     /** Put the rover down at a spot and a bearing, and reset the trip. */
     park(x: number, z: number, azimuth: number): void;
+    /**
+     * Analog control, each −1..1: `x` steers, `y` is throttle forward and brake back.
+     * Additive with the keyboard. Unlike the walker's, the steering here is genuinely
+     * proportional — a stick half over turns the wheel at half the rate, which is
+     * closer to what the LRV's T-handle actually did than a key is.
+     */
+    setMoveInput(x: number, y: number): void;
     update(deltaSeconds: number, fieldOfView: number): void;
 }
 
@@ -131,6 +146,12 @@ export function createDriver(
     obstacles: Obstacles
 ): Driver {
     const held = new Set<string>();
+    /** Analog control, from the touch stick. */
+    let stickX = 0;
+    let stickY = 0;
+    /** Where the look drag was last seen — see `onPointerMove`. */
+    let lookX = 0;
+    let lookY = 0;
     // The look direction is relative to the *vehicle*, not to the world: turning your
     // head does not turn the rover, and the rover turning carries your head with it.
     const look = new Euler(0, 0, 0, 'YXZ');
@@ -269,23 +290,32 @@ export function createDriver(
     function onPointerDown(event: PointerEvent): void {
         if (!enabled || event.button !== 0) return;
         looking = true;
+        lookX = event.clientX;
+        lookY = event.clientY;
         domElement.setPointerCapture(event.pointerId);
         domElement.style.cursor = 'grabbing';
     }
 
     function onPointerMove(event: PointerEvent): void {
         if (!enabled || !looking) return;
+        // Tracked rather than read off `event.movementX`, which is not populated for
+        // touch-derived pointer events in every engine and arrives as `undefined`
+        // where it is missing — see the longer note in `walk.ts`.
+        const deltaX = event.clientX - lookX;
+        const deltaY = event.clientY - lookY;
+        lookX = event.clientX;
+        lookY = event.clientY;
         const scale =
             Math.tan((camera.fov * Math.PI) / 360) / Math.tan((SURFACE_FOV * Math.PI) / 360);
         // Clamped both ways, because this is a head turn in a pressure suit rather than
         // a free camera: you cannot look behind your own seat.
         look.y = MathUtils.clamp(
-            look.y - event.movementX * LOOK_SENSITIVITY * scale,
+            look.y - deltaX * LOOK_SENSITIVITY * scale,
             -YAW_LIMIT,
             YAW_LIMIT
         );
         look.x = MathUtils.clamp(
-            look.x - event.movementY * LOOK_SENSITIVITY * scale,
+            look.x - deltaY * LOOK_SENSITIVITY * scale,
             -PITCH_LIMIT,
             PITCH_LIMIT
         );
@@ -312,6 +342,8 @@ export function createDriver(
 
     function onBlur(): void {
         held.clear();
+        stickX = 0;
+        stickY = 0;
     }
 
     domElement.addEventListener('pointerdown', onPointerDown);
@@ -348,6 +380,8 @@ export function createDriver(
 
         disable() {
             enabled = false;
+            stickX = 0;
+            stickY = 0;
             looking = false;
             held.clear();
             // The parking brake was a full pull back on the hand controller, and they
@@ -360,6 +394,11 @@ export function createDriver(
 
         setGround(heightAt) {
             ground = heightAt;
+        },
+
+        setMoveInput(x, y) {
+            stickX = x;
+            stickY = y;
         },
 
         park(x, z, azimuth) {
@@ -403,8 +442,11 @@ export function createDriver(
             }
 
             // --- throttle ---
-            const forward = held.has('KeyW');
-            const back = held.has('KeyS');
+            // A dead zone, because a stick resting near centre must not creep the
+            // vehicle: the LRV coasts to a stop on rolling drag alone and a few
+            // hundredths of throttle would stop it ever getting there.
+            const forward = held.has('KeyW') || stickY > THROTTLE_DEAD_ZONE;
+            const back = held.has('KeyS') || stickY < -THROTTLE_DEAD_ZONE;
             if (forward) speed += ACCELERATION * deltaSeconds;
             else if (back) speed -= BRAKING * deltaSeconds;
             else {
@@ -415,8 +457,12 @@ export function createDriver(
             speed = MathUtils.clamp(speed, -REVERSE_SPEED_MS, LRV_TOP_SPEED_MS);
 
             // --- steering ---
-            const steerInput = (held.has('KeyA') ? 1 : 0) - (held.has('KeyD') ? 1 : 0);
-            if (steerInput !== 0) {
+            const steerInput = MathUtils.clamp(
+                (held.has('KeyA') ? 1 : 0) - (held.has('KeyD') ? 1 : 0) - stickX,
+                -1,
+                1
+            );
+            if (Math.abs(steerInput) > 1e-3) {
                 steer = MathUtils.clamp(
                     steer + steerInput * STEER_RATE * deltaSeconds,
                     -LRV_MAX_STEER_RAD,

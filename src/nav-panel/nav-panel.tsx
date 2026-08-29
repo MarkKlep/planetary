@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
 import { BODIES, SHEET_GROUPS, hasSheet } from './bodies';
 import { BodyIcon } from './planet-icons';
@@ -67,6 +67,31 @@ export function NavPanel() {
   /** Which group's sheet is up, or null. See system-sheet.tsx. */
   const [openSheet, setOpenSheet] = useState<string | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(() => window.matchMedia(MOBILE_QUERY).matches);
+
+  /**
+   * The one place the scene asks the drawer to get out of the way.
+   *
+   * Every other direction of this bridge is React exposing DOM for `script.ts` to read
+   * — ids and `data-target` attributes. This is the one thing that has to travel the
+   * other way, because the collapse is React state and the event that should trigger
+   * it is a *mode change*, which `script.ts` owns and can reach in three ways: the
+   * Land button, the `L` key, and landing at the nearest site from free flight.
+   * Routing all three through `updateSurfaceChrome` and out as one event is what keeps
+   * them agreeing, rather than teaching each path to click a button it cannot see.
+   *
+   * Landing is deliberately not treated like the layer toggles beside it, which leave
+   * the drawer open on purpose so two can be flipped in sequence. It is the only
+   * control in the panel that replaces what is being rendered — and on this layout the
+   * drawer is 85% of the screen, so leaving it up means landing on the Moon and being
+   * shown a list of planets.
+   */
+  useEffect(() => {
+    const onCollapse = () => {
+      if (window.matchMedia(MOBILE_QUERY).matches) setIsCollapsed(true);
+    };
+    window.addEventListener('planetary:collapse-nav', onCollapse);
+    return () => window.removeEventListener('planetary:collapse-nav', onCollapse);
+  }, []);
 
   // Delegated rather than wired onto every `data-target` button individually — this
   // is the drawer's "select and it gets out of the way" behaviour, and it only makes

@@ -282,6 +282,22 @@
         right: 12px;
     }
 
+    /**
+     * The panel is a drawer at this width, and its own close chevron rides on its
+     * right edge — at `min(85vw, 320px)` that lands under this button on every common
+     * phone width. Measured: on a 390px viewport the chevron spans x 319–361 and this
+     * spans 330–378, and `elementFromPoint` at the middle of the chevron returns *this*
+     * — so the obvious way to shut the drawer opened the assistant instead.
+     *
+     * Hidden rather than nudged aside, because while the drawer is open there is
+     * nothing for the assistant to be consulted about: it covers the scene, and the
+     * scrim beneath this is already the "put it away" gesture.
+     */
+    .navigation-panel:not(.navigation-panel--collapsed) ~ .chat-toggle {
+        opacity: 0;
+        pointer-events: none;
+    }
+
     .chat-panel {
         top: 68px;
         right: 12px;

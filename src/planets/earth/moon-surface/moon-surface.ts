@@ -201,6 +201,21 @@ export interface MoonSurface {
     readonly roverDistance: number;
     /** Board it if you are near enough, or step off it if you are on it. */
     toggleRover(): void;
+    /** Whether the rover is close enough to climb onto. */
+    readonly roverInReach: boolean;
+    /**
+     * Analog movement for touch, routed to whichever of the two is driving.
+     *
+     * It lives on the mode rather than on either controller for the same reason the
+     * `Z` and `R` keys do: the caller is a thumb stick on the screen, which has no
+     * business knowing whether the person holding it is currently on foot or in the
+     * seat. Boarding swaps the consumer underneath it mid-gesture.
+     */
+    setMoveInput(x: number, y: number): void;
+    /** Push off. Ignored in the rover, which has no legs. */
+    hop(): void;
+    /** The long lens, the same one `Z` toggles. */
+    toggleZoom(): void;
     enter(site: LandingSite): void;
     exit(): void;
     /**
@@ -498,6 +513,27 @@ export function createMoonSurface(options: MoonSurfaceOptions): MoonSurface {
         },
         walker,
         driver,
+
+        get roverInReach() {
+            return roverDistance() <= BOARDING_RANGE_M;
+        },
+
+        setMoveInput(x, y) {
+            // Only the one actually in control is fed, and the other is zeroed on
+            // `disable()` anyway — so a handover cannot leave a stale vector behind in
+            // the controller that just gave up the camera.
+            if (driving) driver.setMoveInput(x, y);
+            else walker.setMoveInput(x, y);
+        },
+
+        hop() {
+            if (!driving) walker.hop();
+        },
+
+        toggleZoom() {
+            if (suspended) return;
+            zoomed = !zoomed;
+        },
 
         toggleRover() {
             if (!active) return;

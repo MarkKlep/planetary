@@ -101,7 +101,9 @@
 // rule `.surface-hud`'s walking and driving halves follow. Scoped under the block for
 // that file's reason as well: single-class selectors here would be decided by source
 // order rather than by intent.
-.rover-hint .rover-hint__near {
+.rover-hint .rover-hint__near,
+.rover-hint .rover-hint__far-touch,
+.rover-hint .rover-hint__near-touch {
     display: none;
 }
 
@@ -164,13 +166,73 @@
     }
 }
 
-// No keyboard, nothing to prompt. Surface mode is driven entirely from the keys — the
-// walker, the rover and the long lens all are — so on a touch device this would be an
-// instruction that cannot be followed, sitting in the middle of the view. The HUD hides
-// its own key legend on small screens for the same reason; this asks the sharper
-// question, since a narrow desktop window still has an `R` to press.
+/**
+ * The touch wording, and the reason this block is no longer a `display: none`.
+ *
+ * It used to hide the prompt outright, and the note that stood here was right about
+ * why: surface mode was driven entirely from the keys, so on a phone this was an
+ * instruction that could not be followed sitting in the middle of the view. What
+ * changed is the premise rather than the reasoning — `surface-touch.tsx` puts a stick
+ * and a Board button on the screen, so there is now something to point at.
+ *
+ * The prompt matters *more* here than it does on a desktop, not less. The Board button
+ * is disabled until you are inside `BOARDING_RANGE_M`, and a greyed-out control is the
+ * one thing on the screen that cannot say "there is a rover 8 m behind you and it is
+ * worth turning round for".
+ *
+ * The key cap goes, because it is the half of the prompt that names a key.
+ */
 @media (hover: none) and (pointer: coarse) {
-    .rover-hint {
+    .rover-hint__key {
         display: none;
+    }
+
+    /**
+     * Lifted out of the middle and narrowed, which is the one thing that has to change
+     * about the position now that the frame has furniture in it. Dead centre is still
+     * where a first-person prompt belongs on a desktop, where the read-out is a small
+     * box in a far corner; on a phone the HUD is 190px of a 390px screen and the
+     * controls own the bottom, so a centred full-width line runs straight through the
+     * read-out and comes out the other side. Above both is the only clear band left,
+     * and it is still on the optical axis.
+     */
+    .rover-hint {
+        justify-content: flex-start;
+        // A fixed offset rather than a fraction of the viewport, because what it has to
+        // clear is fixed: the read-out below it is 290px tall wherever it is shown, so
+        // on a 568px screen a percentage that works at 664px lands on top of it. This
+        // sits under the panel toggle and above the tallest the HUD can reach.
+        padding-top: 76px;
+    }
+
+    .rover-hint__text {
+        max-width: 17rem;
+        text-align: center;
+        text-wrap: balance;
+    }
+
+    .rover-hint .rover-hint__far {
+        display: none;
+    }
+
+    .rover-hint .rover-hint__far-touch {
+        display: inline;
+    }
+
+    .rover-hint--near {
+        .rover-hint__near-touch {
+            display: inline;
+        }
+
+        .rover-hint__far-touch {
+            display: none;
+        }
+
+        // The `--near` block above turns this one back on at equal specificity, so it
+        // has to be turned off again here — this file is later, which is the whole of
+        // the tiebreak. Without it both wordings show at once, in one sentence.
+        .rover-hint__near {
+            display: none;
+        }
     }
 }

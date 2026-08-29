@@ -38,6 +38,17 @@ const LOPE_SPEED = 2.6;
  */
 const HOP_SPEED = 1.6;
 
+/**
+ * How far the stick has to be pushed to break into a lope.
+ *
+ * The gait stays a choice between two measured speeds rather than becoming a
+ * continuum, because those two numbers are the feel of the place and the comment
+ * above says nothing about them should scale. What the stick's lean buys is the
+ * *choice* — which is what `Shift` is on a keyboard, and it is the one thing an
+ * analog control has that a key does not.
+ */
+const LOPE_LEAN = 0.75;
+
 const LOOK_SENSITIVITY = 0.0022; // radians per pixel dragged, matching free flight
 const PITCH_LIMIT = MathUtils.degToRad(89.5);
 /**
@@ -106,6 +117,14 @@ export interface Walker {
      * something at `altitude` radians above the horizon.
      */
     face(azimuth: number, altitude?: number): void;
+    /**
+     * Analog movement, right-positive and forward-positive, each −1..1. Additive with
+     * the keyboard rather than exclusive with it, so a tablet with a keyboard attached
+     * does not have to choose. See `createThumbStick`.
+     */
+    setMoveInput(x: number, y: number): void;
+    /** Push off, if there is ground underfoot. The touch control's half of Space. */
+    hop(): void;
     update(deltaSeconds: number, fieldOfView: number, zoomed: boolean): void;
 }
 
@@ -138,6 +157,12 @@ export function createWalker(
     let speed = 0;
     /** Which foot goes down next. Flipped per footfall, so the trail is two lines. */
     let footSide = 1;
+    /** Analog movement, from the touch stick. Zero whenever nothing is holding it. */
+    let stickX = 0;
+    let stickY = 0;
+    /** Where the look drag was last seen — see `onPointerMove`. */
+    let lookX = 0;
+    let lookY = 0;
     const contact = new Vector3();
     /** Which way the last collision pushed. See the note in `update`. */
     const push = new Vector3();
@@ -168,19 +193,32 @@ export function createWalker(
     function onPointerDown(event: PointerEvent): void {
         if (!enabled || event.button !== 0) return;
         looking = true;
+        lookX = event.clientX;
+        lookY = event.clientY;
         domElement.setPointerCapture(event.pointerId);
         domElement.style.cursor = 'grabbing';
     }
 
     function onPointerMove(event: PointerEvent): void {
         if (!enabled || !looking) return;
+        // The drag delta is tracked here rather than read off `event.movementX`.
+        // That property is specified for pointer events but is not populated for
+        // touch-derived ones in every engine, and where it is missing it arrives as
+        // `undefined` — which would make the subtraction below `NaN`, put `NaN` into
+        // the camera quaternion, and leave the view black with no way back. Two
+        // clientX readings cannot fail that way, and they mean exactly the same thing
+        // here because nothing in this mode ever locks the pointer.
+        const deltaX = event.clientX - lookX;
+        const deltaY = event.clientY - lookY;
+        lookX = event.clientX;
+        lookY = event.clientY;
         // Sensitivity tracks the field of view, or the long lens would be unusable:
         // the same drag has to sweep the same fraction of the frame either way.
         const scale =
             Math.tan((camera.fov * Math.PI) / 360) / Math.tan((SURFACE_FOV * Math.PI) / 360);
-        orientation.y -= event.movementX * LOOK_SENSITIVITY * scale;
+        orientation.y -= deltaX * LOOK_SENSITIVITY * scale;
         orientation.x = MathUtils.clamp(
-            orientation.x - event.movementY * LOOK_SENSITIVITY * scale,
+            orientation.x - deltaY * LOOK_SENSITIVITY * scale,
             -PITCH_LIMIT,
             PITCH_LIMIT
         );
@@ -202,10 +240,7 @@ export function createWalker(
 
         if (event.code === 'Space') {
             event.preventDefault(); // or the page scrolls under the canvas
-            if (!airborne) {
-                verticalSpeed = HOP_SPEED;
-                airborne = true;
-            }
+            pushOff();
         }
     }
 
@@ -215,9 +250,18 @@ export function createWalker(
         held.delete(event.code);
     }
 
+    /** The one place a hop begins, so the key and the touch button cannot diverge. */
+    function pushOff(): void {
+        if (!enabled || airborne) return;
+        verticalSpeed = HOP_SPEED;
+        airborne = true;
+    }
+
     function onBlur(): void {
         held.clear();
         velocity.set(0, 0, 0);
+        stickX = 0;
+        stickY = 0;
     }
 
     domElement.addEventListener('pointerdown', onPointerDown);
@@ -241,6 +285,8 @@ export function createWalker(
             enabled = true;
             held.clear();
             velocity.set(0, 0, 0);
+            stickX = 0;
+            stickY = 0;
             verticalSpeed = 0;
             airborne = false;
             domElement.style.cursor = 'grab';
@@ -251,6 +297,8 @@ export function createWalker(
             looking = false;
             held.clear();
             velocity.set(0, 0, 0);
+            stickX = 0;
+            stickY = 0;
             speed = 0;
             domElement.style.cursor = 'default';
         },
@@ -274,6 +322,15 @@ export function createWalker(
             airborne = false;
             distanceWalked = 0;
             nextFootfall = FOOTFALL_SPACING;
+        },
+
+        setMoveInput(x, y) {
+            stickX = x;
+            stickY = y;
+        },
+
+        hop() {
+            pushOff();
         },
 
         face(azimuth, altitude = 0) {
@@ -304,6 +361,11 @@ export function createWalker(
             if (held.has('KeyS')) move.z += 1;
             if (held.has('KeyA')) move.x -= 1;
             if (held.has('KeyD')) move.x += 1;
+            // The stick adds into the same vector the keys do, so neither input has to
+            // know the other exists. Its magnitude is read separately below — the
+            // direction is all that survives the normalise.
+            move.x += stickX;
+            move.z -= stickY;
 
             if (move.lengthSq() > 0) {
                 // Walk in the tangent plane, not along the line of sight. Looking up
@@ -312,7 +374,8 @@ export function createWalker(
                 move.normalize().applyAxisAngle(UP, orientation.y);
             }
 
-            const lope = held.has('ShiftLeft') || held.has('ShiftRight');
+            const lean = Math.min(Math.hypot(stickX, stickY), 1);
+            const lope = held.has('ShiftLeft') || held.has('ShiftRight') || lean >= LOPE_LEAN;
             const target = (lope ? LOPE_SPEED : WALK_SPEED) * (zoomed ? 0.35 : 1);
 
             // Frame-rate independent easing: a fixed fraction closed per second.
