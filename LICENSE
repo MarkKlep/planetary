@@ -1,0 +1,79 @@
+Copyright (c) 2026 Mark Klepanchuk. All rights reserved.
+
+PROPRIETARY — NO LICENSE GRANTED
+
+This repository and its contents (the "Software") are made available for
+viewing only. No licence, express or implied, is granted to any person to use,
+copy, reproduce, modify, adapt, translate, merge, publish, distribute,
+sublicense, sell, host, deploy, or create derivative works from the Software or
+any part of it.
+
+Reading the source in order to learn from it is welcome. Reusing it is not.
+Anything beyond viewing requires prior written permission from the copyright
+holder, which may be requested at markklepanchuk@gmail.com.
+
+WHAT PUBLISHING ON GITHUB NECESSARILY ALLOWS
+
+While this repository is public on GitHub, GitHub's Terms of Service grant
+every GitHub user a limited licence to view it and to fork it within GitHub.
+That grant comes from publishing here and cannot be withdrawn by this file; the
+terms above cannot and do not purport to override it. Cloning a public
+repository is likewise a normal consequence of it being public.
+
+Everything past that point — running the Software, publishing it, deploying it,
+or reusing any part of it outside GitHub — is not permitted by this licence.
+The only way to prevent copying outright is to make the repository private.
+
+ATTRIBUTION AND AUTHORSHIP
+
+Mark Klepanchuk is the author of the Software. Nothing in this repository, and
+nothing GitHub's forking functionality permits, grants anyone the right to
+present it as their own work.
+
+Specifically, no person may:
+
+  * remove, obscure, or alter the copyright notice above, this file, or any
+    authorship or credit notice in the source, in any copy of the Software,
+    including a fork held on GitHub;
+
+  * represent the Software, or any part of it, or anything substantially
+    derived from it, as their own original work — including in a portfolio, a
+    CV or job application, a demo, a talk, coursework or a thesis, a
+    competition entry, a client deliverable, or a published article;
+
+  * publish or deploy it under their own name or branding, or in a way that
+    suggests they wrote it, or that suggests the author endorses, sponsors, or
+    is associated with what they have published.
+
+A fork on GitHub is permitted by GitHub's terms and remains visibly a fork of
+this repository. Presenting the code as one's own authorship anywhere is a
+misrepresentation, and is not made permissible by having obtained a copy
+lawfully. This section stands independently of the copyright terms above: even
+where a copy exists legitimately, the claim of authorship does not.
+
+Learning from the Software and building your own work afterwards is welcome,
+and is not what this section is about.
+
+THIRD-PARTY COMPONENTS
+
+The terms above apply to the original work in this repository. They do not
+apply to, and cannot restrict, third-party material distributed with it, which
+remains under its own terms:
+
+  * public/textures/ — NASA imagery, in the public domain, with one exception:
+    saturn_color.jpg is (c) Solar System Scope and licensed CC BY 4.0.
+    Attribution is a condition of that licence and cannot be removed. See
+    public/textures/CREDITS.md for the full accounting.
+
+  * Dependencies installed from npm, including IBM Plex (SIL Open Font License
+    1.1) via @fontsource, three.js, React and Vite, each under its own licence
+    as declared by its package. They are not redistributed by this repository.
+
+NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

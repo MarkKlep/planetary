@@ -1,9 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <!-- Same palette and shape language as the nav panel's instrument tokens in
-       variables.scss: a sun in the --signal amber (the colour of the one light
+       variables.scss: a sun in the `signal` amber (the colour of the one light
        every position in the scene is computed from), one visible orbit ring, one
        planet on it. Kept to three flat shapes on a dark ground so it stays
-       legible at 16px in a browser tab, where gradients and glows disappear. -->
+       legible at 16px in a browser tab, where gradients and glows disappear.
+
+       The custom property above is named without its leading dashes on purpose:
+       XML forbids a doubled hyphen anywhere inside a comment, and an SVG served
+       as an image is parsed by a strict XML parser rather than the forgiving
+       HTML one. Spelled with its dashes, that property name is a fatal parse
+       error here, and the whole file silently fails to render — which looks
+       exactly like a missing file, except the server returns 200 with the right
+       content type. Comments are the only place this can be reintroduced, so
+       none of them may spell a custom property, a CSS range, or a CLI flag. -->
   <rect width="32" height="32" rx="7" fill="#08080a" />
   <circle cx="16" cy="16" r="10.5" fill="none" stroke="#3a3a3d" stroke-width="1.4" />
   <circle cx="16" cy="16" r="4.6" fill="#ff8a3d" />

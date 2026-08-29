@@ -14,11 +14,13 @@ import { Analytics } from "@vercel/analytics/react";
 const SPLASH_FADE_MS = 400;
 
 export function App() {
-  // Gates the landing hint, which must not be on screen while the splash still is:
-  // it announces something to go and click, and the panel it points at is behind a
-  // full-screen cover until this flips. Same signal the splash's own fade uses, for
-  // the same reason — see the comment on `onFirstFrame` below.
-  const [sceneReady, setSceneReady] = useState(false);
+  // Gates the landing hint. Not the same signal the splash's fade uses, and that is
+  // the point: the splash lifts on the first frame, which is the *start* of a 3.3s
+  // opening move — the system-wide shot, then the long fly-to Earth. A card put up
+  // then is competing with the biggest camera move in the app. This flips when that
+  // move has settled, which is the first moment the scene is holding still and the
+  // first moment anything else on screen is the thing being looked at.
+  const [introSettled, setIntroSettled] = useState(false);
 
   useEffect(() => {
     // Deferred one task so the browser can paint this commit before initScene
@@ -33,14 +35,16 @@ export function App() {
       // scene picked up more `ShaderMaterial`s (the rings among them), whose
       // compilation is paid on the real first `render()` call, not before. See
       // the comment on `initScene` in script.ts.
-      initScene(() => {
-        const splash = document.getElementById('splash');
-        if (splash) {
-          splash.classList.add('splash--done');
-          window.setTimeout(() => splash.remove(), SPLASH_FADE_MS);
-        }
-        setSceneReady(true);
-      });
+      initScene(
+        () => {
+          const splash = document.getElementById('splash');
+          if (splash) {
+            splash.classList.add('splash--done');
+            window.setTimeout(() => splash.remove(), SPLASH_FADE_MS);
+          }
+        },
+        () => setIntroSettled(true),
+      );
     }, 0);
 
     return () => clearTimeout(timer);
@@ -72,10 +76,11 @@ export function App() {
           the one saying the range is modelled. */}
       <BetelgeuseHud />
       <ChatWidget />
-      {/* Mounted only once the scene has actually drawn, and it decides for itself
-          whether it has anything to say — a visitor who has already been told renders
-          nothing at all. See moon-hint.tsx. */}
-      {sceneReady && <MoonHint />}
+      {/* Mounted the moment the opening fly-to settles on Earth, which is what times
+          the card — it goes up on arrival rather than over the move. It then decides
+          for itself whether it has anything to say: a visitor who has already been
+          told renders nothing at all. See moon-hint.tsx. */}
+      {introSettled && <MoonHint />}
       {/* Mounted once and driven from `script.ts` through `bindModal`, which looks it
           up by this id. Standing on the Moon is the one mode that is easy to leave by
           accident — Escape, L, and every nav target all lift off — and impossible to

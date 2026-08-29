@@ -1,6 +1,7 @@
 {
   "name": "planetary",
   "version": "1.0.0",
+  "private": true,
   "main": "index.js",
   "scripts": {
     "dev": "vite",
@@ -20,8 +21,8 @@
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "author": "Mark Klepanchuk <markklepanchuk@gmail.com>",
+  "license": "UNLICENSED",
   "description": "",
   "devDependencies": {
     "@types/react": "^19.2.8",

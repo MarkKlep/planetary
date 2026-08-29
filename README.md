@@ -178,3 +178,12 @@ re-introduce.
 
 Textures are NASA public-domain imagery, with one CC BY 4.0 exception. See
 [`public/textures/CREDITS.md`](public/textures/CREDITS.md).
+
+## License
+
+Proprietary — all rights reserved. The source is public to be read, not reused: no
+licence is granted to use, copy, modify, deploy or distribute it, and no one may
+present it as their own work — in a portfolio, a CV, a demo, coursework or anywhere
+else. See [`LICENSE`](LICENSE), which also covers the third-party material this does
+not apply to. Learning from it and then building your own thing is welcome. For
+anything else, ask.

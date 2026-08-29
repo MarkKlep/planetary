@@ -18,24 +18,25 @@
  *
  * A page that has not been interacted with cannot make sound: every current browser
  * creates the `AudioContext` in `suspended` and only lets `resume()` through off a
- * user gesture. That is not an error case to swallow — it is the *common* case for a
- * chime that fires on arrival, so it is handled rather than caught. `playChime` tries
- * to resume immediately (which succeeds for anyone who arrived by clicking a link on
- * a page of ours, or who reloaded a tab they had already used), and otherwise arms a
- * one-shot listener for the first click, tap or key and rings then.
+ * user gesture. For a chime that fires on arrival that is not an edge case, it is
+ * *the* case — a cold visit is suspended every single time. **There is therefore no
+ * way to guarantee the chime sounds at the moment the card appears, in any browser,
+ * and no amount of code here changes that.** It is worth stating plainly because it
+ * is the constraint every version of this file has been shaped by.
  *
- * That listener is why this returns a canceller instead of nothing. Without one, a
- * visitor who never touches the page for five minutes gets a chime out of nowhere
- * long after the card that explains it has gone; the caller cancels on unmount, so
- * the sound can only ever arrive while there is something on screen to attribute it
- * to.
+ * What is guaranteed instead is the pairing: the chime is never heard without the
+ * card being on screen. `chimeWhenAudible` rings immediately if the context is
+ * already running (a reload of a tab that has been used, an arrival from a click on a
+ * page of ours), and otherwise at the first gesture — with the wait bounded by the
+ * caller, which passes the card's own visible life. The caller is told which of the
+ * two happened, so a late ring can hold the card open long enough to be read after
+ * the sound rather than leaving at the same moment.
  *
- * The canceller also has to be usable *within* a gesture, because the deferred chime
- * has one genuinely bad case: the first gesture on the page may be the click that
- * dismisses the card, and a sound that arrives because you closed the notification is
- * worse than no sound at all. `GESTURE_EVENTS` is exported so the caller can watch
- * the same events in the capture phase — which runs ahead of the window-level
- * listeners armed here — and cancel before this ever sees them.
+ * Two earlier arrangements are worth not going back to. Waiting for a gesture with no
+ * bound at all rang the chime long after the card had gone, with nothing on screen to
+ * attribute it to. Bounding it to a couple of seconds instead — short enough that the
+ * sound would always be part of the card's arrival — made it silent for practically
+ * everyone, because nobody clicks that fast.
  */
 
 /** G5 and D6. */
@@ -56,6 +57,8 @@ const ATTACK_S = 0.008;
  * and not there is one that can ring the chime at the wrong moment.
  */
 export const GESTURE_EVENTS = ['pointerdown', 'keydown', 'touchstart'] as const;
+
+
 
 /**
  * One context for the page, created on first use — never at module load. Constructing
@@ -113,42 +116,77 @@ function ring(ctx: AudioContext): void {
 }
 
 /**
- * Rings once, now or at the first user gesture, whichever the autoplay policy allows.
+ * Rings once at the first moment the browser allows it, and tells the caller when
+ * that has been settled either way.
  *
- * @returns a canceller that withdraws a gesture-deferred chime that has not sounded
- *          yet. Safe to call at any point, including after the chime has played.
+ * @param waitMs   how long to wait for the gesture that unblocks audio before giving
+ *                 up on the sound. The caller's content should not be held back
+ *                 longer than it is willing to withhold it — see the note above.
+ * @param onSettled called exactly once with whether anything was actually heard —
+ *                 immediately after the chime is scheduled, or at `waitMs` with the
+ *                 page still silent. Never called after the returned canceller has
+ *                 run. The flag is there so a caller can keep its own content up long
+ *                 enough to be looked at after a ring that arrived late.
+ * @returns a canceller. It must be callable *synchronously* from inside a gesture:
+ *          the gesture that would unblock the chime can be the one that makes the
+ *          chime unwanted, and a caller that waits for a state update to tear this
+ *          down will be a whole event too late.
  */
-export function playChime(): () => void {
-    const ctx = audioContext();
-    if (!ctx) return () => {};
-
-    // Both routes below can win the race — the deferred `resume()` may settle just
-    // after a gesture has already resumed and rung — so the ring itself is the thing
-    // guarded, not either path into it.
-    let rung = false;
+export function chimeWhenAudible(waitMs: number, onSettled: (rang: boolean) => void): () => void {
+    let settled = false;
     let cancelled = false;
-
-    const ringOnce = () => {
-        if (rung || cancelled) return;
-        rung = true;
-        ring(ctx);
-    };
-
-    if (ctx.state === 'running') {
-        ringOnce();
-        return () => {};
-    }
+    let waitTimer = 0;
 
     const onGesture = () => {
-        stopListening();
-        if (cancelled) return;
-        void ctx.resume().then(ringOnce, () => {});
+        void resumeThenSettle();
     };
-
 
     const stopListening = () => {
         for (const type of GESTURE_EVENTS) window.removeEventListener(type, onGesture);
     };
+
+    /**
+     * The one way out, taken once. `sound` is the context to ring on, or null for
+     * having given up — the two endings differ only in whether anything is heard,
+     * which is why they share a path rather than being separate callbacks.
+     */
+    const settle = (sound: AudioContext | null) => {
+        if (settled || cancelled) return;
+        settled = true;
+        window.clearTimeout(waitTimer);
+        stopListening();
+        if (sound) ring(sound);
+        onSettled(Boolean(sound));
+    };
+
+    const ctx = audioContext();
+    if (!ctx) {
+        // No Web Audio at all. Nothing to wait for, so the caller should not be kept
+        // waiting either.
+        settle(null);
+        return () => {};
+    }
+
+    const resumeThenSettle = () =>
+        ctx.resume().then(
+            // Chrome leaves this promise pending until a gesture arrives rather than
+            // rejecting, and Safari resolves it with the context still suspended — so
+            // the state is re-read on the way out instead of the promise being taken
+            // as an answer.
+            () => {
+                if (ctx.state === 'running') settle(ctx);
+            },
+            () => {},
+        );
+
+    if (ctx.state === 'running') {
+        // Already interacted with — a reload of a tab that has been used, or an
+        // arrival from a click on a page of ours. Nothing to wait for.
+        settle(ctx);
+        return () => {};
+    }
+
+    waitTimer = window.setTimeout(() => settle(null), waitMs);
 
     for (const type of GESTURE_EVENTS) {
         // Bubble phase, deliberately — see the note on `GESTURE_EVENTS`: a caller
@@ -156,21 +194,13 @@ export function playChime(): () => void {
         window.addEventListener(type, onGesture, { once: true, passive: true });
     }
 
-    // Chrome leaves this promise pending until a gesture arrives rather than
-    // rejecting, and Safari resolves it with the context still suspended — so the
-    // state is re-read on the way out instead of the promise being taken as an
-    // answer.
-    void ctx.resume().then(
-        () => {
-            if (ctx.state !== 'running') return;
-            stopListening();
-            ringOnce();
-        },
-        () => {},
-    );
+    // Tried once up front as well, because the state above can go stale between the
+    // read and here on a page that is being interacted with as it loads.
+    void resumeThenSettle();
 
     return () => {
         cancelled = true;
+        window.clearTimeout(waitTimer);
         stopListening();
     };
 }

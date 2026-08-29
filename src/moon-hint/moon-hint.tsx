@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { GESTURE_EVENTS, playChime } from './chime';
+import { GESTURE_EVENTS, chimeWhenAudible } from './chime';
 import './moon-hint.scss';
 
 /**
@@ -32,15 +32,20 @@ import './moon-hint.scss';
 /** Named like `planetary:quality`, though it lives in a different storage — see below. */
 const STORAGE_KEY = 'planetary:moon-hint';
 
-/**
- * Long enough after the splash's own 400 ms fade that the card arrives at a settled
- * scene rather than sliding in over the tail of it — and, more to the point, long
- * enough that the chime does not land on top of the first frame's stutter.
- */
-const ENTER_DELAY_MS = 900;
-
 /** Two sentences and a shortcut, at an unhurried reading speed, plus a beat to act. */
 const AUTO_HIDE_MS = 18000;
+
+/**
+ * How long the chime may wait for the gesture that lets it through, when the browser
+ * would not let it sound on arrival.
+ *
+ * Deliberately the card's own life rather than a figure of its own, which is the
+ * whole rule the sound obeys: it may be late, it may never come, but it is never
+ * heard without the card being on screen to explain it. See `chimeWhenAudible` for
+ * why arriving late is the best a browser permits, and why the two tighter
+ * alternatives were both worse.
+ */
+const CHIME_WAIT_MS = AUTO_HIDE_MS;
 
 /** Must match `moon-hint-out`'s duration in the stylesheet. */
 const EXIT_MS = 240;
@@ -110,31 +115,30 @@ function markSeen(): void {
 }
 
 /**
- * `waiting` and `done` render nothing; the two in between are the card's own
- * animation. Entry is a CSS animation rather than a transition toggled a frame after
- * mount, so there is no render-then-add-a-class dance to get wrong, and `leaving` is
- * a real state rather than an unmount because a card that vanishes mid-sentence reads
- * as a bug in the page.
+ * `done` renders nothing; the two before it are the card's own animation. Entry is a
+ * CSS animation rather than a transition toggled a frame after mount, so there is no
+ * render-then-add-a-class dance to get wrong, and `leaving` is a real state rather
+ * than an unmount because a card that vanishes mid-sentence reads as a bug in the
+ * page.
+ *
+ * There is no waiting phase, and there used to be two. Both were this component
+ * guessing at when the scene would be ready to be interrupted — a fixed delay after
+ * the first frame, and then a wait for the browser to allow sound. `App.tsx` now
+ * mounts this at the moment the opening fly-to settles on Earth, so the right time to
+ * appear is *being mounted*, and the card is up on its first render.
  */
-type Phase = 'waiting' | 'shown' | 'leaving' | 'done';
+type Phase = 'shown' | 'leaving' | 'done';
 
 export function MoonHint() {
-    const [phase, setPhase] = useState<Phase>(() => (shouldShow() ? 'waiting' : 'done'));
-
-    useEffect(() => {
-        if (phase !== 'waiting') return;
-        const timer = window.setTimeout(() => setPhase('shown'), ENTER_DELAY_MS);
-        return () => window.clearTimeout(timer);
-    }, [phase]);
+    const [phase, setPhase] = useState<Phase>(() => (shouldShow() ? 'shown' : 'done'));
 
     // Everything that holds only while the card is actually up. Tearing all of it
     // down together is what guarantees the beacon stops with the card and the chime
-    // can never arrive after it — see `playChime` on why that matters.
+    // can never arrive after it — see `chimeWhenAudible` on why that matters.
     useEffect(() => {
         if (phase !== 'shown') return;
 
         document.body.classList.add(BEACON_CLASS);
-        const cancelChime = playChime();
 
         const dismiss = () => setPhase('leaving');
 
@@ -143,6 +147,15 @@ export function MoonHint() {
             window.clearTimeout(autoHide);
             autoHide = window.setTimeout(dismiss, AUTO_HIDE_MS);
         };
+
+        // Rings now if the browser allows it — which it does only for a page that has
+        // already been interacted with — and otherwise at the first gesture, for as
+        // long as the card is up. A ring that arrives late restarts the clock, so the
+        // sound is never the noise a card makes on its way out: whenever it is heard,
+        // there is a full reading of the card left after it.
+        const cancelChime = chimeWhenAudible(CHIME_WAIT_MS, (rang) => {
+            if (rang) restartClock();
+        });
 
         // Delegated on the document rather than bound to the controls themselves, for
         // the nav panel's own reason: those buttons are React-rendered and the panel
@@ -158,17 +171,16 @@ export function MoonHint() {
             if (isLandKey(event)) dismiss();
         };
 
-        // The chime waits for the page's first gesture whenever the browser blocked
-        // it on arrival, and that gesture can perfectly well be the one that ends the
-        // card — pressing Land, hitting L, or clicking the ×. A sound that arrives
+        // The gesture the chime is waiting for can perfectly well be the one that ends
+        // the card — pressing Land, hitting L, or clicking the ×. A sound that arrives
         // *because* the notification was dismissed is worse than no sound at all, so
         // the chime is withdrawn before it can hear the same event.
         //
         // This has to be the gesture itself rather than the dismissal it leads to:
-        // `click` runs a whole event later than `pointerdown`, by which time the
-        // chime has already resumed the context and rung. Capture phase on the
-        // document runs ahead of the chime's window-level listeners for every one of
-        // these, which is what makes getting in first possible at all.
+        // `click` runs a whole event later than `pointerdown`, by which time the chime
+        // has already resumed the context and rung. Capture phase on the document runs
+        // ahead of the chime's own window-level listeners for every one of these,
+        // which is what makes getting in first possible at all.
         const onEndingGesture = (event: Event) => {
             const ends =
                 event.type === 'keydown'
@@ -205,7 +217,7 @@ export function MoonHint() {
         return () => window.clearTimeout(timer);
     }, [phase]);
 
-    if (phase === 'waiting' || phase === 'done') return null;
+    if (phase === 'done') return null;
 
     return (
         // `role="status"` rather than `alert`: this is an offer, not an interruption,

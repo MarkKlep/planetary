@@ -158,8 +158,18 @@ import {
  * whichever `renderer.render()` call first uses a given material, not before, and a
  * scene with several custom `ShaderMaterial`s (the rings among them) can lose that race
  * by a couple of seconds even though `initScene()` itself returns in milliseconds.
+ *
+ * @param onIntroSettled Called once when the opening move is over — the system-wide
+ * shot, then the fly-to that leaves it for Earth — which is the first moment the
+ * camera is holding still on anything. Chrome that has to announce itself over the
+ * scene wants that beat rather than the first frame: `onFirstFrame` is 3.3 seconds
+ * earlier, in the middle of the longest camera move in the app, where a card arriving
+ * is competing with the shot it is arriving over. Fired unconditionally, including
+ * when the intro is skipped because the user has already taken the camera somewhere
+ * of their own — the announcement is not conditional on the move having happened, only
+ * timed by it.
  */
-export function initScene(onFirstFrame?: () => void) {
+export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void) {
     const container = document.getElementById('app') as HTMLElement;
 
     if (!container) {
@@ -2780,6 +2790,18 @@ export function initScene(onFirstFrame?: () => void) {
                 document.querySelector('.nav-btn[data-target="earth"]')?.classList.add('active');
                 focusOnObject(earth, EARTH_VIEW_DISTANCE, INTRO_FLIGHT_DURATION);
             }, INTRO_HOLD_DURATION);
+
+            // A second timer rather than a completion callback threaded through
+            // `focusOnObject`: that function serves some thirty callers and none of
+            // the others wants one, and the intro is the one fly-to whose end is a
+            // known quantity in advance — it is scheduled from here, at a fixed
+            // duration, from this same instant. Separate from the branch above so it
+            // still fires when the intro is skipped, which is what makes it something
+            // a caller can rely on arriving.
+            window.setTimeout(
+                () => onIntroSettled?.(),
+                INTRO_HOLD_DURATION + INTRO_FLIGHT_DURATION,
+            );
         }
     }
 
