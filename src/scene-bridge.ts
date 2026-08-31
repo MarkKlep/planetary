@@ -16,6 +16,7 @@ import { titan } from './planets/saturn/titan';
 import { uranus } from './planets/uranus/uranus';
 import { neptune } from './planets/neptune/neptune';
 import { betelgeuse } from './background/betelgeuse';
+import { andromeda } from './background/andromeda';
 
 /**
  * The scene's own view of where the camera is and what it is on, exposed for readers
@@ -34,7 +35,7 @@ import { betelgeuse } from './background/betelgeuse';
  * "what am I looking at?".
  */
 
-/** The 26 focus targets, matching the nav panel's `data-target` vocabulary exactly. */
+/** The 27 focus targets, matching the nav panel's `data-target` vocabulary exactly. */
 export type BodyId =
     | 'sun'
     | 'mercury'
@@ -61,10 +62,11 @@ export type BodyId =
     | 'iapetus'
     | 'uranus'
     | 'neptune'
-    // Not a focus target in the sense the others are — there is no flying to it, and
-    // `focusOnObject` is not what puts the camera on it. It is here because the panel
-    // has a row for it and the assistant is asked what the camera is looking at.
+    // Not focus targets in the sense the others are — there is no flying to either,
+    // and `focusOnObject` is not what puts the camera on them. They are here because
+    // the panel has a row for each and the assistant is asked what it is looking at.
     | 'betelgeuse'
+    | 'andromeda'
     | 'system';
 
 export const BODY_IDS: BodyId[] = [
@@ -73,7 +75,7 @@ export const BODY_IDS: BodyId[] = [
     'jupiter', 'io', 'europa', 'ganymede', 'callisto',
     'saturn', 'mimas', 'enceladus', 'tethys', 'dione', 'rhea', 'titan', 'iapetus',
     'uranus', 'neptune',
-    'betelgeuse',
+    'betelgeuse', 'andromeda',
     'system',
 ];
 
@@ -105,6 +107,7 @@ export const BODY_LABELS: Record<BodyId, string> = {
     uranus: 'Uranus',
     neptune: 'Neptune',
     betelgeuse: 'Betelgeuse',
+    andromeda: 'the Andromeda galaxy',
     system: 'the whole solar system',
 };
 
@@ -151,6 +154,7 @@ const idByObject = new Map<Object3D, BodyId>([
     [uranus, 'uranus'],
     [neptune, 'neptune'],
     [betelgeuse, 'betelgeuse'],
+    [andromeda, 'andromeda'],
 ]);
 
 /**

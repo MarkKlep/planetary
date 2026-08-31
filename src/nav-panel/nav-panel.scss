@@ -426,6 +426,103 @@
         }
     }
 
+    /**
+     * The one control in this panel that is not a button, and the only one whose value
+     * is worth reading while it moves — so it is laid out as a labelled instrument
+     * rather than as a slider with a caption: name on the left, current value on the
+     * right in the telemetry cyan every other measurement in this chrome uses, and the
+     * track spanning both underneath.
+     */
+    .nav-slider {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: baseline;
+        gap: 6px 8px;
+        margin-top: 2px;
+        padding: 10px 12px 11px;
+        border: 1px solid var(--hairline);
+        border-radius: var(--radius-md);
+        background: var(--panel);
+    }
+
+    .nav-slider__label {
+        font-size: 12px;
+        color: var(--ink-dim);
+        cursor: pointer;
+    }
+
+    .nav-slider__value {
+        font-family: var(--font-mono);
+        font-size: 10px;
+        letter-spacing: 0.04em;
+        color: var(--telemetry);
+        font-variant-numeric: tabular-nums;
+        // The label swings between "Off" and "x1 - as seen", so the row would otherwise
+        // reflow every time the thumb passed either. Right-aligned in a fixed column
+        // instead, which is what the tabular figures are for.
+        justify-self: end;
+        text-align: right;
+        min-width: 76px;
+    }
+
+    .nav-slider__input {
+        grid-column: 1 / -1;
+        width: 100%;
+        height: 18px;
+        margin: 0;
+        // The one place this chrome takes a native control and repaints it. Left alone,
+        // a range input arrives with the platform's own accent, radius and thumb, which
+        // is the single most obviously borrowed shape a panel like this can contain.
+        appearance: none;
+        background: transparent;
+        cursor: pointer;
+
+        &::-webkit-slider-runnable-track {
+            height: 2px;
+            border-radius: 1px;
+            background: var(--hairline-bright);
+        }
+
+        &::-moz-range-track {
+            height: 2px;
+            border-radius: 1px;
+            background: var(--hairline-bright);
+        }
+
+        // Amber, because this is a control rather than a reading — the same split the
+        // rest of the panel keeps between --signal and --telemetry.
+        &::-webkit-slider-thumb {
+            appearance: none;
+            width: 12px;
+            height: 12px;
+            margin-top: -5px;
+            border: 0;
+            border-radius: 50%;
+            background: var(--signal);
+        }
+
+        &::-moz-range-thumb {
+            width: 12px;
+            height: 12px;
+            border: 0;
+            border-radius: 50%;
+            background: var(--signal);
+        }
+
+        &:focus-visible {
+            outline: 1px solid var(--signal);
+            outline-offset: 4px;
+        }
+    }
+
+    .nav-slider__hint {
+        grid-column: 1 / -1;
+        margin: 0;
+        font-size: 10px;
+        line-height: 1.45;
+        color: var(--ink-faint);
+    }
+
     .nav-btn.nav-action-btn {
         display: flex;
         align-items: center;

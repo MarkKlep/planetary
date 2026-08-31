@@ -592,6 +592,39 @@ function BodyShape({ id }: BodyIconProps) {
           discRadius={6.9}
         />
       );
+    // The one row in the list that is neither a body in the solar system nor a point of
+    // light, and it is drawn as the thing that makes it neither: a disc, seen at 77°, so
+    // an ellipse rather than a circle. Three details are the real ones. It is tilted
+    // because the real object is — position angle 35°, running north-east to south-west,
+    // the same angle `background/andromeda.ts` lays the disc at. The core is warm and
+    // the disc is cool, which is the one colour fact about a spiral: old stars in the
+    // middle, young ones outside. And the dark line across it is on one side only,
+    // because that is what a dust lane in a tilted plane looks like — the evidence that
+    // that edge is the near one.
+    case 'andromeda':
+      return (
+        <g transform={`rotate(-35 ${CENTER} ${CENTER})`}>
+          <defs>
+            <radialGradient id="planet-icon-andromeda-halo" cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor="#d6e4ff" stopOpacity="0.95" />
+              <stop offset="38%" stopColor="#8ea9e0" stopOpacity="0.45" />
+              <stop offset="100%" stopColor="#6d84c0" stopOpacity="0" />
+            </radialGradient>
+          </defs>
+          <ellipse cx={CENTER} cy={CENTER} rx="9.4" ry="3" fill="url(#planet-icon-andromeda-halo)" />
+          <ellipse cx={CENTER} cy={CENTER} rx="5.6" ry="1.9" fill="#b9cdf2" opacity="0.4" />
+          <path
+            d="M 4.5 11 Q 10 9.3 15.5 11"
+            fill="none"
+            stroke="#232a44"
+            strokeWidth="0.7"
+            strokeLinecap="round"
+            opacity="0.55"
+          />
+          <ellipse cx={CENTER} cy={CENTER} rx="2.5" ry="1.6" fill="#ffe6bd" opacity="0.9" />
+          <circle cx={CENTER} cy={CENTER} r="1" fill="#fff6e4" />
+        </g>
+      );
     case 'system':
       return (
         <>

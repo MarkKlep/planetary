@@ -1,5 +1,9 @@
 import { useEffect, useState } from 'react';
 import { TIME_SPEEDS, DEFAULT_TIME_SPEED } from '../constants/planets.const';
+import {
+  ANDROMEDA_BRIGHTNESS_DEFAULT,
+  ANDROMEDA_DISTANCE_MLY,
+} from '../background/andromeda';
 import { BODIES, SHEET_GROUPS, hasSheet } from './bodies';
 import { BodyIcon } from './planet-icons';
 import { SystemSheet } from './system-sheet';
@@ -223,6 +227,66 @@ export function NavPanel() {
                 />
               </div>
             </div>
+          </div>
+        </div>
+        {/* The two things in this app that are not in the solar system, and the one
+            control that belongs to them.
+
+            Their own section rather than two more rows on the object list, for the
+            reason that list is called Objects: everything in it is somewhere the camera
+            can be sent, at a distance the scene actually models, and neither of these
+            is. Betelgeuse is 8x10^11 scene units away and Andromeda four thousand times
+            that again; both are painted on a backdrop shell 960 units out that follows
+            the camera, so choosing one turns the view rather than travelling.
+
+            The slider is here rather than behind a chevron in a sheet, and that is not a
+            layout preference — see system-sheet.tsx. A sheet is a modal over a dimmed,
+            blurred scene, and this is a control whose whole use is watching a faint
+            thing appear and disappear while you drag it. Putting it behind one would be
+            holding a dialog over the answer. */}
+        <div className="nav-section nav-section--deep-sky">
+          <h2 className="nav-section-title">Deep sky</h2>
+          <div className="nav-object-list" onClick={handleObjectListClick}>
+            <button
+              className={`nav-btn nav-object-btn ${activeTarget === 'betelgeuse' ? 'active' : ''}`}
+              data-target="betelgeuse"
+              onClick={() => setActiveTarget('betelgeuse')}
+            >
+              <span className="nav-object-symbol"><BodyIcon id="betelgeuse" /></span>
+              <span>Betelgeuse</span>
+            </button>
+            <button
+              className={`nav-btn nav-object-btn ${activeTarget === 'andromeda' ? 'active' : ''}`}
+              data-target="andromeda"
+              onClick={() => setActiveTarget('andromeda')}
+            >
+              <span className="nav-object-symbol"><BodyIcon id="andromeda" /></span>
+              <span>Andromeda</span>
+            </button>
+          </div>
+          {/* script.ts owns the value read-out, like the clock above and both HUDs: it
+              is written from the gain the galaxy module reports rather than recomputed
+              here, so what is printed cannot drift from what is being drawn. The em
+              dash is the same neutral placeholder, gone within a frame of initScene. */}
+          <div className="nav-slider">
+            <label className="nav-slider__label" htmlFor="andromeda-brightness">
+              Andromeda brightness
+            </label>
+            <span className="nav-slider__value" id="andromeda-brightness-value">—</span>
+            <input
+              className="nav-slider__input"
+              id="andromeda-brightness"
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              defaultValue={ANDROMEDA_BRIGHTNESS_DEFAULT}
+            />
+            <p className="nav-slider__hint">
+              ×1 is what an eye gets: magnitude 3.4, but spread over six Moon-widths —
+              fainter than the sky it sits in. Past that is exposure, not galaxy:{' '}
+              {ANDROMEDA_DISTANCE_MLY.toFixed(1)} million light years, developed.
+            </p>
           </div>
         </div>
         <div className="nav-section">

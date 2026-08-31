@@ -12,6 +12,12 @@ import {
     betelgeuseTelemetry,
     updateBetelgeuse,
 } from './background/betelgeuse';
+import {
+    ANDROMEDA_MAJOR_AXIS_DEG,
+    andromeda,
+    andromedaDirection,
+    setAndromedaBrightness,
+} from './background/andromeda';
 import { iss, issTelemetry, updateISS, updateISSPosition } from './iss';
 import { issGroundTrack, issOrbitPath, updateISSTrajectory } from './iss-trajectory';
 import { moon, moonTidalRotation } from './planets/earth/moon';
@@ -506,6 +512,11 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     // cheat), and surface mode borrows the whole group, so it hangs in the lunar sky
     // too without that path knowing it exists.
     backgroundTexture.add(betelgeuse);
+    // And the galaxy, on the same shell and for the same two reasons — plus a third
+    // that only applies to it: it is 3.2° across, so unlike the star it has to be
+    // *oriented* as well as placed, and riding a group that is re-parked rather than
+    // re-rotated leaves that orientation alone. See andromeda.ts.
+    backgroundTexture.add(andromeda);
     // Added to the scene root, not to the system nodes they belong to: an orbit is
     // the path a body traces *through* the Sun's frame, so it has to stay put while
     // the body moves along it. Parenting each one to the node that carries its planet
@@ -623,6 +634,12 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         // goes on the same two rules as the planets' — off in the system-wide shot,
         // and off when a nearer label wants the same pixels.
         { ...createLabel('Betelgeuse', betelgeuse, 24), body: betelgeuse, radius: 1, hideBeyond: Infinity },
+        // The other one that is not in the solar system, and the only label in this
+        // list on something that is *extended* — which is what the 30 units are: about
+        // 1.8° above the centre, so the chip sits clear of a 3.2° galaxy rather than
+        // over the middle of it. Hung on the group rather than on the disc inside it,
+        // whose local "up" is rolled 35° round the line of sight.
+        { ...createLabel('Andromeda', andromeda, 30), body: andromeda, radius: 1, hideBeyond: Infinity },
     ];
 
     // --- per-frame label scratch ------------------------------------------
@@ -1198,6 +1215,41 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     // the user explicitly chooses the Solar system view.
     setOrbitsVisible(false);
 
+    // --- Andromeda's brightness -------------------------------------------
+    //
+    // The one control in this panel that is not a switch, and it is a slider because
+    // what it moves is genuinely continuous: it is an *exposure*, not a layer. See
+    // andromeda.ts — the galaxy spans four orders of magnitude of surface brightness,
+    // it is spread over an area that leaves its average fainter than the night sky, and
+    // there is no single setting at which both its core and its arms are visible. Which
+    // of those is on screen is a property of how long you look, not of the galaxy, so
+    // the app is not in a position to choose it and does not pretend to.
+    //
+    // The read-out is written from the gain the module reports rather than computed
+    // here, in the rule the ISS and Betelgeuse panels already follow: what is printed
+    // cannot drift from what is being drawn.
+    const andromedaBrightness = document.getElementById(
+        'andromeda-brightness'
+    ) as HTMLInputElement | null;
+    const andromedaBrightnessValue = document.getElementById('andromeda-brightness-value');
+
+    function applyAndromedaBrightness() {
+        const gain = setAndromedaBrightness(Number(andromedaBrightness?.value ?? 0));
+        if (andromedaBrightnessValue) {
+            // "×1" is the honest setting rather than the middle of the travel, so it is
+            // the one worth naming: everything above it is a photograph and everything
+            // below it is a worse night.
+            const shown = gain.toFixed(1);
+            andromedaBrightnessValue.textContent =
+                gain === 0 ? 'Off' : shown === '1.0' ? '×1 · as seen' : `×${shown}`;
+        }
+    }
+
+    // `input` rather than `change`, so the sky moves under the thumb: the whole point of
+    // the control is watching where the galaxy stops being visible.
+    andromedaBrightness?.addEventListener('input', applyAndromedaBrightness);
+    applyAndromedaBrightness();
+
     /**
      * Camera focus.
      *
@@ -1244,10 +1296,11 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             return;
         }
 
-        // Being taken anywhere at all is also leaving Betelgeuse. One line here covers
-        // the nav panel, every keyboard shortcut, the reset button and a click in the
-        // scene, none of which need to know the star has a mode.
-        standDownBetelgeuse();
+        // Being taken anywhere at all is also leaving whichever of the two things
+        // outside the solar system was being looked at. One line here covers the nav
+        // panel, every keyboard shortcut, the reset button and a click in the scene,
+        // none of which need to know either of them has a mode.
+        standDownSkyTarget();
 
         const isSystemView =
             target === sun &&
@@ -1319,11 +1372,36 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     const aimRotation = new Quaternion();
 
     /**
-     * Whether the panel and its read-out are up. Not a camera mode: the camera is the
-     * ordinary orbit camera throughout, and this only records that the last thing
-     * asked for was the star.
+     * The two things in this scene that are not in the solar system, and the one
+     * vocabulary that covers them: neither can be flown to, both are picked out of the
+     * backdrop by angle rather than by raycast, and both leave the camera parked
+     * wherever it already was.
      */
-    let betelgeuseSelected = false;
+    type SkyTargetId = 'betelgeuse' | 'andromeda';
+    const SKY_TARGETS: Record<SkyTargetId, { object: Object3D; direction: Vector3; pick: number }> = {
+        betelgeuse: {
+            object: betelgeuse,
+            direction: betelgeuseDirection,
+            // About 1.7°, which at the default field of view is roughly 20px. A star is
+            // a point, so the figure is a comfortable click radius and nothing more.
+            pick: 0.03,
+        },
+        andromeda: {
+            object: andromeda,
+            direction: andromedaDirection,
+            // The galaxy's own half-extent, which is the one case where the pick radius
+            // is not a tuned number: it is 3.2° of sky and you click on the thing.
+            pick: (ANDROMEDA_MAJOR_AXIS_DEG / 2) * MathUtils.DEG2RAD,
+        },
+    };
+    const SKY_TARGET_IDS = Object.keys(SKY_TARGETS) as SkyTargetId[];
+
+    /**
+     * Which of them the panel is claiming, or null. Not a camera mode: the camera is
+     * the ordinary orbit camera throughout, and this only records that the last thing
+     * asked for was out there rather than in the solar system.
+     */
+    let skyTarget: SkyTargetId | null = null;
 
     /**
      * How far *past* a blocking body the camera steps, as a multiple of its radius.
@@ -1345,40 +1423,46 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
      */
     const STEP_CLEAR_APPROACH = 3;
 
-    /** Distance still to travel along the star's direction, in world units. */
+    /** Distance still to travel along the selection's direction, in world units. */
     let stepClearRemaining = 0;
+    /** ...and which direction that is, since the two targets are 76° apart. */
+    let stepClearDirection: Vector3 = betelgeuseDirection;
     const stepClearToBody = new Vector3();
 
     /**
-     * Points the camera at Betelgeuse and steps clear of whatever is in front of it.
+     * Points the camera at one of them and steps clear of whatever is in front of it.
      *
-     * There is no flying to a star and the panel says so, but there is a real and
-     * small thing the camera can do about the *view*: the body it is parked at is the
-     * only object in this scene big enough to hide a point of light, and stepping past
-     * it is a move of a few Earth radii. So the action is a turn plus, when something
-     * is genuinely in the way, a short step forward that leaves it behind.
+     * There is no flying to a star or a galaxy and the panel says so, but there is a
+     * real and small thing the camera can do about the *view*: the body it is parked at
+     * is the only object in this scene big enough to hide something on the backdrop,
+     * and stepping past it is a move of a few Earth radii. So the action is a turn
+     * plus, when something is genuinely in the way, a short step forward that leaves it
+     * behind.
      *
      * The orbit pivot is kept at its current distance rather than pushed out to the
-     * star: it is what `OrbitControls` orbits around, and a pivot at the star's real
-     * range would make a drag rotate the camera about a point 8×10¹¹ units away, which
-     * is not a camera control, it is a fixed direction. Holding the range the user
-     * already had means dragging afterwards feels exactly as it did before.
+     * target: it is what `OrbitControls` orbits around, and a pivot at Betelgeuse's real
+     * range would make a drag rotate the camera about a point 8×10¹¹ units away — and
+     * Andromeda's is four thousand times further again. That is not a camera control, it
+     * is a fixed direction. Holding the range the user already had means dragging
+     * afterwards feels exactly as it did before.
      */
-    function viewBetelgeuse() {
+    function viewSkyObject(id: SkyTargetId) {
         if (moonSurface.active) {
-            confirmLeaveSurface(() => viewBetelgeuse());
+            confirmLeaveSurface(() => viewSkyObject(id));
             return;
         }
 
+        const { object, direction } = SKY_TARGETS[id];
         setFreeFlight(false);
         setOrbitsVisible(false);
         // A fly-to still in the air would keep writing the pivot this is about to own.
         focusAnimation = null;
-        setFocusedObject(betelgeuse);
+        setFocusedObject(object);
 
-        aimDirection = betelgeuseDirection;
-        betelgeuseSelected = true;
-        stepClearRemaining = clearanceNeeded();
+        aimDirection = direction;
+        skyTarget = id;
+        stepClearDirection = direction;
+        stepClearRemaining = clearanceNeeded(direction);
     }
 
     /**
@@ -1392,20 +1476,20 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
      * it — and carries the radius to answer it with. Whatever can hide a point of
      * light is whatever you are nearest.
      */
-    function clearanceNeeded(): number {
+    function clearanceNeeded(direction: Vector3): number {
         const radius = nearestBody.radius;
         stepClearToBody.subVectors(
             nearestBody.object.getWorldPosition(scratchTarget),
             camera.position
         );
 
-        const along = stepClearToBody.dot(betelgeuseDirection);
+        const along = stepClearToBody.dot(direction);
         // Already behind the camera: nothing to step past.
         if (along <= 0) return 0;
 
         const distance = Math.max(stepClearToBody.length(), radius);
         const angularRadius = Math.asin(Math.min(1, radius / distance));
-        if (stepClearToBody.angleTo(betelgeuseDirection) > angularRadius * STEP_CLEAR_APPROACH) {
+        if (stepClearToBody.angleTo(direction) > angularRadius * STEP_CLEAR_APPROACH) {
             return 0;
         }
         return along + radius * STEP_CLEAR_MARGIN;
@@ -1414,19 +1498,19 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     /**
      * Ends the approach, and releases the nav row with it.
      *
-     * The row needs releasing separately because it is the only entry in that list
-     * that can be left claiming a destination the app has since left. Every other row
-     * names a body the camera really is parked at, and stays true until another is
-     * picked; this one names a mode, and landing on the Moon or taking the controls
-     * ends the mode without touching the panel. Free flight already clears the whole
+     * These two rows need releasing separately because they are the only entries in
+     * the panel that can be left claiming a destination the app has since left. Every
+     * other row names a body the camera really is parked at, and stays true until
+     * another is picked; these name a mode, and landing on the Moon or taking the
+     * controls ends the mode without touching the panel. Free flight already clears the whole
      * row of buttons for its own reasons, so this is idempotent there.
      */
-    function standDownBetelgeuse() {
-        betelgeuseSelected = false;
+    function standDownSkyTarget() {
+        skyTarget = null;
         stepClearRemaining = 0;
-        document
-            .querySelector('.nav-btn[data-target="betelgeuse"]')
-            ?.classList.remove('active');
+        SKY_TARGET_IDS.forEach((id) => {
+            document.querySelector(`.nav-btn[data-target="${id}"]`)?.classList.remove('active');
+        });
     }
 
     // Taking hold of the camera cancels the turn but *not* the approach: the two are
@@ -1452,8 +1536,8 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         if (enabled) {
             focusAnimation = null;
             // Flying yourself somewhere is the one destination `focusOnObject` never
-            // hears about, so the star has to be stood down here as well.
-            standDownBetelgeuse();
+            // hears about, so the sky selection has to be stood down here as well.
+            standDownSkyTarget();
             controls.enabled = false;
             freeFlight.enable();
             document
@@ -1729,7 +1813,7 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             // Landing does not route through `focusOnObject` either, and the borrowed
             // starfield takes the disc down with it — so it has to be stood down before
             // it goes, or it would come back grown when the surface is left again.
-            standDownBetelgeuse();
+            standDownSkyTarget();
             focusAnimation = null;
             moonSurface.enter(site);
             updateSurfaceChrome(true, site);
@@ -1845,19 +1929,6 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
     // event allocated garbage on the mouse's own event rate. The set never changes.
     const clickTargetMeshes = clickTargets.map((t) => t.hit);
 
-    /**
-     * How close a click has to come to Betelgeuse to count, in radians — about 1.7°,
-     * which at the default field of view is roughly 20 px.
-     *
-     * The star is picked by *angle to the ray* rather than by raycasting geometry, and
-     * that is the cheap way round rather than the crude one. It is a single vertex of
-     * a `Points`, drawn at a size fixed in *pixels* — so hit-testing the geometry would
-     * mean tuning `Raycaster.params.Points.threshold`, which is in world units, against
-     * a target whose screen size does not vary with distance at all. The angle is
-     * exact, allocates nothing, and is the same quantity the sprite's size stands for.
-     */
-    const BETELGEUSE_PICK_RADIANS = 0.03;
-
     /** Sets `raycaster` from a mouse event. Both pick paths below start here. */
     function setPickRay(event: MouseEvent) {
         const rect = renderer.domElement.getBoundingClientRect();
@@ -1866,9 +1937,22 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         raycaster.setFromCamera(mouse, camera);
     }
 
-    /** Whether the ray already set by `setPickRay` is on the star. */
-    function rayHitsBetelgeuse() {
-        return raycaster.ray.direction.angleTo(betelgeuseDirection) < BETELGEUSE_PICK_RADIANS;
+    /**
+     * Which of the two backdrop objects the ray already set by `setPickRay` is on, if
+     * either — by *angle to the ray* rather than by raycasting geometry, which is the
+     * cheap way round rather than the crude one. The star is a single vertex of a
+     * `Points` drawn at a size fixed in *pixels*, so hit-testing its geometry would mean
+     * tuning `Raycaster.params.Points.threshold`, which is in world units, against a
+     * target whose screen size does not vary with distance at all; and the galaxy is a
+     * quad whose visible extent is a good deal smaller than the quad. The angle is
+     * exact, allocates nothing, and is the quantity both of their sizes stand for.
+     */
+    function raySkyTarget(): SkyTargetId | null {
+        for (const id of SKY_TARGET_IDS) {
+            const { direction, pick } = SKY_TARGETS[id];
+            if (raycaster.ray.direction.angleTo(direction) < pick) return id;
+        }
+        return null;
     }
 
     function pickTarget(event: MouseEvent) {
@@ -1918,9 +2002,10 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             (!isAlreadyObserving(picked.focus, picked.distance) || picked.focus === moon);
         // Tested only where nothing in the solar system was hit, which is both the
         // cheap ordering and the correct one: everything in this scene is in front of
-        // the star, so anything the ray already found is between you and it.
-        const onStar = !picked && !betelgeuseSelected && rayHitsBetelgeuse();
-        renderer.domElement.style.cursor = focusable || onStar ? 'pointer' : 'default';
+        // the backdrop, so anything the ray already found is between you and it.
+        const onSky = !picked ? raySkyTarget() : null;
+        renderer.domElement.style.cursor =
+            focusable || (onSky !== null && onSky !== skyTarget) ? 'pointer' : 'default';
     });
 
     renderer.domElement.addEventListener('click', (event: MouseEvent) => {
@@ -1936,14 +2021,16 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             return;
         }
 
-        // Same ordering as the hover, and the same reason. Ignored when the star is
-        // already the selection, so a stray click on it is not a second step forward.
-        if (!picked && !betelgeuseSelected && rayHitsBetelgeuse()) {
+        // Same ordering as the hover, and the same reason. Ignored when the thing under
+        // the cursor is already the selection, so a stray click on it is not a second
+        // step forward.
+        const onSky = !picked ? raySkyTarget() : null;
+        if (onSky !== null && onSky !== skyTarget) {
             document
                 .querySelectorAll('.nav-btn[data-target]')
                 .forEach((button) => button.classList.remove('active'));
-            document.querySelector('.nav-btn[data-target="betelgeuse"]')?.classList.add('active');
-            viewBetelgeuse();
+            document.querySelector(`.nav-btn[data-target="${onSky}"]`)?.classList.add('active');
+            viewSkyObject(onSky);
             return;
         }
 
@@ -1992,10 +2079,11 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
                     case 'moon':
                         focusOnObject(moon, 3, 1500);
                         break;
-                    // The one arm here that is not a fly-to, because there is no
-                    // flying to a star — see `approachBetelgeuse`.
+                    // The two arms here that are not fly-tos, because there is no
+                    // flying to either of them — see `viewSkyObject`.
                     case 'betelgeuse':
-                        viewBetelgeuse();
+                    case 'andromeda':
+                        viewSkyObject(target);
                         break;
                     case 'iss':
                         focusOnObject(iss, ISS_VIEW_DISTANCE, 1500);
@@ -2257,7 +2345,7 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             followTarget === iss &&
             !freeFlight.enabled &&
             !moonSurface.active &&
-            !betelgeuseSelected;
+            skyTarget === null;
         issHud?.classList.toggle('iss-hud--visible', shown);
         if (!shown || nowMs < issHudRefreshDue) return;
         issHudRefreshDue = nowMs + 100;
@@ -2298,7 +2386,7 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
      * default rate is not a per-frame quantity by any stretch.
      */
     function updateBetelgeuseHud(nowMs: number) {
-        const shown = betelgeuseSelected && !freeFlight.enabled && !moonSurface.active;
+        const shown = skyTarget === 'betelgeuse' && !freeFlight.enabled && !moonSurface.active;
         betelgeuseHud?.classList.toggle('betelgeuse-hud--visible', shown);
         if (!shown || nowMs < betelgeuseHudRefreshDue) return;
         betelgeuseHudRefreshDue = nowMs + 100;
@@ -2685,7 +2773,14 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
             // Everything else here is a body you can always find; the analemma is an
             // overlay you might have switched off, and its chip shouldn't linger
             // once the curve it's labelling is gone.
-            labelForcedHidden[i] = label.body === analemmaAnchor && !analemmaVisible ? 1 : 0;
+            // ...and the galaxy is an object you can turn the brightness of down to
+            // nothing, which is the same situation: a chip pointing at a patch of empty
+            // sky is worse than no chip.
+            labelForcedHidden[i] =
+                (label.body === analemmaAnchor && !analemmaVisible) ||
+                (label.body === andromeda && !andromeda.visible)
+                    ? 1
+                    : 0;
             // Projected in place rather than into a clone — `project` mutates, and both
             // things the unprojected position was wanted for have already been read.
             position.project(camera);
@@ -2794,8 +2889,8 @@ export function initScene(onFirstFrame?: () => void, onIntroSettled?: () => void
         // and pivot move together, so the direction being looked at is untouched.
         if (stepClearRemaining > 0) {
             const step = stepClearRemaining * (1 - Math.pow(0.008, realDelta));
-            camera.position.addScaledVector(betelgeuseDirection, step);
-            controls.target.addScaledVector(betelgeuseDirection, step);
+            camera.position.addScaledVector(stepClearDirection, step);
+            controls.target.addScaledVector(stepClearDirection, step);
             stepClearRemaining -= step;
             // An exponential approach never arrives; a millionth of an Earth radius is
             // comfortably past the point where anything can see the difference.
